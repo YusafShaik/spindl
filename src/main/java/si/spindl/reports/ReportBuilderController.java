@@ -1,0 +1,28 @@
+package si.spindl.reports;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.*;
+import si.spindl.tenant.DevelopmentTenant;
+import java.util.List;
+import java.util.UUID;
+
+@RestController @RequestMapping("/api/report-builder")
+public class ReportBuilderController {
+    private final ReportBuilderService service;private final DevelopmentTenant tenant;
+    public ReportBuilderController(ReportBuilderService service,DevelopmentTenant tenant){this.service=service;this.tenant=tenant;}
+    @GetMapping("/sources") public List<ReportBuilderService.SourceView> sources(){return service.sources();}
+    @GetMapping("/definitions") public List<ReportBuilderService.ReportView> list(){return service.list();}
+    @PostMapping("/definitions") @ResponseStatus(HttpStatus.CREATED) public ReportBuilderService.ReportView create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateReportRequest request){requireConfigurator(jwt);List<ReportBuilderService.ReportFilter> filters=request.filters()==null?List.of():request.filters().stream().map(filter->new ReportBuilderService.ReportFilter(filter.field(),filter.operator(),filter.value())).toList();List<ReportBuilderService.ReportMetricInput> metrics=request.metrics()==null?List.of():request.metrics().stream().map(metric->new ReportBuilderService.ReportMetricInput(metric.function(),metric.field())).toList();return service.create(UUID.fromString(jwt.getSubject()),new ReportBuilderService.CreateRequest(request.name(),request.dataSource(),request.columns(),filters,request.groupBy(),metrics));}
+    @DeleteMapping("/definitions/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void delete(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){requireConfigurator(jwt);service.delete(UUID.fromString(jwt.getSubject()),id);}
+    @GetMapping("/definitions/{id}/run") public ReportBuilderService.RunResult run(@PathVariable UUID id,@RequestParam(required=false) String q,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="50") int size){return service.run(id,q,page,size);}
+    private void requireConfigurator(Jwt jwt){var roles=jwt.getClaimAsStringList("roles");if(roles==null||roles.stream().noneMatch(role->java.util.Set.of("OWNER","ADMIN","MANAGER").contains(role)))throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN,"Only workspace administrators and managers can manage saved reports");}
+    public record CreateReportRequest(@NotBlank @Size(max=120) String name,@NotBlank @Size(max=32) String dataSource,@NotEmpty @Size(max=12) List<@NotBlank String> columns,@Size(max=8) List<@Valid ReportFilterRequest> filters,@Size(max=64) String groupBy,@Size(max=4) List<@Valid ReportMetricRequest> metrics){}
+    public record ReportFilterRequest(@NotBlank String field,@NotBlank String operator,@NotBlank @Size(max=120) String value){}
+    public record ReportMetricRequest(@NotBlank String function,@NotBlank String field){}
+}
