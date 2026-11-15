@@ -1,120 +1,91 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  Activity, ArrowDown, ArrowDownUp, Bell, Boxes, Check, ChevronDown,
-  CircleHelp, Command, Download, Filter, LayoutDashboard, Menu, MoreHorizontal,
-  Package, Plus, Search, Settings2, SlidersHorizontal, Sparkles, Users,
-  Warehouse, Wrench, ShieldCheck, ChartNoAxesColumnIncreasing,
+  ArrowDown, ArrowUp, Bell, Boxes, ChartNoAxesColumnIncreasing, CheckCircle2,
+  ChevronDown, CircleHelp, ClipboardList, CreditCard, Download, Factory, Filter,
+  LayoutDashboard, Menu, MoreHorizontal, Package, Plus, Search, Settings,
+  ShieldCheck, ShoppingCart, TriangleAlert, Users, Warehouse,
 } from 'lucide-react';
 import './preview.css';
 
-const rows = [
-  { sku: 'MAT-2048', name: 'Recycled kraft mailer · 250 × 350 mm', group: 'Packaging', location: 'Mumbai · A-04', onHand: '1,240', reserved: '180', available: '1,060', status: 'In stock', tone: 'success' },
-  { sku: 'CMP-1180', name: 'Aluminium hinge assembly, brushed', group: 'Components', location: 'Pune · B-12', onHand: '482', reserved: '96', available: '386', status: 'In stock', tone: 'success' },
-  { sku: 'RAW-0092', name: 'Natural cotton webbing · 25 mm', group: 'Raw material', location: 'Mumbai · C-02', onHand: '74', reserved: '32', available: '42', status: 'Low stock', tone: 'warning' },
-  { sku: 'FIN-3305', name: 'Canvas tote · natural / large', group: 'Finished goods', location: 'Bengaluru · FG-01', onHand: '216', reserved: '48', available: '168', status: 'In stock', tone: 'success' },
-  { sku: 'MAT-0716', name: 'Water-based adhesive · 5 L', group: 'Packaging', location: 'Pune · D-03', onHand: '0', reserved: '0', available: '0', status: 'Out of stock', tone: 'danger' },
-];
-
-const navigation = [
-  { label: 'Overview', icon: LayoutDashboard },
-  { label: 'Inventory', icon: Package, active: true },
-  { label: 'Purchasing', icon: Boxes },
-  { label: 'Production', icon: Wrench },
-  { label: 'Quality', icon: ShieldCheck },
-];
-
-const businessNavigation = [
-  { label: 'Sales & POS', icon: ChartNoAxesColumnIncreasing },
-  { label: 'Customers', icon: Users },
-  { label: 'Warehouses', icon: Warehouse },
+const items = [
+  { name: 'Aluminium Sheet 2mm', sku: 'ALU-102', category: 'Raw materials', warehouse: 'Main warehouse', on: '480', available: '450', unit: 'pcs', status: 'In stock', tone: 'good' },
+  { name: 'Steel Fasteners M8', sku: 'STL-048', category: 'Components', warehouse: 'Main warehouse', on: '18', available: '12', unit: 'pcs', status: 'Low stock', tone: 'low' },
+  { name: 'Copper Wire 1.5mm', sku: 'COP-215', category: 'Raw materials', warehouse: 'East depot', on: '1,250', available: '1,050', unit: 'm', status: 'In stock', tone: 'good' },
+  { name: 'Packaging Inserts', sku: 'PKG-220', category: 'Packaging', warehouse: 'Main warehouse', on: '0', available: '0', unit: 'pcs', status: 'Out of stock', tone: 'out' },
+  { name: 'Hydraulic Fittings', sku: 'HYD-083', category: 'Components', warehouse: 'West warehouse', on: '320', available: '290', unit: 'pcs', status: 'In stock', tone: 'good' },
+  { name: 'Polymer Resin A4', sku: 'POL-411', category: 'Raw materials', warehouse: 'East depot', on: '95', available: '40', unit: 'kg', status: 'Low stock', tone: 'low' },
 ];
 
 function Preview() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <div className="preview-frame min-h-screen bg-sp-canvas font-sans text-sp-text">
-      <aside className={`preview-sidebar${mobileNavOpen ? ' is-open' : ''}`}>
-        <a className="preview-brand" href="#preview" aria-label="Spindl illustrative preview home">
-          <span className="preview-brand-mark"><i /><i /><i /><i /></span>
-          <span>spindl</span><span className="preview-brand-workspace">WORKSPACE</span>
-          <ChevronDown size={14} className="text-sp-text-muted" />
-        </a>
-
-        <button className="preview-workspace" type="button">
-          <span className="preview-workspace-avatar">N</span>
-          <span className="preview-workspace-copy"><strong>Northstar Goods</strong><small>Operations workspace</small></span>
-          <ChevronDown size={14} />
-        </button>
-
-        <button className="preview-quick-search" type="button">
-          <Search size={15} /><span>Search anything</span><kbd><Command size={10} /> K</kbd>
-        </button>
-
-        <nav className="preview-navigation" aria-label="Illustrative preview navigation">
-          <div className="preview-nav-caption">WORKSPACE</div>
-          {navigation.map(({ label, icon: Icon, active }) => <a key={label} href={`#${label.toLowerCase()}`} className={`preview-nav-item${active ? ' is-active' : ''}`} aria-current={active ? 'page' : undefined}><Icon size={16} strokeWidth={1.8} /><span>{label}</span>{label === 'Inventory' && <span className="preview-nav-count">24</span>}</a>)}
-          <div className="preview-nav-caption preview-nav-caption-spaced">BUSINESS</div>
-          {businessNavigation.map(({ label, icon: Icon }) => <a key={label} href={`#${label.toLowerCase()}`} className="preview-nav-item"><Icon size={16} strokeWidth={1.8} /><span>{label}</span></a>)}
-          <div className="preview-nav-caption preview-nav-caption-spaced">ADMINISTRATION</div>
-          <a href="#team" className="preview-nav-item"><Users size={16} strokeWidth={1.8} /><span>Team</span></a>
-        </nav>
-
-        <div className="preview-sidebar-bottom">
-          <a href="#settings" className="preview-nav-item"><Settings2 size={16} strokeWidth={1.8} /><span>Settings</span></a>
-          <a href="#help" className="preview-help"><CircleHelp size={16} /><span>Help center</span><span className="preview-help-key">?</span></a>
-          <button className="preview-profile" type="button"><span className="preview-profile-avatar">AS</span><span className="preview-workspace-copy"><strong>Arjun Sharma</strong><small>Workspace admin</small></span><MoreHorizontal size={17} /></button>
-        </div>
-      </aside>
-      {mobileNavOpen && <button className="preview-mobile-overlay" type="button" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
-
-      <div className="preview-main">
-        <header className="preview-topbar">
-          <div className="preview-breadcrumb"><button className="preview-mobile-toggle" type="button" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}><Menu size={17} /></button><span>Workspace</span><span className="preview-slash">/</span><strong>Inventory</strong><span className="preview-slash">/</span><span>Illustrative items</span></div>
-          <div className="preview-topbar-actions"><span className="preview-shortcut-hint">Inventory overview</span><button className="preview-icon-button" aria-label="Notifications" type="button"><Bell size={17} /><i /></button><span className="preview-topbar-divider" /><span className="preview-user-dot">AS</span></div>
-        </header>
-
-        <main className="preview-content">
-          <div className="preview-kicker"><Sparkles size={14} /> SAMPLE WORKSPACE / INVENTORY</div>
-          <div className="preview-page-heading">
-            <div><h1 className="sp-type-page">Inventory</h1><p className="sp-type-body text-sp-text-secondary">A sample workspace composition for reviewing Spindl’s visual language.</p></div>
-            <div className="preview-heading-actions"><button className="preview-button preview-button-secondary" type="button"><Download size={15} /> Export</button><button className="preview-button preview-button-primary" type="button"><Plus size={16} /> New item</button></div>
+    <div className="min-h-screen bg-sp-canvas font-sans text-sp-text">
+      <div className="shell">
+        <aside className={`sidebar${mobileNavOpen ? ' open' : ''}`}>
+          <div className="brand"><span className="brand-mark">s</span>spindl<span className="brand-workspace">WORKSPACE</span></div>
+          <div className="workspace"><div className="ws-icon">AC</div><div className="ws-text"><b>Acme Manufacturing</b><small>Business workspace</small></div><ChevronDown size={16} /></div>
+          <div className="sidebar-scroll">
+            <div className="nav-group">Workspace</div>
+            <div className="nav-item"><LayoutDashboard />Overview</div>
+            <div className="nav-item active"><Package />Inventory<span className="count">2,846</span></div>
+            <div className="nav-item"><ShoppingCart />Purchasing</div>
+            <div className="nav-item"><Factory />Manufacturing</div>
+            <div className="nav-item"><ShieldCheck />Quality</div>
+            <div className="nav-group nav-group-spaced">Business</div>
+            <div className="nav-item"><CreditCard />Sales &amp; POS</div>
+            <div className="nav-item"><Users />Customers</div>
+            <div className="nav-item"><CreditCard />Finance</div>
+            <div className="nav-item"><ChartNoAxesColumnIncreasing />Reports</div>
+            <div className="nav-group nav-group-spaced">Administration</div>
+            <div className="nav-item"><Users />Team</div>
+            <div className="nav-item"><Settings />Settings</div>
           </div>
+          <div className="sidebar-bottom">
+            <div className="nav-item" id="help"><CircleHelp />Help &amp; support</div>
+            <div className="user"><div className="userpic">YS</div><div><b>Workspace Admin</b><small>Administrator</small></div><ChevronDown size={15} className="user-chevron" /></div>
+          </div>
+        </aside>
+        <button className={`mobile-overlay${mobileNavOpen ? ' show' : ''}`} aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />
 
-          <section className="preview-section" aria-labelledby="inventory-list-title">
-            <div className="preview-section-heading"><div><h2 id="inventory-list-title" className="sp-type-section">Items</h2><p className="sp-type-body text-sp-text-secondary">A sample view of stock records and availability.</p></div><button className="preview-text-action" type="button">View activity <ArrowDown size={14} className="preview-next-arrow" /></button></div>
-            <div className="preview-tabs" role="tablist" aria-label="Illustrative preview sections">
-              <button className="preview-tab is-active" type="button" role="tab" aria-selected="true">Records <span>24</span></button>
-              <button className="preview-tab" type="button" role="tab" aria-selected="false">Controls <span>6</span></button>
-              <button className="preview-tab" type="button" role="tab" aria-selected="false">States <span>4</span></button>
+        <main className="work">
+          <header className="top">
+            <div className="breadcrumbs"><button className="iconbtn mobile-toggle" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}><Menu size={17} /></button><span>Workspace</span><span>/</span><b>Inventory</b><span>/</span><span>All items</span></div>
+            <div className="top-right"><button className="iconbtn help" aria-label="Quick search"><Search /></button><span className="key">⌘ K</span><button className="iconbtn" aria-label="Notifications"><Bell /></button><div className="circle">YS</div></div>
+          </header>
+
+          <div className="page"><div className="page-inner">
+            <div className="heading"><div><div className="overline">OPERATIONS / INVENTORY</div><h1>Inventory</h1><p>A clear view of stock, availability, and movement across your business.</p></div><div className="actions"><button className="btn"><Download size={14} />Export</button><button className="btn primary"><Plus size={14} />New item</button></div></div>
+
+            <div className="metrics">
+              <div className="metric"><div className="metric-title">Total inventory items <ClipboardList /></div><div className="metric-value">2,846</div><div className="metric-foot"><span className="positive">↗ 8.2%</span> from last month</div></div>
+              <div className="metric"><div className="metric-title">Inventory value <CreditCard /></div><div className="metric-value">₹48.2L</div><div className="metric-foot">Across <span className="metric-emphasis">4 warehouses</span></div></div>
+              <div className="metric"><div className="metric-title">Low stock items <TriangleAlert /></div><div className="metric-value">18</div><div className="metric-foot"><span className="caution">Needs attention</span> · 6 critical</div></div>
+              <div className="metric"><div className="metric-title">Stock accuracy <CheckCircle2 /></div><div className="metric-value">98.6<span className="metric-percent">%</span></div><div className="metric-foot"><span className="positive">↗ 1.4%</span> from last audit</div></div>
             </div>
-            <div className="preview-panel">
-              <div className="preview-toolbar">
-                <label className="preview-search"><Search size={16} /><span className="sr-only">Search illustrative items</span><input placeholder="Search items…" /></label>
-                <div className="preview-filter-actions"><button className="preview-button preview-button-filter" type="button"><Filter size={15} /> Filters</button><label className="preview-select-wrap"><span className="sr-only">Sample location</span><select className="preview-button preview-button-filter preview-select" defaultValue="all"><option value="all">All locations</option><option value="north">North facility</option><option value="south">South facility</option></select><ChevronDown size={14} /></label><button className="preview-button preview-button-filter preview-columns-button" type="button"><SlidersHorizontal size={15} /> Columns</button><button className="preview-button preview-button-filter preview-sort-button" type="button"><ArrowDownUp size={15} /><span>Sort</span></button></div>
+
+            <div className="section-head"><div><h2>Items</h2><p>Manage stock quantities, product details and warehouse availability.</p></div><button className="subtle-link">View stock movements ↗</button></div>
+            <div className="tabs" role="tablist" aria-label="Inventory status filters"><button className="tab active" role="tab" aria-selected="true">All items <span>8</span></button><button className="tab" role="tab" aria-selected="false">Low stock <span>2</span></button><button className="tab" role="tab" aria-selected="false">Out of stock <span>1</span></button><button className="tab" role="tab" aria-selected="false">Reserved <span>1</span></button></div>
+
+            <div className="table-tools"><div className="left-tools"><label className="search"><Search /><input placeholder="Search items or SKU..." aria-label="Search inventory" /></label><button className="filter"><Filter />Filters</button></div><div className="right-tools"><select className="filter" aria-label="Warehouse"><option>All warehouses</option><option>Main warehouse</option><option>East depot</option><option>West warehouse</option></select><button className="filter"><Boxes />Columns</button></div></div>
+
+            <div className="table-card"><div className="table-scroll"><table><thead><tr><th><input type="checkbox" aria-label="Select all visible rows" /></th><th>ITEM <span className="sort-indicator">↕</span></th><th>SKU</th><th>CATEGORY</th><th>WAREHOUSE</th><th className="number">ON HAND</th><th className="number">AVAILABLE</th><th>STATUS</th><th /></tr></thead><tbody>{items.map((item) => <tr key={item.sku}><td><input type="checkbox" aria-label={`Select ${item.name}`} /></td><td><div className="item-cell"><div className="item-icon"><Package size={15} /></div><div><div className="item-name">{item.name}</div><div className="item-sub">Updated recently</div></div></div></td><td className="sku">{item.sku}</td><td>{item.category}</td><td>{item.warehouse}</td><td className="number stock">{item.on} <span className="muted">{item.unit}</span></td><td className="number">{item.available} <span className="muted">{item.unit}</span></td><td><span className={`badge ${item.tone}`}>{item.status}</span></td><td><button className="row-menu" aria-label={`More actions for ${item.name}`}>···</button></td></tr>)}</tbody></table></div><div className="table-footer"><span>Showing 1–6 of 8 items</span><div className="pagination"><button className="pg" aria-label="Previous page">‹</button><button className="pg active">1</button><button className="pg" aria-label="Next page">›</button></div></div></div>
+
+            <div className="below">
+              <div className="mini-card"><div className="mini-head"><h3>Recent stock movements</h3><span>Last 24 hours</span></div>
+                <div className="movement"><div className="movement-icon"><ArrowUp size={16} /></div><div className="movement-info"><b>Aluminium Sheet 2mm</b><small>Stock received · PO-1042 · 10:42 AM</small></div><div className="movement-qty plus">+120 pcs</div></div>
+                <div className="movement"><div className="movement-icon outgoing"><ArrowDown size={16} /></div><div className="movement-info"><b>Steel Fasteners M8</b><small>Production issue · WO-0831 · 09:18 AM</small></div><div className="movement-qty minus">−80 pcs</div></div>
+                <div className="movement"><div className="movement-icon"><ArrowUp size={16} /></div><div className="movement-info"><b>Copper Wire 1.5mm</b><small>Warehouse transfer · TR-0226 · Yesterday</small></div><div className="movement-qty plus">+250 m</div></div>
               </div>
-              <div className="preview-table-scroll" tabIndex={0} aria-label="Scrollable illustrative inventory table">
-                <table className="preview-table">
-                  <thead><tr><th scope="col">Item</th><th scope="col">Group</th><th scope="col">Location</th><th scope="col" className="is-numeric">On hand</th><th scope="col" className="is-numeric">Reserved</th><th scope="col" className="is-numeric">Available</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Row actions</span></th></tr></thead>
-                  <tbody>{rows.map((row) => <tr key={row.sku}><td><div className="preview-item-cell"><span className="preview-item-icon"><Package size={15} /></span><span className="preview-item-copy"><strong>{row.name}</strong><small>{row.sku}</small></span></div></td><td className="preview-secondary-cell">{row.group}</td><td className="preview-secondary-cell">{row.location}</td><td className="is-numeric">{row.onHand}</td><td className="is-numeric preview-secondary-cell">{row.reserved}</td><td className="is-numeric preview-available-cell">{row.available}</td><td><span className={`preview-status is-${row.tone}`}><i />{row.status}</span></td><td><button className="preview-row-menu" aria-label={`More actions for ${row.sku}`} type="button"><MoreHorizontal size={17} /></button></td></tr>)}</tbody>
-                </table>
+              <div className="mini-card"><div className="mini-head"><h3>Warehouse overview</h3><span>4 locations</span></div>
+                <div className="location-row"><Warehouse className="loc-icon" /><div className="loc-details"><b>Main warehouse</b><small>Hyderabad · Primary location</small></div><div className="loc-count">1,482 items</div></div>
+                <div className="location-row"><Warehouse className="loc-icon" /><div className="loc-details"><b>East depot</b><small>Distribution center</small></div><div className="loc-count">824 items</div></div>
+                <div className="location-row"><Warehouse className="loc-icon" /><div className="loc-details"><b>West warehouse</b><small>Regional storage</small></div><div className="loc-count">540 items</div></div>
               </div>
-              <footer className="preview-table-footer"><span>Showing <strong>1–5</strong> of <strong>24</strong> illustrative items</span><div><button className="preview-page-button" type="button" disabled><ArrowDown size={13} className="preview-rotate" /> Previous</button><button className="preview-page-button" type="button">Next <ArrowDown size={13} className="preview-next-arrow" /></button></div></footer>
             </div>
-          </section>
-
-          <section className="preview-form-panel" aria-labelledby="sample-form-title">
-            <div className="preview-form-intro"><div className="preview-form-icon"><Activity size={17} /></div><div><h2 id="sample-form-title" className="sp-type-panel">Form states</h2><p className="sp-type-meta text-sp-text-muted">Static examples for input, focus, and validation styling.</p></div></div>
-            <div className="preview-form-grid">
-              <label className="preview-field"><span className="sp-type-label">Item name</span><input className="preview-input" value="Recycled kraft mailer" readOnly /><small className="sp-type-meta text-sp-text-muted">Standard field · 36px control height</small></label>
-              <label className="preview-field"><span className="sp-type-label">SKU <em>Required</em></span><input className="preview-input is-focused" value="MAT-2048" readOnly /><small className="sp-type-meta text-sp-text-muted">Focused state · visible brand focus</small></label>
-              <label className="preview-field preview-field-error"><span className="sp-type-label">Reorder point <em>Required</em></span><input className="preview-input is-invalid" value="-4" readOnly aria-invalid="true" aria-describedby="preview-validation" /><small id="preview-validation" className="preview-validation-message"><span><Check size={12} /></span> Enter a quantity of 0 or more.</small></label>
-            </div>
-            <div className="preview-form-footer"><span className="sp-type-meta text-sp-text-muted">Samples are visual only; no data is saved.</span><button className="preview-button preview-button-secondary" type="button"><SlidersHorizontal size={15} /> Form settings</button></div>
-          </section>
-
-          <p className="preview-disclaimer"><span className="preview-disclaimer-dot" /> All names, counts, locations, and quantities above are illustrative sample data.</p>
+            <div className="concept-note">SPINDL · PRODUCT DESIGN CONCEPT 01 · Illustrative data · Interactive HTML prototype</div>
+          </div></div>
         </main>
       </div>
     </div>
@@ -123,5 +94,4 @@ function Preview() {
 
 const root = document.getElementById('design-preview-root');
 if (!root) throw new Error('Missing design preview root');
-
 createRoot(root).render(<StrictMode><Preview /></StrictMode>);
