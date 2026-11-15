@@ -1,69 +1,93 @@
-# Spindl Precision Design System — v1
+# Spindl Precision Design System — normative specification
 
-**Status:** approved art direction; implementation in progress. **Reference:** Linear-inspired Spindl Inventory Workspace concept. This document is the source of truth for future agents and contributors.
+## Purpose and scope
+Apply a consistent, premium, Linear-inspired **visual language** to Spindl's existing ERP screens. **Do not recreate, restructure, or replace any feature screen.** The feature's current React code and requirements determine all displayed information and behavior. This document determines typography, color, spacing, controls, visual hierarchy, and accessibility.
 
-## Product identity
-Spindl is a calm, precise, premium enterprise ERP. The design is not a copy of Linear: borrow its rigor in alignment, information density, typography and interaction. Keep Spindl purple and ERP-specific controls.
+Linear is inspiration for precision, restrained color, crisp alignment, and interaction quality; Spindl must retain its own identity. No screen prototype or demo is an authority over existing production content.
 
-### Foundations
+## 1. Typography — STRICT, REQUIRED
+
+Use **DM Sans** for all application UI, including tables, inputs, labels, menus, navigation, dialogs, and help text. Use **Manrope** for page/section headings and prominent metric values only. Use a monospace face only for technical IDs when there is a real readability benefit.
+
+| Semantic role | Family | Size / line height | Weight | Usage |
+|---|---|---|---|---|
+| Page title | Manrope | 24px / 32px | 700 | Main heading for an existing page |
+| Section title | Manrope | 18px / 26px | 700 | Existing section headings |
+| Panel title | DM Sans | 15px / 22px | 600 | Table and form panel headings |
+| Body / description | DM Sans | 14px / 22px | 400 | Descriptions, explanatory text |
+| Table cells | DM Sans | 14px / 20px | 400–500 | All operational table values |
+| Table headers | DM Sans | 12px / 18px | 600 | Column labels; normal or subtle uppercase |
+| Input / select values | DM Sans | 14px / 20px | 400–500 | All editable values and placeholders |
+| Field labels | DM Sans | 13px / 20px | 600 | Form field names |
+| Buttons / tabs | DM Sans | 13px / 20px | 600 | Action text and navigation tabs |
+| Sidebar navigation | DM Sans | 13px / 20px | 500–600 | Module navigation |
+| Status badges | DM Sans | 12px / 18px | 600 | Status labels and chips |
+| Metadata / helper | DM Sans | 12px / 18px | 400–500 | Dates, captions, hints, secondary details |
+| KPI / key figure | Manrope | 24px / 32px | 700 | Existing prominent values only |
+
+### Enforcement
+- **12px is the absolute minimum for meaningful UI text.** Never use 8, 9, 10, or 11px for any operational label, helper, table value, sidebar item, badge, or metadata.
+- Do not shrink fonts to squeeze more columns into a table. Use horizontal scrolling, truncation with accessible disclosure, or responsive column handling that preserves functionality.
+- Density modes change row height and padding, **never font sizes**.
+- Do not use arbitrary Tailwind font sizes, inline font-size styles, or one-off CSS type scales in feature components. Use the semantic typography roles above.
+- Preserve readable contrast; muted text is still readable.
+- Use tabular numerals for quantities, monetary values, and dates; right-align numeric columns.
+- Use normal sentence case for UI copy; existing labels remain unchanged unless explicitly approved.
+- Fonts must fall back gracefully when web fonts are unavailable.
+
+## 2. Color tokens
 - Brand: `#7055D8`; brand hover `#5C42C3`; selected tint `#F1EDFC`.
-- Canvas: `#F7F8FA`; surfaces: `#FFFFFF`; ink: `#20212B`; secondary: `#475467`; muted: `#667085`; divider: `#E4E7EC`.
-- Success `#15803D`; warning `#B45309`; danger `#B42318`; info `#175CD3`. Never rely on color alone.
-- UI typography: DM Sans; headings and KPI figures: Manrope; IDs and technical references may use a monospace face.
-- Display 30/38 800; page title 24/32 700; section 20/28 700; card 16/24 700; body 14/22 400–500; label 13/20 600; metadata 12/18 500. Never shrink essential ERP text to fit.
-- Spacing: 4px baseline, preferred steps 4/8/12/16/20/24/32/40/48.
-- Radius: controls 6–8px, panels 8–10px, dialogs 12px. Borders 1px. Avoid excessive shadows; use elevation mainly for overlays.
-- Controls: 32px compact, 40px default, 48px large. Minimum touch targets should remain usable.
-- Data rows: 44–52px default; 38–44px compact. Density changes padding, not font size.
+- Canvas: `#F7F8FA`; surfaces `#FFFFFF`; ink `#20212B`; secondary text `#475467`; muted text `#667085`; border `#E4E7EC`.
+- Semantic: success `#15803D`, warning `#B45309`, danger `#B42318`, info `#175CD3`.
+- Use brand purple for selected states, primary actions, and focus; not as decoration.
+- Status text/icon must communicate meaning without relying on color alone.
 
-### Layout architecture
-1. Workspace shell: 240–256px sidebar, 56–64px topbar, content with a flexible max width.
-2. Page header: breadcrumb, title, description if useful, one dominant action, secondary contextual actions.
-3. Toolbar: tabs, search, filter chips, column controls, export, bulk actions.
-4. Main content: data table or workflow canvas. Avoid card-on-card nesting.
-5. Record detail: contextual right-side inspector with actions, summary, relationships and audit history.
+## 3. Spacing, controls, and density
+- Spacing: 4px baseline, preferred 4/8/12/16/20/24/32/40/48px.
+- Radius: controls 6–8px; panels 8–10px; dialogs 12px.
+- Border: subtle 1px; shadows reserved mainly for floating overlays.
+- Control heights: compact 32px, default 40px, large 48px.
+- Data rows: default 48px; compact 40px. Keep table text 14px in both.
+- Avoid nested card borders and arbitrary gaps; preserve the existing screen's grouping.
 
-### Shared components (canonical)
-`Button`, `IconButton`, `Input`, `NumberInput`, `Select`, `SegmentedControl`, `Checkbox`, `Switch`, `Textarea`, `DateField`, `Badge`, `StatusBadge`, `Tooltip`, `DropdownMenu`, `Tabs`, `Dialog`, `Drawer`, `Toast`, `Skeleton`, `EmptyState`, `PageHeader`, `FilterBar`, `DataTable`, `Pagination`, `Metric`, `RecordInspector`, `CommandPalette`, `FormField`, `Money`, `Quantity`, `EntityLink`, `AuditTimeline`.
+## 4. Shared design-system components
+Create components incrementally as existing screens need them:
+`Button`, `IconButton`, `Input`, `Select`, `Checkbox`, `Switch`, `Textarea`, `StatusBadge`, `Tabs`, `Dialog`, `Drawer`, `Tooltip`, `DropdownMenu`, `PageHeader`, `FilterBar`, `DataTable`, `Pagination`, `FormField`, `EmptyState`, `Skeleton`, `Toast`.
 
-Components must document variants, props, focus behavior, error/loading/empty states, responsive behavior and usage. Use Radix for complex accessible primitives, TanStack Table for grids, React Hook Form + Zod for form validation, Lucide icons, Recharts for charts.
+Component APIs must support the real fields and behavior already used in Spindl. Use accessible headless primitives where appropriate, Lucide icons, and Tailwind CSS v4 semantic tokens. Do not invent new UI sections to justify a component.
 
-### Page templates
-- Directory: inventory, customers, suppliers, sales and purchases.
-- Record detail: purchase order, product, invoice, customer, manufacturing order.
-- Dashboard: operational KPIs, trends, exceptions and actions.
-- Workflow: approvals, manufacturing, quality inspection and POS.
-- Settings: section navigation, grouped controls, explicit save feedback.
+## 5. Existing screen preservation contract
+The current application owns:
+- Navigation labels, order, destinations, and permissions.
+- Page headings, sections, tables, fields, column order, and business terminology.
+- Data fetching, calculations, validation, actions, exports, and workflows.
+- Filtering, sorting, pagination, loading, error, and empty behavior.
 
-### Non-negotiable UX quality
-- Real content and actions first; no decorative placeholder cards in production.
-- Labels, values and status must be legible at 100% zoom.
-- Align amounts and quantities to the right with tabular numerals.
-- Every icon-only control has an accessible label and visible focus.
-- Every async action exposes loading and failure states.
-- Tables must remain operable at tablet widths; horizontal scroll is contained.
-- Use consistent wording, dates, currency and quantity formats across modules.
-- Preserve authorization and tenant isolation in UI action visibility.
+The design system owns:
+- Typography roles, spacing, colors, borders, radii, focus rings, and elevation.
+- Visual styling and accessibility of buttons, inputs, menus, tables, dialogs, and status indicators.
+- Consistent hover/selected/disabled/loading appearance.
 
-### Technology
-React + TypeScript + Vite + Tailwind CSS v4 with semantic CSS tokens. Components are Spindl-owned and use accessible headless primitives where appropriate. Storybook is the long-term interactive documentation surface; Vitest, Testing Library, Playwright and axe provide quality gates.
+**Do not exchange one set of screen fields or workflows for another.** If improving usability appears to require information-architecture changes, propose them separately and wait for approval.
 
-### Architecture
+## 6. Implementation architecture
 ```
 frontend/src/design-system/
-  tokens.css           # semantic CSS variables and Tailwind v4 mapping
-  components/          # reusable UI components (not business logic)
-  patterns/            # filter bars, record inspectors, data tables
-  templates/           # page layouts
-  index.ts             # public exports
-frontend/src/features/ # domain-specific composition and hooks
+  tokens.css
+  components/
+  patterns/
+  index.ts
+frontend/src/features/   # existing screen composition and domain behavior
 ```
 
-### Review checklist
-[ ] Visually matches approved Inventory reference
-[ ] Uses shared components and tokens
-[ ] Readable typography and consistent density
-[ ] Loading, empty, error, disabled and focus states
-[ ] Keyboard, screen reader and responsive behavior
-[ ] No API/permissions/calculation regressions
-[ ] Typecheck, build and relevant tests pass
+Build an isolated component playground before applying shared styles to existing screens. Keep the playground out of the production navigation unless specifically approved. Migrate one existing component/region at a time. Do not rewrite the entire app stylesheet.
+
+## 7. Quality gates
+- All existing labels, fields, columns, sections, and actions remain present.
+- No meaningful text below 12px; tables, inputs, and body are 14px.
+- Type hierarchy matches the semantic scale exactly.
+- Keyboard/focus behavior, responsive overflow, and semantic statuses work.
+- Existing business behavior and API contracts remain unchanged.
+- `npm run typecheck`, `npm run build`, and relevant tests pass.
+- Before/after screenshots show the **same existing screen** with improved presentation.
+- PR reviewed before merge.
