@@ -198,8 +198,7 @@ tbody td { font-size: 12px; }
 .product-directory-panel tbody td:nth-child(7),
 .product-directory-panel tbody td:nth-child(8),
 .product-directory-panel tbody td:nth-child(9) { text-align: right; }
-.product-directory-panel .ref-cell,
-.product-directory-panel .amount-cell { color: var(--sp-text-secondary) !important; font-weight: 600; }
+.product-directory-panel tbody td.amount-cell { color: var(--sp-text-secondary); font-weight: 600; }
 .product-directory-panel .party-cell { gap: 10px; color: var(--sp-text-secondary); }
 .product-directory-panel .party-name { min-width: 0; gap: 3px; }
 .product-directory-panel .party-name b { color: #383b44; font-size: 12px; font-weight: 650; }
@@ -226,12 +225,20 @@ tbody td { font-size: 12px; }
   font: 600 11px/1.4 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 .product-directory-panel .mini-action:hover { background: #ebe6fa; }
-.product-directory-panel .mini-action.muted { color: #8a5149; background: #fff7f5; border-color: #f1dfdc; }
-.product-directory-panel .empty-cell { height: 90px; color: #6f7480; font-size: 12px; text-align: center !important; }
+.product-directory-panel .mini-action.muted {
+  color: var(--sp-text-secondary);
+  background: var(--sp-surface);
+  border-color: var(--sp-border);
+}
+.product-directory-panel .mini-action.muted:hover {
+  background: var(--sp-surface-hover);
+  border-color: var(--sp-border-strong);
+}
+.product-directory-panel tbody td.empty-cell { height: 90px; color: #6f7480; font-size: 12px; }
 .product-directory-panel button:focus-visible,
 .product-directory-panel input:focus-visible {
-  outline-color: var(--sp-focus);
-  box-shadow: 0 0 0 3px rgb(112 85 216 / 18%);
+  outline-color: var(--sp-brand);
+  box-shadow: 0 0 0 3px rgb(112 85 216 / 24%);
 }
 @media (max-width: 560px) {
   .product-directory-panel .directory-top { align-items: flex-start; }
