@@ -433,3 +433,49 @@ body {
   .warehouse-transfer-grid .warehouse-reason { grid-column: auto; }
   .warehouse-create-form button { justify-self: stretch; }
 }
+
+/* Purchasing and sales directories, workflow forms, and transaction dialogs. */
+.purchase-layout, .sales-layout { gap: 16px; }
+.purchase-layout .panel, .sales-layout .panel { border-radius: 8px; }
+.purchase-supplier-count, .purchase-footnote { color: #6f7480; font-size: 11px; }
+.supplier-row { border-top-color: var(--sp-border-subtle); }
+.supplier-row .party-name b { color: var(--sp-text); }
+.supplier-row .party-name small { color: #6f7480; }
+.action-inline { gap: 6px; flex-wrap: wrap; }
+.purchase-layout .mini-action, .sales-layout .mini-action { min-height: 32px; padding: 5px 9px; font-size: 10px; }
+.purchase-layout .table-controls, .sales-layout .table-controls { min-height: 48px; }
+.purchase-layout .table-scroll, .sales-layout .table-scroll { overscroll-behavior-x: contain; }
+.purchase-layout .panel-header, .sales-layout .panel-header { padding-bottom: 14px; }
+.purchase-layout .payables-total { color: var(--sp-text-secondary); font-size: 12px; }
+.purchase-layout .reorder-panel { overflow: hidden; }
+.purchase-layout .reorder-number { min-height: 36px; border-color: var(--sp-border); border-radius: 6px; color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.purchase-layout .reorder-actions { gap: 12px; padding: 14px 16px; border-top-color: var(--sp-border-subtle); }
+.purchase-layout .reorder-actions label { color: var(--sp-text-secondary); font-size: 12px; }
+.purchase-layout .reorder-actions select { min-height: 36px; border-color: var(--sp-border); border-radius: 6px; color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.purchase-layout .reorder-actions > span { color: #6f7480; font-size: 11px; }
+.purchase-layout .reorder-panel table { min-width: 720px; }
+.purchase-layout .form-note { border: 1px solid #ecd8ad; background: #fffaf0; color: #76571e; font-size: 12px; line-height: 1.5; }
+.sales-layout .sales-footnote, .sales-layout .purchase-footnote { line-height: 1.5; }
+.sales-layout .party-name { gap: 3px; }
+.sales-layout .party-name b { color: #383b44; font-size: 11px; }
+.sales-layout .party-name small { font-size: 10px; }
+.record-modal { display: grid; gap: 14px; }
+.record-modal > label { display: grid; gap: 6px; color: var(--sp-text-secondary); font-size: 12px; }
+.record-modal input, .record-modal select, .record-modal textarea { width: 100%; min-height: 36px; border: 1px solid var(--sp-border); border-radius: 6px; padding: 7px 10px; background: var(--sp-surface); color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.record-modal input:focus, .record-modal select:focus, .record-modal textarea:focus { border-color: var(--sp-brand); outline: 2px solid rgb(112 85 216 / 18%); outline-offset: 1px; }
+.record-modal .receive-line { gap: 7px; border-color: var(--sp-border-subtle); border-radius: 7px; padding: 12px; }
+.record-modal .receive-line > b { color: var(--sp-text); font-size: 12px; }
+.record-modal .receive-line > small { color: #6f7480; font-size: 11px; }
+.record-modal .form-row { gap: 10px; }
+.record-modal .form-row label { display: grid; gap: 5px; color: var(--sp-text-secondary); font-size: 12px; }
+.record-modal .modal-total { padding-top: 12px; border-top: 1px solid var(--sp-border-subtle); color: var(--sp-text-secondary); font-size: 12px; }
+.record-modal .modal-total b { color: var(--sp-text); font-size: 14px; font-variant-numeric: tabular-nums; }
+.record-modal .modal-actions { position: sticky; bottom: -26px; padding: 14px 0 0; background: var(--sp-surface); }
+
+@media (max-width: 700px) {
+  .purchase-layout .reorder-actions { align-items: stretch; }
+  .purchase-layout .reorder-actions select { width: 100%; }
+  .purchase-layout .reorder-actions .button { justify-content: center; }
+  .record-modal { padding: 20px; }
+  .record-modal .modal-actions { bottom: -20px; }
+}
