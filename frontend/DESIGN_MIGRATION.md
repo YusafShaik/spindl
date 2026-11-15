@@ -1,56 +1,71 @@
-# Spindl frontend modernization — agent-ready implementation plan
+# Spindl UI adoption plan — preserve existing screens
 
-## Current baseline (v2, 2026-11-15)
-React + TypeScript + Vite. App composition: `src/App.tsx`. Existing features: `src/features/`. Global styling: `src/styles.css`. Existing Inventory directory: `src/features/inventory/ProductDirectory.tsx`; inventory hooks: `src/features/inventory/useInventoryActions.ts`. No Tailwind or frontend test scripts were present in the inspected `package.json`. Existing CSS includes many 8–11px operational labels; these need to become legible.
+## Mission
+Implement the Spindl Precision Design System on the **existing** ERP UI. This is a styling/component adoption project, **not** a screen recreation, product redesign, or information-architecture project.
 
-## Execution sequence
+**Existing feature JSX, props, hooks, labels, sections, data, and workflows are authoritative.** No reference mockup may replace them. Follow `AGENTS.md` and the strict typography table in `frontend/DESIGN_SYSTEM.md`.
 
-### M0 — Foundations (this branch)
-- Establish canonical agent instructions, design spec and token file.
-- Preserve the approved HTML Inventory prototype as the visual reference; do not treat its sample data as production data.
-- Do not change existing business behavior.
+## Current codebase landmarks
+- React + TypeScript + Vite: `frontend/`
+- App composition and navigation: `frontend/src/App.tsx`
+- Existing shared stylesheet: `frontend/src/styles.css`
+- Existing feature implementations: `frontend/src/features/`
+- Existing API clients and types: `frontend/src/lib/`, `frontend/src/types/`
+- Semantic design tokens: `frontend/src/design-system/tokens.css`
 
-### M1 — Tooling + component library
-- Install Tailwind CSS v4 and Vite integration with a lockfile update.
-- Import `src/design-system/tokens.css` through the global style entry, without breaking existing CSS. Map Tailwind tokens via `@theme inline`.
-- Build canonical `Button`, `Input`, `StatusBadge`, `PageHeader`, `Tabs`, `FilterBar`, `DataTable`, `Drawer`, `EmptyState`.
-- Add Storybook or a dedicated `/design-system` development-only route to display components with all states.
-- Add unit tests and visual regression snapshots.
+Inspect the latest code before acting; these paths describe the baseline, not a license to rewrite them.
 
-### M2 — Inventory pilot
-- Keep `ProductDirectory` props and `useInventoryActions` behavior intact.
-- Replace table, toolbar, heading and actions with shared components.
-- Add item inspector; it must display real ItemSummary fields and call existing actions.
-- Preserve stock adjustment, threshold changes, movement history, search, export, pagination, and custom fields.
-- Validate keyboard, mobile overflow and permissions.
-- Capture before/after screenshots and obtain visual sign-off.
+## Milestone A — inventory current UI patterns (NO visual changes)
+1. Identify existing buttons, inputs, tables, status indicators, filters, dialogs, and layout patterns.
+2. Record current typography sizes and inconsistent styles.
+3. Produce a mapping from existing CSS/components to proposed semantic design-system components.
+4. Record business and UI contracts for any feature that will later be migrated.
+5. Do not edit production screens.
 
-### M3 — ERP module migration
-- Purchasing, Sales, Customers, Transactions, Manufacturing, Quality, CRM, Reports, Settings, Team, POS.
-- Reuse the same shell, record inspector, data grid, filters, dialogs and field primitives.
-- Remove legacy feature CSS only when no longer referenced.
+**Deliverable:** audited component map and a prioritized migration plan. No app redesign.
 
-### M4 — Quality gate and cleanup
-- Storybook coverage for shared components.
-- Vitest + Testing Library, Playwright smoke tests, axe accessibility checks.
-- Enforce design-system imports and avoid hardcoded values in feature code.
-- Validate desktop, tablet, phone, keyboard and reduced-motion modes.
+## Milestone B — isolated design-system playground (NO production UI changes)
+1. Integrate Tailwind CSS v4 in a way that does not reset or override existing application styles. Carefully isolate Tailwind preflight; verify no regression in existing pages.
+2. Implement shared tokens and semantic typography utilities from `DESIGN_SYSTEM.md` **exactly**.
+3. Build a small, reusable set of components based on actual Spindl UI needs.
+4. Expose an isolated development-only playground entry point; do not add new production navigation.
+5. Demonstrate component variants and states using sample data only in the playground.
+6. Verify the current app still looks and behaves the same.
 
-## Commands
+**Deliverable:** playground + components + typecheck/build/test results. Stop for visual review.
+
+## Milestone C — migrate one existing UI region per PR
+1. Choose a single existing region (e.g., a table toolbar or a form section); do not redesign an entire module.
+2. Record the region's existing headings, fields, labels, controls, action handlers, data sources, and behavior.
+3. Replace only its presentation with shared design-system components.
+4. Preserve every field and action; keep existing data and API integration unchanged.
+5. Test the region, including keyboard and responsive behavior.
+6. Capture before/after screenshots of the same region and check typography against the strict role table.
+7. Stop for review. Do not automatically migrate the next region.
+
+**Deliverable:** one small, reversible PR with a before/after screen contract.
+
+## Milestone D — extend adoption gradually
+After successful review, apply the same components to other existing regions across all ERP modules. Maintain a migration ledger showing migrated regions and remaining legacy styles. Remove old CSS only after proving no other screen depends on it.
+
+## Forbidden shortcuts
+- Recreating Inventory or any other screen from a demo/mockup.
+- Replacing real business sections with visually attractive invented sections.
+- Removing, hiding, renaming, or moving existing fields/actions to fit a layout.
+- Refactoring backend, API, permissions, calculations, or workflow handlers as part of UI migration.
+- Replacing the global stylesheet wholesale or allowing Tailwind preflight to change unrelated screens.
+- Shrinking table fonts below 14px or meaningful text below 12px.
+- Changing multiple modules in one PR.
+- Automatically merging a UI PR.
+
+## Validation
+From `frontend/`:
 ```bash
-cd frontend
 npm install
 npm run typecheck
 npm run build
 ```
-These commands are required for implementation PRs; they have **not** been executed as part of this documentation-only foundation.
+Also run relevant automated tests and manually verify affected workflows. Do not claim validation without execution.
 
-## Agent task prompt
-> Read AGENTS.md, frontend/DESIGN_SYSTEM.md and frontend/DESIGN_MIGRATION.md. Implement the next unchecked milestone on a feature branch. Match the approved Spindl Inventory Workspace reference: Linear-like precision in Spindl's purple/light palette. Preserve all existing backend interactions and business logic. Reuse the design-system components. Provide before/after screenshots, test results, and any remaining gaps.
-
-## Avoid
-- No wholesale App rewrite.
-- No replacement of real data with fixtures.
-- No new custom CSS for each feature.
-- No tiny 8–10px labels or dense unreadable tables.
-- No new design direction without explicit approval.
+## Agent task prompt — Milestone B only
+> Read AGENTS.md, frontend/DESIGN_SYSTEM.md, and frontend/DESIGN_MIGRATION.md. Implement **only Milestone B**: an isolated design-system playground and shared primitives. Strictly follow the semantic typography table (14px body/table/input, 12px minimum meaningful text). Existing screens and workflows are authoritative and must remain unchanged. Do not recreate any screen, alter App.tsx, rewrite styles.css, or add production navigation. Prevent Tailwind resets from affecting existing UI. Run typecheck/build, document tests and screenshot evidence, and open an unmerged PR for review. Stop after Milestone B.
