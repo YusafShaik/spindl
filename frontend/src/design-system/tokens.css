@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650&display=swap');
+@import "tailwindcss/theme";
+@import "tailwindcss/utilities";
+
+:root {
+  --sp-canvas: #F8F9FB;
+  --sp-sidebar: #F6F7F9;
+  --sp-surface: #FFFFFF;
+  --sp-surface-subtle: #FBFBFC;
+  --sp-surface-hover: #F5F5F8;
+  --sp-text: #22242B;
+  --sp-text-secondary: #59606D;
+  --sp-text-muted: #777E8B;
+  --sp-text-disabled: #98A0AC;
+  --sp-border: #E6E8ED;
+  --sp-border-subtle: #EFF0F3;
+  --sp-border-strong: #D6D9E1;
+  --sp-brand: #7055D8;
+  --sp-brand-hover: #6046C7;
+  --sp-brand-active: #533AB5;
+  --sp-brand-soft: #F1EEFE;
+  --sp-focus: #A998ED;
+  --sp-success: #20865B;
+  --sp-success-soft: #EEF8F1;
+  --sp-warning: #9A651C;
+  --sp-warning-soft: #FFF6E8;
+  --sp-danger: #B9434B;
+  --sp-danger-soft: #FDF0F1;
+  --sp-info: #2763A5;
+  --sp-info-soft: #EDF5FE;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--sp-text);
+  background: var(--sp-canvas);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+@theme inline {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --color-sp-canvas: var(--sp-canvas);
+  --color-sp-sidebar: var(--sp-sidebar);
+  --color-sp-surface: var(--sp-surface);
+  --color-sp-surface-subtle: var(--sp-surface-subtle);
+  --color-sp-surface-hover: var(--sp-surface-hover);
+  --color-sp-text: var(--sp-text);
+  --color-sp-text-secondary: var(--sp-text-secondary);
+  --color-sp-text-muted: var(--sp-text-muted);
+  --color-sp-text-disabled: var(--sp-text-disabled);
+  --color-sp-border: var(--sp-border);
+  --color-sp-border-subtle: var(--sp-border-subtle);
+  --color-sp-border-strong: var(--sp-border-strong);
+  --color-sp-brand: var(--sp-brand);
+  --color-sp-brand-hover: var(--sp-brand-hover);
+  --color-sp-brand-active: var(--sp-brand-active);
+  --color-sp-brand-soft: var(--sp-brand-soft);
+  --color-sp-focus: var(--sp-focus);
+  --color-sp-success: var(--sp-success);
+  --color-sp-success-soft: var(--sp-success-soft);
+  --color-sp-warning: var(--sp-warning);
+  --color-sp-warning-soft: var(--sp-warning-soft);
+  --color-sp-danger: var(--sp-danger);
+  --color-sp-danger-soft: var(--sp-danger-soft);
+  --color-sp-info: var(--sp-info);
+  --color-sp-info-soft: var(--sp-info-soft);
+}
+
+.sp-type-page { font-size: 24px; line-height: 32px; font-weight: 650; letter-spacing: -0.6px; }
+.sp-type-section { font-size: 18px; line-height: 26px; font-weight: 650; letter-spacing: -0.3px; }
+.sp-type-panel { font-size: 15px; line-height: 22px; font-weight: 600; letter-spacing: -0.1px; }
+.sp-type-body { font-size: 14px; line-height: 22px; font-weight: 400; letter-spacing: 0; }
+.sp-type-body-strong { font-size: 14px; line-height: 22px; font-weight: 600; letter-spacing: 0; }
+.sp-type-table { font-size: 14px; line-height: 20px; font-weight: 400; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.sp-type-table-head { font-size: 12px; line-height: 18px; font-weight: 600; letter-spacing: 0.2px; }
+.sp-type-input { font-size: 14px; line-height: 20px; font-weight: 400; letter-spacing: 0; }
+.sp-type-label { font-size: 13px; line-height: 20px; font-weight: 600; letter-spacing: 0; }
+.sp-type-control { font-size: 13px; line-height: 20px; font-weight: 600; letter-spacing: 0; }
+.sp-type-nav { font-size: 13px; line-height: 20px; font-weight: 500; letter-spacing: 0; }
+.sp-type-badge { font-size: 12px; line-height: 18px; font-weight: 600; letter-spacing: 0; }
+.sp-type-meta { font-size: 12px; line-height: 18px; font-weight: 400; letter-spacing: 0; }
+.sp-type-metric { font-size: 24px; line-height: 32px; font-weight: 650; letter-spacing: -0.6px; font-variant-numeric: tabular-nums; }
+
+@layer theme, base, components, utilities;

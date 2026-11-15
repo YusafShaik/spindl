@@ -1,0 +1,8 @@
+@import "./tokens.css";
+
+/* Preview-local normalization; this file is never imported by the production app. */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--sp-focus); outline-offset: 2px; }
