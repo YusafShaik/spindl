@@ -1,9 +1,10 @@
-import { StrictMode } from 'react';
+import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity, ArrowDown, ArrowDownUp, Bell, Boxes, Check, ChevronDown,
-  CircleHelp, Command, Download, Filter, LayoutDashboard, MoreHorizontal,
-  Package, Plus, Search, Settings2, SlidersHorizontal, Sparkles, Warehouse,
+  CircleHelp, Command, Download, Filter, LayoutDashboard, Menu, MoreHorizontal,
+  Package, Plus, Search, Settings2, SlidersHorizontal, Sparkles, Users,
+  Warehouse, Wrench, ShieldCheck, ChartNoAxesColumnIncreasing,
 } from 'lucide-react';
 import './preview.css';
 
@@ -19,16 +20,25 @@ const navigation = [
   { label: 'Overview', icon: LayoutDashboard },
   { label: 'Inventory', icon: Package, active: true },
   { label: 'Purchasing', icon: Boxes },
+  { label: 'Production', icon: Wrench },
+  { label: 'Quality', icon: ShieldCheck },
+];
+
+const businessNavigation = [
+  { label: 'Sales & POS', icon: ChartNoAxesColumnIncreasing },
+  { label: 'Customers', icon: Users },
   { label: 'Warehouses', icon: Warehouse },
 ];
 
 function Preview() {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
   return (
     <div className="preview-frame min-h-screen bg-sp-canvas font-sans text-sp-text">
-      <aside className="preview-sidebar">
+      <aside className={`preview-sidebar${mobileNavOpen ? ' is-open' : ''}`}>
         <a className="preview-brand" href="#preview" aria-label="Spindl illustrative preview home">
           <span className="preview-brand-mark"><i /><i /><i /><i /></span>
-          <span>spindl</span>
+          <span>spindl</span><span className="preview-brand-workspace">WORKSPACE</span>
           <ChevronDown size={14} className="text-sp-text-muted" />
         </a>
 
@@ -42,9 +52,13 @@ function Preview() {
           <Search size={15} /><span>Search anything</span><kbd><Command size={10} /> K</kbd>
         </button>
 
-        <div className="preview-nav-caption">WORKSPACE</div>
         <nav className="preview-navigation" aria-label="Illustrative preview navigation">
+          <div className="preview-nav-caption">WORKSPACE</div>
           {navigation.map(({ label, icon: Icon, active }) => <a key={label} href={`#${label.toLowerCase()}`} className={`preview-nav-item${active ? ' is-active' : ''}`} aria-current={active ? 'page' : undefined}><Icon size={16} strokeWidth={1.8} /><span>{label}</span>{label === 'Inventory' && <span className="preview-nav-count">24</span>}</a>)}
+          <div className="preview-nav-caption preview-nav-caption-spaced">BUSINESS</div>
+          {businessNavigation.map(({ label, icon: Icon }) => <a key={label} href={`#${label.toLowerCase()}`} className="preview-nav-item"><Icon size={16} strokeWidth={1.8} /><span>{label}</span></a>)}
+          <div className="preview-nav-caption preview-nav-caption-spaced">ADMINISTRATION</div>
+          <a href="#team" className="preview-nav-item"><Users size={16} strokeWidth={1.8} /><span>Team</span></a>
         </nav>
 
         <div className="preview-sidebar-bottom">
@@ -53,26 +67,32 @@ function Preview() {
           <button className="preview-profile" type="button"><span className="preview-profile-avatar">AS</span><span className="preview-workspace-copy"><strong>Arjun Sharma</strong><small>Workspace admin</small></span><MoreHorizontal size={17} /></button>
         </div>
       </aside>
+      {mobileNavOpen && <button className="preview-mobile-overlay" type="button" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
 
       <div className="preview-main">
         <header className="preview-topbar">
-          <div className="preview-breadcrumb"><span>Workspace</span><span className="preview-slash">/</span><strong>Inventory</strong></div>
+          <div className="preview-breadcrumb"><button className="preview-mobile-toggle" type="button" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}><Menu size={17} /></button><span>Workspace</span><span className="preview-slash">/</span><strong>Inventory</strong><span className="preview-slash">/</span><span>Illustrative items</span></div>
           <div className="preview-topbar-actions"><span className="preview-shortcut-hint">Inventory overview</span><button className="preview-icon-button" aria-label="Notifications" type="button"><Bell size={17} /><i /></button><span className="preview-topbar-divider" /><span className="preview-user-dot">AS</span></div>
         </header>
 
         <main className="preview-content">
-          <div className="preview-kicker"><Sparkles size={14} /> ILLUSTRATIVE DESIGN PREVIEW</div>
+          <div className="preview-kicker"><Sparkles size={14} /> SAMPLE WORKSPACE / INVENTORY</div>
           <div className="preview-page-heading">
             <div><h1 className="sp-type-page">Inventory</h1><p className="sp-type-body text-sp-text-secondary">A sample workspace composition for reviewing Spindl’s visual language.</p></div>
             <div className="preview-heading-actions"><button className="preview-button preview-button-secondary" type="button"><Download size={15} /> Export</button><button className="preview-button preview-button-primary" type="button"><Plus size={16} /> New item</button></div>
           </div>
 
           <section className="preview-section" aria-labelledby="inventory-list-title">
-            <div className="preview-section-heading"><div><h2 id="inventory-list-title" className="sp-type-section">Items</h2><p className="sp-type-meta text-sp-text-muted">Illustrative sample records · 5 items shown</p></div><button className="preview-icon-button preview-section-menu" aria-label="More item list options" type="button"><MoreHorizontal size={18} /></button></div>
+            <div className="preview-section-heading"><div><h2 id="inventory-list-title" className="sp-type-section">Items</h2><p className="sp-type-body text-sp-text-secondary">A sample view of stock records and availability.</p></div><button className="preview-text-action" type="button">View activity <ArrowDown size={14} className="preview-next-arrow" /></button></div>
+            <div className="preview-tabs" role="tablist" aria-label="Illustrative preview sections">
+              <button className="preview-tab is-active" type="button" role="tab" aria-selected="true">Records <span>24</span></button>
+              <button className="preview-tab" type="button" role="tab" aria-selected="false">Controls <span>6</span></button>
+              <button className="preview-tab" type="button" role="tab" aria-selected="false">States <span>4</span></button>
+            </div>
             <div className="preview-panel">
               <div className="preview-toolbar">
                 <label className="preview-search"><Search size={16} /><span className="sr-only">Search illustrative items</span><input placeholder="Search items…" /></label>
-                <div className="preview-filter-actions"><button className="preview-button preview-button-filter" type="button"><Filter size={15} /> Filters <span className="preview-filter-count">2</span></button><button className="preview-button preview-button-filter preview-sort-button" type="button"><ArrowDownUp size={15} /><span>Sort</span></button></div>
+                <div className="preview-filter-actions"><button className="preview-button preview-button-filter" type="button"><Filter size={15} /> Filters</button><label className="preview-select-wrap"><span className="sr-only">Sample location</span><select className="preview-button preview-button-filter preview-select" defaultValue="all"><option value="all">All locations</option><option value="north">North facility</option><option value="south">South facility</option></select><ChevronDown size={14} /></label><button className="preview-button preview-button-filter preview-columns-button" type="button"><SlidersHorizontal size={15} /> Columns</button><button className="preview-button preview-button-filter preview-sort-button" type="button"><ArrowDownUp size={15} /><span>Sort</span></button></div>
               </div>
               <div className="preview-table-scroll" tabIndex={0} aria-label="Scrollable illustrative inventory table">
                 <table className="preview-table">
