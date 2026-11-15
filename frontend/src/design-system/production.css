@@ -479,3 +479,132 @@ body {
   .record-modal { padding: 20px; }
   .record-modal .modal-actions { bottom: -20px; }
 }
+
+/* Manufacturing, quality, and lead-management workspaces. */
+.manufacturing-layout, .quality-layout, .lead-layout { gap: 16px; }
+.production-tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--sp-border); border-radius: 8px; background: var(--sp-surface); }
+.production-tabs button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--sp-text-secondary); font: 550 11px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.production-tabs button:hover { background: var(--sp-surface-hover); color: var(--sp-text); }
+.production-tabs button.active { background: var(--sp-brand-soft); color: #533ab5; font-weight: 650; }
+.production-form-panel { padding: 18px 20px; }
+.production-form-panel .panel-header { margin-bottom: 15px; }
+.production-form-row { gap: 12px; }
+.production-form-row label, .production-form label { display: grid; gap: 6px; color: var(--sp-text-secondary); font-size: 12px; }
+.production-form-row input, .production-form-row select, .production-form input, .production-form select, .production-form textarea { min-height: 36px; border: 1px solid var(--sp-border); border-radius: 6px; padding: 7px 10px; background: var(--sp-surface); color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.production-form-actions { gap: 8px; padding-top: 14px; border-top-color: var(--sp-border-subtle); }
+.production-metrics { gap: 10px; }
+.production-metric { min-height: 96px; padding: 14px 15px; border: 1px solid var(--sp-border); border-radius: 8px; background: var(--sp-surface); }
+.production-metric small { color: var(--sp-text-muted); font-size: 10px; }
+.production-metric b { color: var(--sp-text); font: 700 20px/1.25 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.production-metric span { color: #6f7480; font-size: 11px; }
+.production-board-filters { gap: 9px; padding: 14px 16px; border: 1px solid var(--sp-border); border-radius: 8px; background: var(--sp-surface); }
+.production-board-filters h3 { color: var(--sp-text); font-size: 12px; }
+.production-board-filters p { color: #6f7480; font-size: 11px; }
+.production-board-filters input, .production-board-filters select { min-height: 36px; border-color: var(--sp-border); border-radius: 6px; padding: 0 10px; color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.work-order-progress > div { height: 6px; background: #eeedf3; }
+.work-order-progress > div span { background: var(--sp-brand); }
+.work-order-progress small { color: #6f7480; font-size: 11px; }
+.work-order-card, .production-form-panel, .work-center-queue { border-radius: 8px; }
+.work-order-card table { min-width: 650px; }
+.work-order-allocations { border-color: var(--sp-border); border-radius: 7px; background: var(--sp-surface-subtle); }
+.work-order-allocations > b, .work-order-allocations label { color: var(--sp-text-secondary); font-size: 12px; }
+.work-order-allocations select { min-height: 36px; border-color: var(--sp-border); border-radius: 6px; color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.work-order-cost { border: 1px solid var(--sp-border-subtle); border-radius: 7px; background: var(--sp-surface-subtle); color: var(--sp-text-secondary); }
+.work-order-cost small { color: #6f7480; }
+.work-center-actions { white-space: nowrap; }
+.queue-card-list { gap: 8px; }
+.queue-card { border-color: var(--sp-border); border-radius: 7px; padding: 12px; }
+.queue-card b { color: var(--sp-text); font-size: 12px; }
+.queue-card small, .job-card-heading p { color: #6f7480; font-size: 11px; }
+.queue-card-state select { min-height: 36px; border-color: var(--sp-border); border-radius: 6px; color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.bom-history-list { background: var(--sp-surface-subtle); }
+.bom-history-list > div { border-bottom-color: var(--sp-border-subtle); font-size: 11px; }
+.bom-history-list b { color: #533ab5; }
+.bom-history-list time { color: #6f7480; font-size: 10px; }
+.quality-lot-list { gap: 10px; padding: 14px 16px; }
+.quality-lot { gap: 10px; border-color: var(--sp-border); border-radius: 7px; padding: 14px; }
+.quality-lot-heading b { color: var(--sp-text); font-size: 12px; }
+.quality-lot-heading small, .quality-lot p { color: #6f7480; font-size: 11px; }
+.quality-inspection-form { gap: 10px; }
+.quality-inspection-form label { color: var(--sp-text-secondary); font-size: 12px; }
+.quality-inspection-form input, .quality-inspection-form select { min-height: 36px; border-color: var(--sp-border); border-radius: 6px; padding: 0 10px; color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.lead-create-form { gap: 12px; }
+.lead-create-form label, .lead-activity-form, .lead-convert-form label { color: var(--sp-text-secondary); font-size: 12px; }
+.lead-create-form input, .lead-activity-form input, .lead-activity-form select, .lead-convert-form input, .lead-convert-form select, .lead-card-header select { min-height: 36px; border-color: var(--sp-border); border-radius: 6px; padding: 0 10px; color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.lead-board { gap: 12px; }
+.lead-board-heading h2 { color: var(--sp-text); font-size: 16px; }
+.lead-board-heading p { color: #6f7480; font-size: 11px; }
+.lead-stage-counts span { border-color: var(--sp-border); border-radius: 6px; padding: 6px 8px; color: var(--sp-text-secondary); font-size: 10px; }
+.lead-stage-counts b { color: var(--sp-text); }
+.lead-card { gap: 12px; border-radius: 8px; padding: 15px 16px; }
+.lead-card-header h3 { color: var(--sp-text); font-size: 13px; }
+.lead-card-header p { color: #6f7480; font-size: 11px; }
+.lead-next-action { border-left-color: var(--sp-brand); border-radius: 0 5px 5px 0; background: var(--sp-brand-soft); color: #51438d; font-size: 11px; }
+.lead-activities > b { color: var(--sp-text-secondary); font-size: 11px; }
+.lead-activities > div { grid-template-columns: 78px minmax(0, 1fr) auto; border-bottom-color: var(--sp-border-subtle); padding: 7px 0; }
+.lead-activities > div > span { color: #533ab5; font-size: 10px; }
+.lead-activities p { color: var(--sp-text-secondary); font-size: 11px; }
+.lead-activities time, .lead-activities > small { color: #6f7480; font-size: 10px; }
+.lead-convert { border-top-color: var(--sp-border-subtle); }
+.lead-convert summary { color: #533ab5; font-size: 11px; }
+
+@media (max-width: 850px) {
+  .production-form-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .production-tabs { overflow-x: auto; }
+  .production-tabs button { white-space: nowrap; }
+  .production-form-panel { padding: 15px; }
+  .quality-inspection-form { grid-template-columns: 1fr 1fr; }
+  .quality-inspection-form label:nth-child(3) { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .production-form-row { grid-template-columns: 1fr; }
+  .lead-create-form { grid-template-columns: 1fr; }
+  .lead-activity-form { grid-template-columns: 1fr; }
+  .lead-activity-form input[name="body"] { grid-column: auto; }
+  .lead-activities > div { grid-template-columns: 68px minmax(0, 1fr); }
+  .lead-activities time { grid-column: 2; }
+}
+
+/* Point-of-sale workspace and receipt controls. */
+.pos-layout { gap: 16px; }
+.pos-open-form { gap: 12px; padding: 14px 0 17px; }
+.pos-open-form label, .pos-open-shift form label { color: var(--sp-text-secondary); font-size: 12px; }
+.pos-open-form input, .pos-open-form select, .pos-layout select, .pos-layout input { min-height: 36px; border-color: var(--sp-border); border-radius: 6px; color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.pos-session-active { color: var(--sp-text-secondary); font-size: 12px; }
+.pos-session-active b { color: var(--sp-text); }
+.pos-workspace { gap: 16px; }
+.pos-workspace > .panel { min-width: 0; padding: 18px; }
+.pos-product-list, .pos-basket { max-height: min(520px, 60vh); }
+.pos-product, .pos-basket-line { min-height: 58px; border-bottom-color: var(--sp-border-subtle); color: var(--sp-text-secondary); font-size: 12px; }
+.pos-product:hover { background: var(--sp-surface-hover); }
+.pos-product b, .pos-basket-line b { color: var(--sp-text); }
+.pos-product small, .pos-basket-line small, .pos-open-shift small { color: #6f7480; font-size: 11px; }
+.pos-basket-line > div { min-width: 0; }
+.pos-layout form > label { color: var(--sp-text-secondary); font-size: 12px; }
+.pos-totals { gap: 9px; padding: 15px 0; border-top-color: var(--sp-border-subtle); color: var(--sp-text-secondary); font-size: 12px; }
+.pos-totals b { color: var(--sp-text); font-variant-numeric: tabular-nums; }
+.pos-open-shift { border-top-color: var(--sp-border-subtle); font-size: 12px; }
+.pos-receipt { gap: 14px; padding: 16px 18px; }
+.pos-receipt h2 { color: var(--sp-text); font-size: 15px; }
+.pos-receipt p { color: #6f7480; font-size: 11px; }
+.pos-receipt-lines { color: var(--sp-text-secondary); font-size: 11px; }
+.pos-receipt-lines b { color: var(--sp-text); font-variant-numeric: tabular-nums; }
+.pos-history-sale { padding: 14px 0; border-top-color: var(--sp-border-subtle); }
+.pos-history-heading { color: var(--sp-text); font-size: 12px; }
+.pos-history-heading small { color: #6f7480; font-size: 11px; }
+.pos-refund-details { color: var(--sp-text-secondary); font-size: 12px; }
+.pos-refund-details summary { color: #533ab5; }
+.pos-refund-line { border-bottom-color: var(--sp-border-subtle); }
+.pos-refund-line label, .pos-refund-controls label, .pos-price-controls label { color: var(--sp-text-secondary); font-size: 11px; }
+.pos-refund-line input, .pos-refund-line select, .pos-refund-controls input, .pos-refund-controls select { min-height: 36px; border-color: var(--sp-border); border-radius: 6px; color: var(--sp-text); font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.pos-price-controls input { min-height: 36px; border-color: var(--sp-border); border-radius: 6px; }
+.pos-pending-checkout { border-color: #e4cb9b; border-radius: 8px; background: #fffaf0; }
+.pos-pending-checkout p { color: #76571e; font-size: 12px; line-height: 1.5; }
+@media (max-width: 760px) {
+  .pos-workspace { grid-template-columns: minmax(0, 1fr); }
+  .pos-workspace > .panel { padding: 15px; }
+  .pos-open-form { align-items: stretch; }
+  .pos-open-form > .button { justify-content: center; }
+}
