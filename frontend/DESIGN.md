@@ -33,8 +33,9 @@
 | `--sp-surface-subtle` | `#FBFBFC` | Table header, quiet regions |
 | `--sp-surface-hover` | `#F8F8FB` | Reference neutral button hover |
 | `--sp-text` | `#22242B` | Primary content |
-| `--sp-text-secondary` | `#5B606C` | Reference secondary table content |
-| `--sp-text-muted` | `#858995` | Reference muted text: short captions, compact metadata, placeholders. Increase contrast for essential/help text when required by the accessibility rules below. |
+| `--sp-text-secondary` | `#5B606C` | Reference secondary table content; use for important supporting copy |
+| `--sp-text-muted` | `#858995` | Historical reference muted text, for nonessential decoration only. For visible UI copy, use accessible `--sp-text-supporting` below instead. |
+| `--sp-text-supporting` | `#626775` | Readable descriptions, breadcrumbs, short metadata, placeholders, form labels and other secondary text on light surfaces (intentional legibility adjustment) |
 | `--sp-text-disabled` | `#98A0AC` | Disabled-only text |
 | `--sp-border` | `#E9EAEE` | Reference standard borders |
 | `--sp-border-subtle` | `#F0F1F4` | Reference table row dividers |
@@ -43,7 +44,7 @@
 | `--sp-brand-hover` | `#6046C7` | Hovered primary actions (reference) |
 | `--sp-brand-active` | `#533AB5` | Pressed primary actions |
 | `--sp-brand-soft` | `#F1EEFE` | Selected navigation and subtle accent background |
-| `--sp-focus` | `#B8A8F7` | Reference keyboard focus outline |
+| `--sp-focus` | `#B8A8F7` | Focus border color (formerly the reference outline color); apply as a crisp 1px border without a large shadow on text fields |
 | `--sp-success` | `#20865B` | Semantic success base; reference badge foreground is `#36865E` |
 | `--sp-success-soft` | `#EEF8F1` | Positive state background |
 | `--sp-warning` | `#A16A20` | Reference warning base; badge foreground `#A87830` and caution accent `#B78035` |
@@ -55,7 +56,9 @@
 
 Additional reference-only state colors used by the HTML: sidebar hover `#E9EAF0`, sidebar active `#EAE5FB`, table hover `#FBFAFF`, table selected `#F7F5FF`, and quiet control surface `#F8F8FA`. Use these only for their corresponding scoped state; they are not additional general-purpose surface tokens.
 
-**Rules:** These are the approved reference colors, consolidated from its CSS values. Brand purple is for active/selected states, primary CTA, links, and focus—not arbitrary card fills. Use semantic colors only for actual statuses. Statuses must include text or icons, not color alone. Validate contrast: normal text >= 4.5:1; large text and meaningful icons >= 3:1. The reference's exact subdued text and status foregrounds should be preserved for visual fidelity when nonessential and legible; where essential information fails contrast, use a stronger accessible foreground and record the visual difference. Never weaken essential contrast to match a screenshot.
+**Legibility correction (approved accessibility exception):** The playground screenshot showed nearly invisible page headings, form labels, panel headings, and checkbox labels. Never apply pale text or opacity to primary headings, labels, control values, selected/unselected choice labels, or actionable text. Set those to `--sp-text` (`#22242B`). Use `--sp-text-supporting` (`#626775`) for readable helper text, placeholders, breadcrumbs, captions, and descriptions. Reserve `--sp-text-muted` (`#858995`) for genuinely nonessential metadata; never use opacity to wash out essential text. All ordinary labels and body text must meet 4.5:1 contrast against their actual surface. These changes intentionally override the reference’s low-contrast presentation.
+
+**Rules:** These are the approved reference colors, consolidated from its CSS values. Brand purple is for active/selected states, primary CTA, links, and focus—not arbitrary card fills. Use semantic colors only for actual statuses. Statuses must include text or icons, not color alone. Validate contrast: normal text >= 4.5:1; large text and meaningful icons >= 3:1. The reference's exact subdued text and status foregrounds may be preserved only for genuinely nonessential content when legible; where essential information fails contrast, use a stronger accessible foreground and record the visual difference. Never weaken essential contrast to match a screenshot.
 
 ### 2.2 Typography — reference values and accessibility exceptions
 
@@ -138,7 +141,7 @@ Each contract describes **appearance and interaction only**. Existing component 
 
 ### 3.2 Text fields, selects, textareas, search
 - Reference inputs/selects: white background, 1px reference border, 6px radius, 33px search/filter height, 10px horizontal padding, 11px control text. The create-item form uses 36px height, 10px padding, and 11px text.
-- Placeholder uses muted readable color. The HTML uses a 3px `#B8A8F7` focus outline with 2px offset on buttons/inputs/selects, and a focused search border with a subtle purple ring. Preserve equivalent visible focus in production; do not reduce it to a border-only change. Error styling must use danger border plus message text and accessible association.
+- Placeholder uses `--sp-text-supporting` for legibility; labels and field values use `--sp-text`. The HTML originally used a 3px `#B8A8F7` outline with 2px offset. **Approved minimal-focus exception:** inputs, selects, textareas, search fields, and date fields use a clean 1px `#B8A8F7` border on focus, with **no box-shadow, outer glow, or thick offset outline**. To ensure keyboard focus remains discernible, add a restrained 2px *inset* focus indicator where the border alone is not sufficiently distinguishable, or use a 2px solid border without changing control geometry (`box-sizing: border-box`). For keyboard-focused buttons, icon controls, checkboxes, radios, switches, and links, retain a clearly visible 2px focus-visible outline (no shadow) so focus is not communicated by a faint border alone. Error styling must use danger border plus message text and accessible association.
 - Reference form labels are 11px semibold. Increase to 12px minimum when essential/readability requires it; 13px is acceptable as an explicit accessibility adjustment. Reference label-to-control gap is 6px.
 - Preserve existing required, disabled, read-only, number formatting, validation, autocomplete, dropdown options, and keyboard handling.
 - Search input: same field tokens; search icon 16px; clear action only if already supported or explicitly approved.
@@ -183,6 +186,13 @@ Each contract describes **appearance and interaction only**. Existing component 
 ### 3.9 States every shared primitive must support
 Default, hover, active/pressed, focus-visible, selected (where relevant), disabled, read-only (where relevant), loading, validation error, success/warning (where relevant), empty (containers), and high-contrast/zoom behavior. Hover must not be the only indicator of state.
 
+### 3.10 Readability and minimal-focus acceptance checks
+
+- On the light canvas and white panels, page titles, section/panel headings, field labels, checkbox/radio labels, input values, table values, and button labels must be visibly dark (`#22242B`) and never have reduced opacity unless genuinely disabled.
+- Descriptions, breadcrumbs, metadata needed for understanding, and placeholders use `#626775` or a darker color; validate normal-text contrast at least 4.5:1.
+- Focusing a text input, search, select, textarea, or date field changes its border to `#B8A8F7` without an external glow or oversized shadow. Keyboard focus on non-field controls remains obvious.
+- Verify default, hover, focus, invalid, disabled, and selected states at desktop and narrow viewport widths; preserve all existing behavior. These are deliberate readability/focus exceptions to the original HTML reference, not a claim of pixel identity.
+
 ## 4. Tailwind CSS v4 — safe implementation rules
 
 1. Use Tailwind CSS **v4** with the Vite integration compatible with the repository's current dependencies. Inspect existing Vite/PostCSS setup first; do not install duplicate plugins or replace config blindly.
@@ -194,74 +204,3 @@ Default, hover, active/pressed, focus-visible, selected (where relevant), disabl
 7. Shared primitives belong in an appropriate existing shared-component location or `frontend/src/design-system/components/` if no suitable library exists. **Do not build a second parallel component library** when a reusable component already exists; adopt styling in place when possible.
 8. Tailwind class composition must preserve passed `className`, refs, native attributes, accessibility, and event handlers. Avoid wrappers that break table structure or forms.
 9. If Tailwind integration affects untouched screens, **revert the integration and isolate it**. Do not compensate with broad global CSS patches.
-
-### Example token implementation pattern (illustrative, not a second specification)
-
-```css
-/* Scoped/adopted only after approval; never blindly replace app styles. */
-:root {
-  --sp-brand: #7055d8;
-  --sp-text: #22242b;
-  --sp-surface: #ffffff;
-  --sp-border: #e6e8ed;
-}
-@theme inline {
-  --color-sp-brand: var(--sp-brand);
-  --color-sp-text: var(--sp-text);
-  --color-sp-surface: var(--sp-surface);
-  --color-sp-border: var(--sp-border);
-}
-```
-
-## 5. Migration protocol — strictly one screen at a time
-
-### Phase 0 — read-only audit (no changes)
-- Inspect repository scripts, dependencies, global CSS, current shared components, routing, and the selected screen's actual JSX/hooks/types.
-- Record the screen contract: **every section, heading, field, column, action, filter, validation, permission, data source, loading/empty/error state, and responsive behavior**. Capture a baseline screenshot at desktop and narrow viewport.
-- Identify existing components to restyle in place and candidates for safe presentational extraction. Report risks. **Stop for approval.**
-
-### Phase 1 — isolated foundation (no production visual changes)
-- Set up Tailwind v4 without global reset leakage; implement semantic tokens, strict Inter type roles, and a minimal set of shared primitives actually used by the selected screen.
-- Make an **isolated development-only component preview** (separate entry point if necessary), not a new production route or another screen recreation. Use representative component states, not a substitute page.
-- Verify untouched app screens remain visually and functionally unchanged. Open a small PR and **stop for review**.
-
-### Phase 2 — first approved screen, one region per PR
-- Choose a real existing screen **only after explicit user approval**. Preserve its structure and all functionality. Restyle one existing region (e.g., toolbar, table, form) using shared primitives; no redesign of content.
-- Compare the region's before/after contract. Check exact typography, alignment, borders, focus/hover, empty/loading/error, responsive overflow, and keyboard use.
-- Run checks and show side-by-side screenshots. **Stop after that region.** Never automatically continue to the next region or screen.
-
-### Phase 3 — gradual adoption
-- After approval, repeat the same region-by-region procedure for the rest of the approved screen, then subsequent screens. Remove legacy CSS only when no remaining component depends on it.
-- Prefer improving existing shared primitives once rather than editing every feature with different ad hoc styles.
-
-## 6. Verification and merge gates
-
-**Mandatory for each PR:**
-- `git diff` reviewed to confirm only intended files/region changed.
-- Run actual repository-supported frontend typecheck, lint, build, and relevant tests. **Discover script names in `package.json`; do not assume `npm run typecheck` exists.** Report executed commands, results, and any missing scripts.
-- Check at least one untouched screen to detect CSS/preflight regressions.
-- Verify all existing fields, columns, controls, and actions still appear and behave identically.
-- Verify keyboard navigation, focus restoration, accessible labels, readable status contrast, 200% zoom, and responsive scrolling.
-- Capture before/after screenshots of the **same actual screen/region** at comparable viewport widths. No invented replacement screen.
-- Record any design-token exceptions, accessibility adjustments, and remaining work in the PR description (not a new Markdown file).
-- **No auto-merge.** Stop for user review.
-
-**Immediate stop conditions:** A field/column/action disappears; navigation changes; data/API behavior changes; existing screens visually regress; Tailwind reset leaks; essential text falls below the accessibility minimum defined in §2.2 without an approved exception; a new screen or KPI is invented; an unapproved dependency migration becomes necessary. Revert the offending UI change and ask before continuing. Compact 10–11px reference roles are permitted only for the short, secondary uses explicitly described in §2.2.
-
-## 7. Reusable Codex task instructions
-
-### First task (after this document is approved and committed)
-
-> Read `frontend/DESIGN.md` completely. Do **Phase 0 only**, a read-only audit of existing shared UI patterns, Tailwind integration risks, and the single screen I nominate. Do not modify files. Identify the existing component contracts and propose a minimal first PR. Treat the approved HTML as the visual authority and production components as the behavior/content authority. Use Inter. Apply any accessibility typography adjustment explicitly and disclose its visual difference; do not recreate a screen. Stop and ask for my approval.
-
-### Foundation task (only after Phase 0 approval)
-
-> Read `frontend/DESIGN.md`. Implement **Phase 1 only**: isolated Tailwind v4 tokens and shared presentational primitives with a development-only component preview. Match the approved HTML's visual values, with documented accessibility adjustments where necessary. Do not change production routes, feature screens, navigation, business logic, or global CSS behavior. Prevent Tailwind Preflight from affecting untouched screens. Run supported checks and submit an unmerged PR. Stop.
-
-### Screen-region task (only after explicit screen and region approval)
-
-> Read `frontend/DESIGN.md`. Restyle only **[approved screen] → [approved region]** using existing data, fields, columns, handlers, permissions, and workflows. Match the approved HTML's appearance values and apply/disclose only documented accessibility adjustments. No screen recreation, feature additions, layout substitution, global CSS rewrite, or unrelated refactoring. Show same-region before/after screenshots, test behavior, and open an unmerged PR. Stop.
-
-## 8. Change control
-
-Any proposed deviation in typography, tokens, component geometry, screen layout, or functionality requires explicit user approval. Update **this same file** if a design standard changes; do not create a second design document. A production feature change is a separate task from a design-system migration.
