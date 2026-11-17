@@ -136,7 +136,118 @@ export function PurchaseRequisitionPanel({ requisitions, suppliers, items, role,
   };
 
   return <>
-    <section className="panel directory-panel"><div className="panel-header directory-top"><div><h2>Purchase requisitions <span className="record-count">{requisitions.length}</span></h2><p>Submit an item request, get manager approval, then convert it into a supplier PO.</p></div><button className="button button-primary" onClick={openCreate}><Plus size={14}/> New requisition</button></div><div className="table-scroll"><table><thead><tr><th>REQUISITION</th><th>NEED BY</th><th>ITEMS</th><th>STATUS</th><th>PURCHASE ORDER</th><th>ACTION</th></tr></thead><tbody>{requisitions.length ? requisitions.map((requisition) => <tr key={requisition.id}><td className="ref-cell">{requisition.requisitionNumber}</td><td className="date-cell">{requisition.needByDate || '—'}</td><td>{requisition.lines.map((line) => `${line.sku} × ${line.quantity}`).join(', ')}</td><td><Status label={requisition.status.toLowerCase().replace('_', ' ')}/></td><td className="ref-cell">{requisition.purchaseOrderNumber || '—'}</td><td><div className="action-inline">{requisition.status === 'SUBMITTED' && managers && <><button className="mini-action" disabled={saving} onClick={() => void approve(requisition)}>Approve</button><button className="mini-action muted" disabled={saving} onClick={() => setRejecting(requisition)}>Reject</button></>}{requisition.status === 'APPROVED' && <button className="mini-action" disabled={saving} onClick={() => openConvert(requisition)}>Create draft PO</button>}</div></td></tr>) : <tr><td className="empty-cell" colSpan={6}>No purchase requisitions yet. Add a request to start the approval flow.</td></tr>}</tbody></table></div></section>
+    <div className="sales-table-card">
+      <div className="sales-toolbar" style={{ padding: '12px 16px', borderBottom: '1px solid var(--sp-border)', marginBottom: 0 }}>
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>
+            Internal Requisitions <span className="sales-subnav-badge" style={{ marginLeft: '6px' }}>{requisitions.length}</span>
+          </div>
+          <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
+            Submit an item request, get manager approval, then convert it into a supplier PO.
+          </div>
+        </div>
+        <button type="button" className="sales-action-btn primary" onClick={openCreate}>
+          <Plus size={13} /> New requisition
+        </button>
+      </div>
+
+      <div className="sales-table-scroll">
+        <table className="sales-table">
+          <thead>
+            <tr>
+              <th style={{ width: '150px' }}>REQUISITION #</th>
+              <th style={{ width: '120px' }}>NEED BY</th>
+              <th>REQUESTED ITEMS</th>
+              <th style={{ width: '120px' }}>STATUS</th>
+              <th style={{ width: '140px' }}>PURCHASE ORDER</th>
+              <th style={{ width: '180px', textAlign: 'right' }}>ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody>
+            {requisitions.length ? (
+              requisitions.map((requisition) => (
+                <tr key={requisition.id} className="sales-row">
+                  <td>
+                    <span className="sales-ref-badge">{requisition.requisitionNumber}</span>
+                  </td>
+                  <td>
+                    <span className="sales-date-cell">{requisition.needByDate || '—'}</span>
+                  </td>
+                  <td>
+                    <div className="sales-items-preview">
+                      {requisition.lines.map((line, idx) => (
+                        <span key={line.id || idx} className="sales-item-tag">
+                          <span className="sales-item-sku">{line.sku}</span>
+                          <span className="sales-item-qty">× {line.quantity}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td>
+                    <Status label={requisition.status.toLowerCase().replace('_', ' ')} />
+                  </td>
+                  <td>
+                    {requisition.purchaseOrderNumber ? (
+                      <span className="sales-ref-badge">{requisition.purchaseOrderNumber}</span>
+                    ) : (
+                      <span className="sales-sub-ref">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="sales-actions-cell">
+                      {requisition.status === 'SUBMITTED' && managers && (
+                        <>
+                          <button
+                            type="button"
+                            className="sales-action-btn primary"
+                            disabled={saving}
+                            onClick={() => void approve(requisition)}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="sales-action-btn ghost"
+                            disabled={saving}
+                            onClick={() => setRejecting(requisition)}
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      {requisition.status === 'APPROVED' && (
+                        <button
+                          type="button"
+                          className="sales-action-btn primary"
+                          disabled={saving}
+                          onClick={() => openConvert(requisition)}
+                        >
+                          Create draft PO
+                        </button>
+                      )}
+                      {requisition.status === 'CONVERTED' && (
+                        <span className="sales-status-chip completed">Converted</span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={6} className="sales-empty-cell">
+                  <div className="sales-empty-state">
+                    <div className="sales-empty-title">No purchase requisitions yet</div>
+                    <div className="sales-empty-desc">
+                      Add an internal item request to trigger manager approval and supplier PO conversion.
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
     {creating && <div className="modal-backdrop" onMouseDown={(event) => closeOnBackdrop(event, () => setCreating(false))}><form className="record-modal" onSubmit={(event) => void create(event)}><div className="modal-title"><div><h2>New purchase requisition</h2><p>Submit quantities for manager approval. Prices are set when purchasing converts it to a PO.</p></div><button type="button" disabled={saving} onClick={() => setCreating(false)}>×</button></div>{lines.map((line, index) => <div className="receive-line" key={index}><label>Item<select value={line.itemId} onChange={(event) => updateLine(index, 'itemId', event.target.value)} required><option value="">Choose item</option>{items.map((item) => <option key={item.id} value={item.id} disabled={lines.some((other, otherIndex) => otherIndex !== index && other.itemId === item.id)}>{item.sku} · {item.name}</option>)}</select></label><label>Quantity<input type="number" min="1" step="1" value={line.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} required/></label>{lines.length > 1 && <button type="button" className="mini-action muted" onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))}>Remove line</button>}</div>)}<button type="button" className="mini-action muted" onClick={() => setLines((current) => [...current, { itemId: '', quantity: 1 }])}>Add another item</button><label>Need by<input name="needByDate" type="date"/></label><label>Notes<textarea name="notes" maxLength={1000} rows={3} placeholder="Reason or delivery requirements"/></label><div className="modal-actions"><button className="button button-secondary" type="button" disabled={saving} onClick={() => setCreating(false)}>Cancel</button><button className="button button-primary" disabled={saving || !items.length}>{saving ? 'Submitting…' : 'Submit requisition'}</button></div></form></div>}
     {rejecting && <div className="modal-backdrop" onMouseDown={(event) => closeOnBackdrop(event, () => setRejecting(null))}><form className="record-modal" onSubmit={(event) => void reject(event)}><div className="modal-title"><div><h2>Reject · {rejecting.requisitionNumber}</h2><p>Give the requester a reason for the decision.</p></div><button type="button" disabled={saving} onClick={() => setRejecting(null)}>×</button></div><label>Reason<textarea name="reason" rows={3} maxLength={500} required/></label><div className="modal-actions"><button className="button button-secondary" type="button" disabled={saving} onClick={() => setRejecting(null)}>Cancel</button><button className="button button-primary" disabled={saving}>{saving ? 'Rejecting…' : 'Reject request'}</button></div></form></div>}
     {converting && <div className="modal-backdrop" onMouseDown={(event) => closeOnBackdrop(event, () => setConverting(null))}><form className="record-modal" onSubmit={(event) => void convert(event)}><div className="modal-title"><div><h2>Create PO · {converting.requisitionNumber}</h2><p>Choose the supplier and provide a unit price for each requested item.</p></div><button type="button" disabled={saving} onClick={() => setConverting(null)}>×</button></div><label>Supplier<select name="supplierId" required defaultValue=""><option value="">Choose supplier</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name} ({supplier.code})</option>)}</select></label>{converting.lines.map((line) => <div className="receive-line" key={line.id}><b>{line.sku} · {line.itemName} × {line.quantity}</b><label>Unit price (₹)<input name={`price-${line.id}`} type="number" min="0" max="999999999999.99" step="0.01" required/></label></div>)}<div className="modal-actions"><button className="button button-secondary" type="button" disabled={saving} onClick={() => setConverting(null)}>Cancel</button><button className="button button-primary" disabled={saving || !suppliers.length}>{saving ? 'Creating…' : 'Create draft PO'}</button></div></form></div>}
@@ -193,5 +304,176 @@ export function ReorderSuggestions({ suppliers, notify, onCreated }: ReorderSugg
     finally { setSaving(false); }
   };
   const selectedCount = Object.keys(selection).length;
-  return <section className="panel directory-panel reorder-panel"><div className="panel-header directory-top"><div><h2>Reorder suggestions <span className="record-count">{suggestions.length}</span></h2><p>Suggested quantities bring available stock back to its threshold after open purchase orders arrive.</p></div></div>{loading ? <p className="empty-cell">Checking stock and open purchase orders…</p> : suggestions.length ? <><div className="table-scroll"><table><thead><tr><th>SELECT</th><th>ITEM</th><th>AVAILABLE</th><th>THRESHOLD</th><th>OPEN ORDER</th><th>SUGGESTED QTY</th><th>UNIT COST (₹)</th></tr></thead><tbody>{suggestions.map((item) => <tr key={item.itemId}><td><input type="checkbox" aria-label={`Select ${item.sku}`} checked={!!selection[item.itemId]} onChange={(event) => toggle(item, event.target.checked)}/></td><td><b>{item.sku}</b><small className="production-subline">{item.itemName}</small></td><td>{item.availableQuantity} {item.unit}</td><td>{item.reorderThreshold} {item.unit}</td><td>{item.incomingQuantity} {item.unit}</td><td>{selection[item.itemId] ? <input className="reorder-number" type="number" min="1" max="2147483647" value={selection[item.itemId].quantity} onChange={(event) => update(item.itemId, 'quantity', event.target.value)}/> : item.suggestedQuantity} {item.unit}</td><td>{selection[item.itemId] ? <input className="reorder-number" type="number" min="0" step="0.01" required value={selection[item.itemId].unitPrice} onChange={(event) => update(item.itemId, 'unitPrice', event.target.value)} placeholder="Enter cost"/> : '—'}</td></tr>)}</tbody></table></div><div className="reorder-actions"><label>Supplier<select value={supplierId} onChange={(event) => setSupplierId(event.target.value)} required><option value="">Choose supplier</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name} ({supplier.code})</option>)}</select></label><span>{selectedCount} item{selectedCount === 1 ? '' : 's'} selected</span><button className="button button-primary" disabled={saving || !selectedCount || !supplierId || suggestions.filter((item) => selection[item.itemId]).some((item) => !Number(selection[item.itemId]?.quantity) || selection[item.itemId]?.unitPrice === '')} onClick={() => void createOrder()}>{saving ? 'Creating…' : 'Create draft PO'}</button></div></> : <p className="empty-cell">No replenishment is needed. Low stock is covered by incoming draft or approved purchase orders.</p>}</section>;
+  return (
+    <div className="sales-table-card">
+      <div className="sales-toolbar" style={{ padding: '12px 16px', borderBottom: '1px solid var(--sp-border)', marginBottom: 0 }}>
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>
+            Reorder Suggestions <span className="sales-subnav-badge" style={{ marginLeft: '6px' }}>{suggestions.length}</span>
+          </div>
+          <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
+            Automated quantities bring available inventory back to minimum thresholds considering open purchase orders.
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="sales-empty-cell">
+          <div className="sales-empty-state">
+            <div className="sales-empty-title">Analyzing stock thresholds…</div>
+            <div className="sales-empty-desc">Checking available inventory against reorder points and incoming purchase orders.</div>
+          </div>
+        </div>
+      ) : suggestions.length ? (
+        <>
+          <div className="sales-table-scroll">
+            <table className="sales-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '60px' }}>SELECT</th>
+                  <th style={{ width: '240px' }}>ITEM</th>
+                  <th style={{ width: '120px' }}>AVAILABLE</th>
+                  <th style={{ width: '120px' }}>THRESHOLD</th>
+                  <th style={{ width: '120px' }}>OPEN PO</th>
+                  <th style={{ width: '150px' }}>SUGGESTED QTY</th>
+                  <th style={{ width: '160px' }}>UNIT COST (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {suggestions.map((item) => (
+                  <tr key={item.itemId} className="sales-row">
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${item.sku}`}
+                        checked={!!selection[item.itemId]}
+                        onChange={(event) => toggle(item, event.target.checked)}
+                      />
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span className="sales-ref-badge" style={{ width: 'fit-content' }}>{item.sku}</span>
+                        <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>{item.itemName}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="sales-fulfillment-tag pending">
+                        {item.availableQuantity} {item.unit}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '11.5px', color: 'var(--sp-text-secondary)' }}>
+                        {item.reorderThreshold} {item.unit}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '11.5px', color: 'var(--sp-text-secondary)' }}>
+                        {item.incomingQuantity} {item.unit}
+                      </span>
+                    </td>
+                    <td>
+                      {selection[item.itemId] ? (
+                        <input
+                          className="sales-search-input"
+                          style={{
+                            height: '28px',
+                            border: '1px solid var(--sp-border)',
+                            borderRadius: '4px',
+                            padding: '0 6px',
+                            width: '90px',
+                            background: 'var(--sp-surface)'
+                          }}
+                          type="number"
+                          min="1"
+                          max="2147483647"
+                          value={selection[item.itemId].quantity}
+                          onChange={(event) => update(item.itemId, 'quantity', event.target.value)}
+                        />
+                      ) : (
+                        <span style={{ fontWeight: 600, color: 'var(--sp-text)' }}>
+                          {item.suggestedQuantity} {item.unit}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {selection[item.itemId] ? (
+                        <input
+                          className="sales-search-input"
+                          style={{
+                            height: '28px',
+                            border: '1px solid var(--sp-border)',
+                            borderRadius: '4px',
+                            padding: '0 6px',
+                            width: '100px',
+                            background: 'var(--sp-surface)'
+                          }}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          required
+                          value={selection[item.itemId].unitPrice}
+                          onChange={(event) => update(item.itemId, 'unitPrice', event.target.value)}
+                          placeholder="Enter cost"
+                        />
+                      ) : (
+                        <span className="sales-sub-ref">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="sales-toolbar" style={{ padding: '12px 16px', borderTop: '1px solid var(--sp-border)', margin: 0, background: 'var(--sp-surface-subtle)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                Supplier:
+                <select
+                  value={supplierId}
+                  onChange={(event) => setSupplierId(event.target.value)}
+                  style={{
+                    height: '30px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--sp-border)',
+                    padding: '0 8px',
+                    background: 'var(--sp-surface)',
+                    fontSize: '12px',
+                    color: 'var(--sp-text)'
+                  }}
+                  required
+                >
+                  <option value="">Choose supplier</option>
+                  {suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name} ({supplier.code})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="sales-item-tag">
+                {selectedCount} item{selectedCount === 1 ? '' : 's'} selected
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="sales-action-btn primary"
+              disabled={saving || !selectedCount || !supplierId || suggestions.filter((item) => selection[item.itemId]).some((item) => !Number(selection[item.itemId]?.quantity) || selection[item.itemId]?.unitPrice === '')}
+              onClick={() => void createOrder()}
+            >
+              {saving ? 'Creating…' : 'Create draft PO'}
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="sales-empty-cell">
+          <div className="sales-empty-state">
+            <div className="sales-empty-title">Stock levels healthy</div>
+            <div className="sales-empty-desc">No replenishment is needed. All inventory is covered by on-hand stock and incoming purchase orders.</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

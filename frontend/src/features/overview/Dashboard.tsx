@@ -1,5 +1,26 @@
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
-import { ArrowDownLeft, ArrowRight, ArrowUpRight, Boxes, Search, ShoppingCart, SlidersHorizontal, Users } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  type TooltipProps,
+} from 'recharts';
+import {
+  AlertTriangle,
+  ArrowDownLeft,
+  ArrowRight,
+  ArrowUpRight,
+  Boxes,
+  CheckCircle2,
+  Clock,
+  Search,
+  ShoppingCart,
+  SlidersHorizontal,
+  Users,
+} from 'lucide-react';
 import { KpiCard } from './KpiCard';
 import { formatCompactRupees, formatCurrency } from '../../lib/utils/currency';
 import { TransactionTable } from '../../components/ui/TransactionTable';
@@ -32,7 +53,7 @@ export interface DashboardItem {
   lowStockThreshold: number | string;
 }
 
-interface DashboardProps {
+export interface DashboardProps {
   metrics: DashboardMetrics;
   trend: DashboardTrendPoint[];
   items: DashboardItem[];
@@ -42,58 +63,500 @@ interface DashboardProps {
   onOpenInventory: () => void;
   onSearchInventory: (sku: string) => void;
   onOpenTransactions: () => void;
+  onNavigate?: (section: string) => void;
 }
 
-export function Dashboard({ metrics, trend, items, transactions, query, onQueryChange, onOpenInventory, onSearchInventory, onOpenTransactions }: DashboardProps) {
-  const lowStockItems = items.filter((item) => Number(item.available) <= Number(item.lowStockThreshold)).slice(0, 5);
-  const lowStockCount = Number(metrics.lowStockItems || 0);
+type TimeRange = '30d' | '90d' | '6m' | '1y';
+type TriageFilter = 'all' | 'stock' | 'financial';
+type TxTab = 'ALL' | 'INVOICE' | 'BILL' | 'PAYMENT';
 
-  return <>
-    <div className="kpi-grid">
-      <KpiCard title="Sales this month" value={formatCurrency(metrics.salesThisMonth)} change="From invoices" detail="invoices issued this month" icon={ArrowUpRight} accent="purple" spark="sales" />
-      <KpiCard title="Open orders" value={metrics.openOrders} change="From database" detail="orders awaiting full shipment" icon={ShoppingCart} accent="amber" spark="orders" />
-      <KpiCard title="Inventory value" value={formatCompactRupees(metrics.inventoryValue)} change="From catalog" detail="opening stock × unit price" icon={Boxes} accent="blue" spark="inventory" />
-      <KpiCard title="Active customers" value={metrics.activeCustomers} change="From database" detail="active customer records" icon={Users} accent="green" spark="customers" />
-      <KpiCard title="Accounts receivable" value={formatCurrency(metrics.accountsReceivable)} change={`Overdue ${formatCurrency(metrics.overdueReceivables)}`} detail="unpaid customer invoices" icon={ArrowUpRight} accent="blue" spark="sales" />
-      <KpiCard title="Accounts payable" value={formatCurrency(metrics.accountsPayable)} change={`Overdue ${formatCurrency(metrics.overduePayables)}`} detail="unpaid supplier bills" icon={ArrowDownLeft} accent="amber" spark="orders" />
+interface CustomTooltipProps extends TooltipProps<number, string> {
+  active?: boolean;
+  payload?: Array<{
+    name: string;
+    value: number;
+    color: string;
+  }>;
+  label?: string;
+}
+
+function LinearChartTooltip({ active, payload, label }: CustomTooltipProps) {
+  if (!active || !payload || !payload.length) return null;
+
+  const sales = Number(payload.find((p) => p.name === 'sales')?.value || 0);
+  const purchases = Number(payload.find((p) => p.name === 'purchases')?.value || 0);
+  const net = sales - purchases;
+
+  return (
+    <div className="chart-custom-tooltip">
+      <div className="tooltip-header">{label}</div>
+      <div className="tooltip-row">
+        <span className="tooltip-label">
+          <i className="legend-dot sales-dot" /> Invoiced sales
+        </span>
+        <b className="tooltip-value">{formatCurrency(sales)}</b>
+      </div>
+      <div className="tooltip-row">
+        <span className="tooltip-label">
+          <i className="legend-dot purchase-dot" /> Supplier bills
+        </span>
+        <b className="tooltip-value">{formatCurrency(purchases)}</b>
+      </div>
+      <div className="tooltip-divider" />
+      <div className="tooltip-row">
+        <span className="tooltip-label">Net cashflow</span>
+        <b className={`tooltip-value ${net >= 0 ? 'text-positive' : 'text-warning'}`}>
+          {net >= 0 ? '+' : ''}{formatCurrency(net)}
+        </b>
+      </div>
     </div>
-    <div className="dashboard-grid">
-      <section className="panel chart-panel">
-        <div className="panel-header"><div><h2>Business overview</h2><p>Invoiced sales and supplier bills by month</p></div><span className="select-button">Last 6 months</span></div>
-        <div className="chart-legend">
-          <span><i className="legend-dot sales-dot" />Sales <b>{formatCurrency(trend.reduce((total, point) => total + Number(point.sales || 0), 0))}</b></span>
-          <span><i className="legend-dot purchase-dot" />Purchases <b>{formatCurrency(trend.reduce((total, point) => total + Number(point.purchases || 0), 0))}</b></span>
+  );
+}
+
+export function Dashboard({
+  metrics,
+  trend,
+  items,
+  transactions,
+  query,
+  onQueryChange,
+  onOpenInventory,
+  onSearchInventory,
+  onOpenTransactions,
+  onNavigate,
+}: DashboardProps) {
+  const [timeRange, setTimeRange] = useState<TimeRange>('6m');
+  const [triageFilter, setTriageFilter] = useState<TriageFilter>('all');
+  const [txTab, setTxTab] = useState<TxTab>('ALL');
+
+  // Low stock calculations
+  const lowStockItems = useMemo(
+    () => items.filter((item) => Number(item.available) <= Number(item.lowStockThreshold)),
+    [items]
+  );
+  const lowStockCount = lowStockItems.length;
+
+  // Financial triage items
+  const overdueReceivable = Number(metrics.overdueReceivables || 0);
+  const overduePayable = Number(metrics.overduePayables || 0);
+  const openOrdersCount = Number(metrics.openOrders || 0);
+
+  const hasFinanceTriage = overdueReceivable > 0 || overduePayable > 0 || openOrdersCount > 0;
+  const financeCount = (overdueReceivable > 0 ? 1 : 0) + (overduePayable > 0 ? 1 : 0) + (openOrdersCount > 0 ? 1 : 0);
+  const totalTriageCount = lowStockCount + financeCount;
+
+  // Filtered trend points based on time range
+  const filteredTrend = useMemo(() => {
+    if (!trend.length) return [];
+    if (timeRange === '30d') return trend.slice(-2);
+    if (timeRange === '90d') return trend.slice(-3);
+    if (timeRange === '6m') return trend.slice(-6);
+    return trend;
+  }, [trend, timeRange]);
+
+  const totalPeriodSales = useMemo(
+    () => filteredTrend.reduce((sum, p) => sum + Number(p.sales || 0), 0),
+    [filteredTrend]
+  );
+  const totalPeriodPurchases = useMemo(
+    () => filteredTrend.reduce((sum, p) => sum + Number(p.purchases || 0), 0),
+    [filteredTrend]
+  );
+  const periodNetMargin = totalPeriodSales - totalPeriodPurchases;
+
+  // Counts for transaction tabs
+  const txCounts = useMemo(() => {
+    let invoices = 0;
+    let bills = 0;
+    let payments = 0;
+    for (const t of transactions) {
+      const type = t.type.toLowerCase();
+      if (type.includes('invoice') || t.direction === 'IN') invoices++;
+      if (type.includes('bill') || type.includes('purchase') || t.direction === 'OUT') bills++;
+      if (type.includes('payment') || t.method) payments++;
+    }
+    return { all: transactions.length, invoices, bills, payments };
+  }, [transactions]);
+
+  return (
+    <>
+      {/* 1. Linear KPI Grid */}
+      <div className="kpi-grid">
+        <KpiCard
+          title="Sales this month"
+          value={formatCurrency(metrics.salesThisMonth)}
+          change="From invoices"
+          positive={Number(metrics.salesThisMonth) > 0}
+          detail="invoices issued this month"
+          icon={ArrowUpRight}
+          accent="purple"
+          spark="sales"
+          onClick={() => onNavigate ? onNavigate('Sales') : onOpenTransactions()}
+        />
+        <KpiCard
+          title="Open orders"
+          value={metrics.openOrders}
+          change="Pending dispatch"
+          detail="orders awaiting full shipment"
+          icon={ShoppingCart}
+          accent="amber"
+          spark="orders"
+          onClick={() => onNavigate ? onNavigate('Sales') : onOpenTransactions()}
+        />
+        <KpiCard
+          title="Inventory value"
+          value={formatCompactRupees(metrics.inventoryValue)}
+          change="Catalog valuation"
+          detail="opening stock × unit price"
+          icon={Boxes}
+          accent="blue"
+          spark="inventory"
+          onClick={onOpenInventory}
+        />
+        <KpiCard
+          title="Active customers"
+          value={metrics.activeCustomers}
+          change="Verified accounts"
+          positive
+          detail="active customer records"
+          icon={Users}
+          accent="green"
+          spark="customers"
+          onClick={() => onNavigate ? onNavigate('Customers') : undefined}
+        />
+        <KpiCard
+          title="Accounts receivable"
+          value={formatCurrency(metrics.accountsReceivable)}
+          change={`Overdue ${formatCurrency(metrics.overdueReceivables)}`}
+          positive={overdueReceivable === 0}
+          detail="unpaid customer invoices"
+          icon={ArrowUpRight}
+          accent="blue"
+          spark="sales"
+          onClick={() => onNavigate ? onNavigate('Sales') : onOpenTransactions()}
+        />
+        <KpiCard
+          title="Accounts payable"
+          value={formatCurrency(metrics.accountsPayable)}
+          change={`Overdue ${formatCurrency(metrics.overduePayables)}`}
+          positive={overduePayable === 0}
+          detail="unpaid supplier bills"
+          icon={ArrowDownLeft}
+          accent="amber"
+          spark="orders"
+          onClick={() => onNavigate ? onNavigate('Purchases') : onOpenTransactions()}
+        />
+      </div>
+
+      {/* 2. Business Overview & Triage Queue */}
+      <div className="dashboard-grid">
+        {/* Performance Chart Panel */}
+        <section className="panel chart-panel">
+          <div className="panel-header chart-panel-header">
+            <div>
+              <h2>Business overview</h2>
+              <p>Invoiced sales and supplier bills by period</p>
+            </div>
+            <div className="chart-header-actions">
+              <div className="segmented-control" role="tablist" aria-label="Time range">
+                <button
+                  type="button"
+                  className={timeRange === '30d' ? 'active' : ''}
+                  onClick={() => setTimeRange('30d')}
+                >
+                  30D
+                </button>
+                <button
+                  type="button"
+                  className={timeRange === '90d' ? 'active' : ''}
+                  onClick={() => setTimeRange('90d')}
+                >
+                  90D
+                </button>
+                <button
+                  type="button"
+                  className={timeRange === '6m' ? 'active' : ''}
+                  onClick={() => setTimeRange('6m')}
+                >
+                  6M
+                </button>
+                <button
+                  type="button"
+                  className={timeRange === '1y' ? 'active' : ''}
+                  onClick={() => setTimeRange('1y')}
+                >
+                  1Y
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="chart-legend chart-legend-interactive">
+            <span>
+              <i className="legend-dot sales-dot" />
+              Sales <b>{formatCurrency(totalPeriodSales)}</b>
+            </span>
+            <span>
+              <i className="legend-dot purchase-dot" />
+              Purchases <b>{formatCurrency(totalPeriodPurchases)}</b>
+            </span>
+            <span className="chart-net-badge">
+              Net cashflow{' '}
+              <b style={{ color: periodNetMargin >= 0 ? 'var(--sp-success)' : 'var(--sp-warning)' }}>
+                {periodNetMargin >= 0 ? '+' : ''}{formatCurrency(periodNetMargin)}
+              </b>
+            </span>
+          </div>
+
+          <div className="chart-area">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={filteredTrend} margin={{ top: 12, right: 6, left: -16, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#5E46C1" stopOpacity={0.16} />
+                    <stop offset="100%" stopColor="#5E46C1" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="purchaseFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#A9A1C7" stopOpacity={0.12} />
+                    <stop offset="100%" stopColor="#A9A1C7" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke="#F0F1F4" strokeDasharray="3 4" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={{ stroke: '#E8E9ED' }}
+                  tick={{ fill: '#8E929C', fontSize: 11, fontFamily: 'Inter' }}
+                  tickMargin={10}
+                />
+                <Tooltip content={<LinearChartTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="purchases"
+                  name="purchases"
+                  stroke="#A9A1C7"
+                  strokeWidth={1.75}
+                  fill="url(#purchaseFill)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="sales"
+                  name="sales"
+                  stroke="#5E46C1"
+                  strokeWidth={2}
+                  fill="url(#salesFill)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+
+        {/* Needs Attention / Operational Triage */}
+        <section className="panel attention-panel">
+          <div className="panel-header attention-panel-header">
+            <div>
+              <h2>
+                Needs attention{' '}
+                <span className={`attention-count ${totalTriageCount > 0 ? 'urgent' : ''}`}>
+                  {totalTriageCount}
+                </span>
+              </h2>
+              <p>Operational alerts requiring review or action</p>
+            </div>
+            <button
+              className="more-button"
+              onClick={onOpenInventory}
+              aria-label="View all inventory"
+              title="Open inventory"
+            >
+              <ArrowRight size={15} />
+            </button>
+          </div>
+
+          {/* Triage filter tabs */}
+          <div className="triage-tabs" role="tablist">
+            <button
+              type="button"
+              className={triageFilter === 'all' ? 'active' : ''}
+              onClick={() => setTriageFilter('all')}
+            >
+              All <span className="tab-count">{totalTriageCount}</span>
+            </button>
+            <button
+              type="button"
+              className={triageFilter === 'stock' ? 'active' : ''}
+              onClick={() => setTriageFilter('stock')}
+            >
+              Stock alerts <span className="tab-count">{lowStockCount}</span>
+            </button>
+            <button
+              type="button"
+              className={triageFilter === 'financial' ? 'active' : ''}
+              onClick={() => setTriageFilter('financial')}
+            >
+              Financials <span className="tab-count">{financeCount}</span>
+            </button>
+          </div>
+
+          <div className="attention-list">
+            {/* 1. Low stock items */}
+            {(triageFilter === 'all' || triageFilter === 'stock') &&
+              lowStockItems.slice(0, 4).map((item) => (
+                <div className="attention-row" key={item.id}>
+                  <span className="attention-icon orange">
+                    <Boxes size={14} aria-hidden="true" />
+                  </span>
+                  <div className="attention-copy">
+                    <b>{item.name}</b>
+                    <small>
+                      {item.available} {item.unit} available · threshold {item.lowStockThreshold}
+                    </small>
+                  </div>
+                  <button
+                    className="mini-action"
+                    onClick={() => onSearchInventory(item.sku)}
+                    title={`Inspect ${item.sku} in inventory`}
+                  >
+                    Review
+                  </button>
+                </div>
+              ))}
+
+            {/* 2. Overdue receivables */}
+            {(triageFilter === 'all' || triageFilter === 'financial') && overdueReceivable > 0 && (
+              <div className="attention-row">
+                <span className="attention-icon red">
+                  <Clock size={14} aria-hidden="true" />
+                </span>
+                <div className="attention-copy">
+                  <b>Overdue customer receivables</b>
+                  <small>{formatCurrency(overdueReceivable)} past payment due date</small>
+                </div>
+                <button
+                  className="mini-action"
+                  onClick={() => onNavigate ? onNavigate('Sales') : onOpenTransactions()}
+                >
+                  Inspect
+                </button>
+              </div>
+            )}
+
+            {/* 3. Overdue payables */}
+            {(triageFilter === 'all' || triageFilter === 'financial') && overduePayable > 0 && (
+              <div className="attention-row">
+                <span className="attention-icon orange">
+                  <AlertTriangle size={14} aria-hidden="true" />
+                </span>
+                <div className="attention-copy">
+                  <b>Overdue supplier payables</b>
+                  <small>{formatCurrency(overduePayable)} awaiting supplier disbursement</small>
+                </div>
+                <button
+                  className="mini-action"
+                  onClick={() => onNavigate ? onNavigate('Purchases') : onOpenTransactions()}
+                >
+                  Pay bills
+                </button>
+              </div>
+            )}
+
+            {/* 4. Open orders */}
+            {(triageFilter === 'all' || triageFilter === 'financial') && openOrdersCount > 0 && (
+              <div className="attention-row">
+                <span className="attention-icon purple">
+                  <ShoppingCart size={14} aria-hidden="true" />
+                </span>
+                <div className="attention-copy">
+                  <b>Orders awaiting fulfillment</b>
+                  <small>{openOrdersCount} customer orders pending shipment</small>
+                </div>
+                <button
+                  className="mini-action"
+                  onClick={() => onNavigate ? onNavigate('Sales') : onOpenTransactions()}
+                >
+                  Dispatch
+                </button>
+              </div>
+            )}
+
+            {/* Clean state */}
+            {totalTriageCount === 0 && (
+              <div className="attention-empty-state">
+                <CheckCircle2 size={28} className="empty-check-icon" aria-hidden="true" />
+                <b>All operations running smoothly</b>
+                <small>All inventory thresholds and financial obligations are up to date.</small>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* 3. Recent Transactions / Activity Stream */}
+      <section className="panel table-panel">
+        <div className="panel-header table-heading">
+          <div>
+            <h2>Recent transactions</h2>
+            <p>Latest customer invoices, supplier bills, and payment records</p>
+          </div>
+          <button className="text-button" onClick={onOpenTransactions}>
+            View full register <ArrowRight size={14} />
+          </button>
         </div>
-        <div className="chart-area"><ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={trend} margin={{ top: 10, right: 5, left: -16, bottom: 0 }}>
-            <defs>
-              <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7257d8" stopOpacity={0.18} /><stop offset="95%" stopColor="#7257d8" stopOpacity={0} /></linearGradient>
-              <linearGradient id="purchaseFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#a9a1c7" stopOpacity={0.12} /><stop offset="95%" stopColor="#a9a1c7" stopOpacity={0} /></linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} stroke="#eef0f3" strokeDasharray="3 5" />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#9aa0aa', fontSize: 11 }} tickMargin={12} />
-            <Tooltip formatter={(value, name) => [formatCurrency(String(value ?? 0)), name === 'sales' ? 'Invoiced sales' : 'Supplier bills']} contentStyle={{ border: '1px solid #ececf1', borderRadius: 10, boxShadow: '0 8px 24px #20233a12', fontSize: 12 }} />
-            <Area type="monotone" dataKey="purchases" name="purchases" stroke="#b0a8ca" strokeWidth={2} fill="url(#purchaseFill)" />
-            <Area type="monotone" dataKey="sales" name="sales" stroke="#7257d8" strokeWidth={2.5} fill="url(#salesFill)" />
-          </AreaChart>
-        </ResponsiveContainer></div>
-      </section>
-      <section className="panel attention-panel">
-        <div className="panel-header"><div><h2>Needs attention <span className="attention-count">{metrics.lowStockItems || 0}</span></h2><p>Items at or below their availability threshold</p></div><button className="more-button" onClick={onOpenInventory} aria-label="Open inventory"><ArrowRight size={16} /></button></div>
-        <div className="attention-list">
-          {lowStockItems.map((item) => <div className="attention-row" key={item.id}>
-            <span className="attention-icon orange"><Boxes size={15} aria-hidden="true" /></span>
-            <div className="attention-copy"><b>{item.name}</b><small>{item.available} {item.unit} available · threshold {item.lowStockThreshold}</small></div>
-            <button onClick={() => onSearchInventory(item.sku)}>Review</button>
-          </div>)}
-          {lowStockCount === 0 && <div className="empty-cell">All active items are above their low-stock thresholds.</div>}
+
+        {/* Transaction Type Filter Tabs + Search bar */}
+        <div className="table-controls table-controls-enhanced">
+          <div className="tx-tabs" role="tablist">
+            <button
+              type="button"
+              className={`tx-tab-btn ${txTab === 'ALL' ? 'active' : ''}`}
+              onClick={() => setTxTab('ALL')}
+            >
+              All <span className="tab-count">{txCounts.all}</span>
+            </button>
+            <button
+              type="button"
+              className={`tx-tab-btn ${txTab === 'INVOICE' ? 'active' : ''}`}
+              onClick={() => setTxTab('INVOICE')}
+            >
+              Sales invoices <span className="tab-count">{txCounts.invoices}</span>
+            </button>
+            <button
+              type="button"
+              className={`tx-tab-btn ${txTab === 'BILL' ? 'active' : ''}`}
+              onClick={() => setTxTab('BILL')}
+            >
+              Supplier bills <span className="tab-count">{txCounts.bills}</span>
+            </button>
+            <button
+              type="button"
+              className={`tx-tab-btn ${txTab === 'PAYMENT' ? 'active' : ''}`}
+              onClick={() => setTxTab('PAYMENT')}
+            >
+              Payments <span className="tab-count">{txCounts.payments}</span>
+            </button>
+          </div>
+
+          <div className="table-search-actions">
+            <div className="search-box">
+              <Search size={14} aria-hidden="true" />
+              <input
+                className="search-input"
+                placeholder="Search transactions..."
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+              />
+              <kbd>/</kbd>
+            </div>
+            {query && (
+              <button className="filter-button" onClick={() => onQueryChange('')}>
+                <SlidersHorizontal size={14} aria-hidden="true" /> Clear
+              </button>
+            )}
+          </div>
         </div>
+
+        <TransactionTable query={query} transactions={transactions} typeFilter={txTab} />
       </section>
-    </div>
-    <section className="panel table-panel">
-      <div className="panel-header table-heading"><div><h2>Recent transactions</h2><p>Latest invoices, bills, payments, and supplier credits</p></div><button className="text-button" onClick={onOpenTransactions}>View all <ArrowRight size={14} /></button></div>
-      <div className="table-controls"><div className="search-box"><Search size={15} aria-hidden="true" /><input className="search-input" placeholder="Search transactions..." value={query} onChange={(event) => onQueryChange(event.target.value)} /><kbd>/</kbd></div><button className="filter-button" onClick={() => onQueryChange('')}><SlidersHorizontal size={15} aria-hidden="true" /> Clear search</button></div>
-      <TransactionTable query={query} transactions={transactions} />
-    </section>
-  </>;
+    </>
+  );
 }

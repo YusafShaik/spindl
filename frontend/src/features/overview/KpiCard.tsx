@@ -12,6 +12,7 @@ export interface KpiCardProps {
   icon: LucideIcon;
   accent: KpiAccent;
   spark: KpiSpark;
+  onClick?: () => void;
 }
 
 const sparkPaths: Record<KpiSpark, string> = {
@@ -21,16 +22,30 @@ const sparkPaths: Record<KpiSpark, string> = {
   customers: 'M0 21 C11 15 18 19 27 12 S40 17 52 8 S65 12 73 6 S89 10 100 1',
 };
 
-export function KpiCard({ title, value, change, positive, detail, icon: Icon, accent, spark }: KpiCardProps) {
+export function KpiCard({ title, value, change, positive, detail, icon: Icon, accent, spark, onClick }: KpiCardProps) {
+  const isClickable = Boolean(onClick);
+
   return (
-    <section className="panel kpi-card">
-      <div className="kpi-top"><span>{title}</span><span className={`kpi-icon ${accent}`}><Icon size={16} aria-hidden="true" /></span></div>
+    <section
+      className={`panel kpi-card ${isClickable ? 'kpi-card-clickable' : ''}`}
+      onClick={onClick}
+      role={isClickable ? 'button' : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } } : undefined}
+      aria-label={isClickable ? `${title}: ${value}. Click to view details.` : undefined}
+    >
+      <div className="kpi-top">
+        <span>{title}</span>
+        <span className={`kpi-icon ${accent}`}>
+          <Icon size={14} aria-hidden="true" />
+        </span>
+      </div>
       <div className="kpi-value">{value}</div>
       <div className="kpi-bottom">
         <span className={`change ${positive ? 'positive' : ''}`}>
           {positive ? <ArrowUpRight size={13} aria-hidden="true" /> : <Activity size={13} aria-hidden="true" />} {change}
         </span>
-        <span>{detail}</span>
+        <span className="kpi-detail">{detail}</span>
       </div>
       <svg className={`sparkline ${accent}`} viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
         <path d={sparkPaths[spark]} />

@@ -28,7 +28,7 @@ export function InvoiceTemplateDesigner({ notify, role }: { notify: (message: st
   const [title, setTitle] = useState('Tax invoice');
   const [footer, setFooter] = useState('Thank you for your business.');
   const [locale, setLocale] = useState<'en-IN' | 'en-US'>('en-IN');
-  const [accentColor, setAccentColor] = useState('#7055d8');
+  const [accentColor, setAccentColor] = useState('#5E46C1');
   const [fields, setFields] = useState<InvoiceField[]>(['invoiceNumber', 'issueDate', 'dueDate', 'customerName', 'subtotal', 'tax', 'total', 'amountPaid', 'balance']);
   const [preview, setPreview] = useState<InvoiceTemplatePreview | null>(null);
   const [working, setWorking] = useState(false);

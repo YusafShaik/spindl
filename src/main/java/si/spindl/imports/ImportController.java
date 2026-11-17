@@ -14,7 +14,13 @@ import java.util.UUID;
 @RequestMapping("/api/imports")
 public class ImportController {
     private final CsvImportService service;
-    public ImportController(CsvImportService service){this.service=service;}
+    private final si.spindl.tenant.DevelopmentTenant tenant;
+    public ImportController(CsvImportService service, si.spindl.tenant.DevelopmentTenant tenant){this.service=service;this.tenant=tenant;}
+
+    @GetMapping("/batches")
+    public java.util.List<CsvImportService.BatchView> batches(){
+        return service.listBatches(tenant.currentTenantId());
+    }
 
     @PostMapping("/{resource}/preview")
     public CsvImportService.PreviewResult preview(@PathVariable String resource,@RequestParam("file") MultipartFile file) throws IOException{return service.preview(resource,file.getBytes());}

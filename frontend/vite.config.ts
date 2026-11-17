@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   const isDesignPreview = mode === 'design-preview';
 
   return {
-    plugins: [react(), ...(isDesignPreview ? [tailwindcss()] : [])],
+    plugins: [react(), tailwindcss()],
     ...(isDesignPreview
       ? {
           appType: 'mpa' as const,

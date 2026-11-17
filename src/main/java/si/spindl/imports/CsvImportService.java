@@ -264,6 +264,12 @@ public class CsvImportService {
     }
     public record ImportError(int row,String message){}
     public record PreviewResult(int totalRows,int validRows,List<ImportError> errors,List<Map<String,String>> sampleRows){}
+    public record BatchView(UUID id,String resourceType,String contentSha256,int rowsImported,java.time.Instant createdAt){}
+    @Transactional(readOnly=true)
+    public List<BatchView> listBatches(UUID tenantId){
+        return batches.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+                .map(b->new BatchView(b.getId(),b.getResourceType(),b.getContentSha256(),b.getRowsImported(),b.getCreatedAt())).toList();
+    }
     public record CommitResult(boolean imported,boolean replayed,String resourceType,int rowsImported,UUID batchId,java.time.Instant createdAt,List<ImportError> errors){
         static CommitResult created(ImportBatchEntity batch){return new CommitResult(true,false,batch.getResourceType(),batch.getRowsImported(),batch.getId(),batch.getCreatedAt(),List.of());}
         static CommitResult replayed(ImportBatchEntity batch){return new CommitResult(true,true,batch.getResourceType(),batch.getRowsImported(),batch.getId(),batch.getCreatedAt(),List.of());}
