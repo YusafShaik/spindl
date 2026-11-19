@@ -90,7 +90,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/team/invitations/accept").permitAll()
-                        .requestMatchers("/api/auth/logout", "/api/auth/me", "/api/auth/sessions", "/api/auth/sessions/**").authenticated()
+                        .requestMatchers("/api/auth/logout", "/api/auth/me", "/api/auth/sessions", "/api/auth/sessions/**", "/api/auth/workspaces", "/api/auth/switch-tenant/**").authenticated()
                         .requestMatchers("/api/auth/password/**").permitAll()
                         .requestMatchers("/api/auth/**").denyAll()
                         .requestMatchers("/api/**").access(authorizationManager)

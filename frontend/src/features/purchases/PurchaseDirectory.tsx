@@ -46,6 +46,7 @@ interface PurchaseDirectoryProps {
   onPayment: (bill: SupplierBill) => void;
   onCredit: (bill: SupplierBill) => void;
   onNewSupplier: () => void;
+  onNewOrder?: () => void;
   requisitionSection: ReactNode;
   reorderSection: ReactNode;
   requisitions?: PurchaseRequisition[];
@@ -88,6 +89,7 @@ export function PurchaseDirectory({
   onPayment,
   onCredit,
   onNewSupplier,
+  onNewOrder,
   requisitionSection,
   reorderSection,
   requisitions = []
@@ -205,51 +207,55 @@ export function PurchaseDirectory({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">COMMITTED PROCUREMENT</span>
-            <ShoppingCart size={14} className="sales-metric-icon orders" />
+            <ShoppingCart size={13} className="sales-metric-icon" />
           </div>
           <div className="sales-metric-val">{money(totalCommittedPoValue)}</div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">{pendingDeliveryCount} pending delivery</span> · {orders.length - pendingDeliveryCount} received
+            <span className="sales-sub-highlight">{pendingDeliveryCount} Pending</span>
+            <span style={{ color: 'var(--sp-text-muted)' }}>· {orders.length - pendingDeliveryCount} received</span>
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">ACCOUNTS PAYABLE</span>
-            <Receipt size={14} className="sales-metric-icon invoices" />
+            <Receipt size={13} className="sales-metric-icon" />
           </div>
           <div className="sales-metric-val">{money(totalAccountsPayable)}</div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-warning">{unpaidBillsCount} unpaid bills</span> across {bills.length} total bills
+            <span className="sales-sub-warning">{unpaidBillsCount} Unpaid</span>
+            <span style={{ color: 'var(--sp-text-muted)' }}>across {bills.length} total bills</span>
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">ACTIVE SUPPLIERS</span>
-            <Building2 size={14} className="sales-metric-icon trend" />
+            <Building2 size={13} className="sales-metric-icon" />
           </div>
-          <div className="sales-metric-val">{suppliers.length} <small style={{ fontSize: '13px', fontWeight: 400, color: 'var(--sp-text-muted)' }}>vendors</small></div>
+          <div className="sales-metric-val">{suppliers.length} <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text-muted)' }}>Vendors</span></div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">Tier-1 certified</span> · Avg {avgSupplierLeadTime}d lead time
+            <span className="sales-sub-highlight">Tier-1 certified</span>
+            <span style={{ color: 'var(--sp-text-muted)' }}>Avg {avgSupplierLeadTime}d lead</span>
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">REQUISITIONS & ALERTS</span>
-            <Boxes size={14} className="sales-metric-icon credits" />
+            <Boxes size={13} className="sales-metric-icon" />
           </div>
-          <div className="sales-metric-val">{pendingRequisitionsCount} <small style={{ fontSize: '13px', fontWeight: 400, color: 'var(--sp-text-muted)' }}>pending</small></div>
+          <div className="sales-metric-val">{pendingRequisitionsCount} <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text-muted)' }}>Pending</span></div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">{requisitions.length} total requests</span> · Automated reorder alerts
+            <span className="sales-sub-highlight">{requisitions.length} Requests</span>
+            <span style={{ color: 'var(--sp-text-muted)' }}>Automated reorder</span>
           </div>
         </div>
       </div>
 
       {/* 2. Linear Sub-Navigation Tabs */}
       <div className="sales-subnav-container">
-        <div className="sales-subnav-tabs">
+        <div className="sales-subnav-tabs" role="tablist" aria-label="Purchases modules">
           <button
             type="button"
             className={`sales-subnav-tab ${activeTab === 'orders' ? 'active' : ''}`}
@@ -309,34 +315,35 @@ export function PurchaseDirectory({
             <span className="sales-subnav-badge">{credits.length}</span>
           </button>
         </div>
+
+        <div className="sales-subnav-actions">
+          {activeTab === 'orders' && onNewOrder && (
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={onNewOrder}
+            >
+              <Plus size={13} />
+              <span>New purchase order</span>
+            </button>
+          )}
+          {activeTab === 'suppliers' && onNewSupplier && (
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={onNewSupplier}
+            >
+              <Plus size={13} />
+              <span>New supplier</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* 3. Toolbar for Tabs with Search & Granular Status Filters */}
+      {/* 3. Toolbar: Status Filter Pills (Left) + Search (Right) */}
       {(activeTab === 'orders' || activeTab === 'suppliers' || activeTab === 'bills' || activeTab === 'credits') && (
         <div className="sales-toolbar">
-          <div className="sales-search-box">
-            <Search size={14} className="sales-search-icon" />
-            <input
-              className="sales-search-input"
-              placeholder={
-                activeTab === 'orders' ? 'Search orders by PO #, supplier, sku...'
-                : activeTab === 'suppliers' ? 'Search suppliers by name, code, contact, city...'
-                : activeTab === 'bills' ? 'Search bills by bill #, supplier, PO #...'
-                : 'Search credit notes by credit #, supplier, reason...'
-              }
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
-            {query ? (
-              <button type="button" className="sales-search-clear" onClick={() => setQuery('')}>
-                <X size={12} />
-              </button>
-            ) : (
-              <kbd className="sales-search-kbd">/</kbd>
-            )}
-          </div>
-
-          <div className="sales-pill-group">
+          <div className="sales-pill-group" role="tablist" aria-label="Status filters">
             {activeTab === 'orders' && (
               <>
                 <button
@@ -400,14 +407,6 @@ export function PurchaseDirectory({
                 >
                   Inactive <span className="sales-pill-count">{suppliers.filter(s => s.status.toLowerCase() !== 'active').length}</span>
                 </button>
-                <button
-                  type="button"
-                  className="sales-action-btn primary"
-                  style={{ marginLeft: 'auto' }}
-                  onClick={onNewSupplier}
-                >
-                  <Plus size={12} /> New supplier
-                </button>
               </>
             )}
 
@@ -442,6 +441,28 @@ export function PurchaseDirectory({
                   Paid <span className="sales-pill-count">{bills.filter(b => b.status === 'paid').length}</span>
                 </button>
               </>
+            )}
+          </div>
+
+          <div className="sales-search-box">
+            <Search size={14} className="sales-search-icon" />
+            <input
+              className="sales-search-input"
+              placeholder={
+                activeTab === 'orders' ? 'Search orders by PO #, supplier, sku...'
+                : activeTab === 'suppliers' ? 'Search suppliers by name, code, contact, city...'
+                : activeTab === 'bills' ? 'Search bills by bill #, supplier, PO #...'
+                : 'Search credit notes by credit #, supplier, reason...'
+              }
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
+            {query ? (
+              <button type="button" className="sales-search-clear" onClick={() => setQuery('')}>
+                <X size={12} />
+              </button>
+            ) : (
+              <kbd className="sales-search-kbd">/</kbd>
             )}
           </div>
         </div>
@@ -504,7 +525,7 @@ export function PurchaseDirectory({
                         </td>
                         <td>
                           <div className="sales-actions-cell">
-                            <CustomFieldEditor resource="purchase_orders" recordId={order.id} />
+                            <CustomFieldEditor resource="purchase_orders" recordId={order.id} label="Fields" />
                             {['draft', 'pending_approval'].includes(order.status) && (
                               <button
                                 type="button"
@@ -649,7 +670,7 @@ export function PurchaseDirectory({
                       </td>
                       <td>
                         <div className="sales-actions-cell">
-                          <CustomFieldEditor resource="suppliers" recordId={supplier.id} />
+                          <CustomFieldEditor resource="suppliers" recordId={supplier.id} label="Fields" />
                         </div>
                       </td>
                     </tr>
@@ -682,16 +703,15 @@ export function PurchaseDirectory({
             <table className="sales-table">
               <thead>
                 <tr>
-                  <th style={{ width: '130px' }}>BILL #</th>
-                  <th style={{ width: '180px' }}>SUPPLIER</th>
-                  <th style={{ width: '120px' }}>PO REF</th>
-                  <th style={{ width: '100px' }}>DUE DATE</th>
-                  <th style={{ width: '100px', textAlign: 'right' }}>TOTAL</th>
-                  <th style={{ width: '90px', textAlign: 'right' }}>PAID</th>
-                  <th style={{ width: '90px', textAlign: 'right' }}>CREDITED</th>
-                  <th style={{ width: '100px', textAlign: 'right' }}>BALANCE</th>
-                  <th style={{ width: '90px' }}>STATUS</th>
-                  <th style={{ width: '180px', textAlign: 'right' }}>ACTIONS</th>
+                  <th style={{ width: '120px' }}>BILL #</th>
+                  <th style={{ width: '160px' }}>SUPPLIER</th>
+                  <th style={{ width: '100px' }}>PO REF</th>
+                  <th style={{ width: '90px' }}>DUE DATE</th>
+                  <th style={{ width: '90px', textAlign: 'right' }}>TOTAL</th>
+                  <th style={{ width: '110px', textAlign: 'right' }}>PAID / CREDITED</th>
+                  <th style={{ width: '90px', textAlign: 'right' }}>BALANCE</th>
+                  <th style={{ width: '85px' }}>STATUS</th>
+                  <th style={{ width: '145px', textAlign: 'right' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -707,7 +727,7 @@ export function PurchaseDirectory({
                         <td>
                           <div className="sales-customer-cell">
                             <span className="sales-customer-avatar">{getInitials(bill.supplierName)}</span>
-                            <span className="sales-customer-name" title={bill.supplierName}>
+                            <span className="sales-customer-name" title={bill.supplierName} style={{ maxWidth: '140px' }}>
                               {bill.supplierName}
                             </span>
                           </div>
@@ -723,11 +743,13 @@ export function PurchaseDirectory({
                         <td className="sales-amount-cell">
                           {money(bill.total)}
                         </td>
-                        <td className="sales-amount-cell muted">
-                          {money(bill.amountPaid)}
-                        </td>
-                        <td className="sales-amount-cell muted">
-                          {money(bill.amountCredited)}
+                        <td className="sales-amount-cell muted" style={{ textAlign: 'right' }}>
+                          <div>{money(bill.amountPaid)}</div>
+                          {Number(bill.amountCredited || 0) > 0 && (
+                            <small style={{ fontSize: '10px', color: 'var(--sp-text-muted)', display: 'block' }}>
+                              {money(bill.amountCredited)} cr
+                            </small>
+                          )}
                         </td>
                         <td className={`sales-amount-cell ${balanceNum > 0 ? 'outstanding' : 'settled'}`}>
                           {money(bill.balance)}
@@ -767,7 +789,7 @@ export function PurchaseDirectory({
                   })
                 ) : (
                   <tr>
-                    <td colSpan={10} className="sales-empty-cell">
+                    <td colSpan={9} className="sales-empty-cell">
                       <div className="sales-empty-state">
                         <Receipt size={24} className="sales-empty-icon" />
                         <div className="sales-empty-title">No supplier bills found</div>

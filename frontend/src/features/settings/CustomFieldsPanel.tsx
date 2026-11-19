@@ -280,22 +280,22 @@ export function CustomFieldsPanel({ role, notify }: CustomFieldsPanelProps) {
   };
 
   return (
-    <section className="panel tenant-settings-panel">
-      <div className="panel-header">
+    <section className="sales-table-card tenant-settings-panel">
+      <div className="sales-card-header">
         <div>
-          <h2>Custom fields schema</h2>
-          <p>
+          <h2 className="sales-card-title">Custom fields schema</h2>
+          <p className="sales-card-subtitle">
             Define strongly-typed custom metadata fields for business entities. Published fields are validated server-side and automatically indexed.
           </p>
         </div>
         {canEdit && (
           <button
             type="button"
-            className="button button-primary"
+            className="sales-action-btn primary"
             onClick={() => setShowAddForm(!showAddForm)}
           >
-            <Plus size={14} />
-            {showAddForm ? 'Close form' : 'Add custom field'}
+            <Plus size={13} />
+            <span>{showAddForm ? 'Close form' : 'Add custom field'}</span>
           </button>
         )}
       </div>
@@ -497,16 +497,16 @@ export function CustomFieldsPanel({ role, notify }: CustomFieldsPanelProps) {
             </p>
           </div>
         ) : (
-          <div className="integration-table-wrap">
-            <table className="integration-table">
+          <div className="sales-table-scroll">
+            <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th>FIELD NAME</th>
-                  <th>FIELD KEY</th>
-                  <th>DATA TYPE</th>
-                  <th>REQUIREMENT</th>
-                  <th>STATUS</th>
-                  {canEdit && <th style={{ textAlign: 'right' }}>ACTION</th>}
+                  <th style={{ width: '24%' }}>FIELD NAME</th>
+                  <th style={{ width: '20%' }}>FIELD KEY</th>
+                  <th style={{ width: '16%' }}>DATA TYPE</th>
+                  <th style={{ width: '16%' }}>REQUIREMENT</th>
+                  <th style={{ width: '12%' }}>STATUS</th>
+                  {canEdit && <th style={{ width: '12%', textAlign: 'right' }}>ACTION</th>}
                 </tr>
               </thead>
               <tbody>
@@ -538,8 +538,8 @@ export function CustomFieldsPanel({ role, notify }: CustomFieldsPanelProps) {
                         {!field.published && (
                           <button
                             type="button"
-                            className="mini-action"
-                            style={{ color: 'var(--sp-brand, #8b5cf6)', fontWeight: 600 }}
+                            className="sales-action-btn secondary"
+                            style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
                             disabled={saving}
                             onClick={() => publish(field.id)}
                           >

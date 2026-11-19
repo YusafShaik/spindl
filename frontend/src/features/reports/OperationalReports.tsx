@@ -383,9 +383,11 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
         <div className="reports-metric-card">
           <div className="reports-metric-header">
             <span className="reports-metric-label">ACCOUNTS RECEIVABLE</span>
-            <TrendingUp size={14} className="reports-metric-icon" />
+            <TrendingUp size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="reports-metric-val">{formatCurrency(executiveTelemetry.receivablesTotal)}</div>
+          <div className="reports-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {formatCurrency(executiveTelemetry.receivablesTotal)}
+          </div>
           <div className="reports-metric-sub">
             {executiveTelemetry.receivablesCount} open customer {executiveTelemetry.receivablesCount === 1 ? 'invoice' : 'invoices'} · uncollected
           </div>
@@ -394,9 +396,11 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
         <div className="reports-metric-card">
           <div className="reports-metric-header">
             <span className="reports-metric-label">ACCOUNTS PAYABLE</span>
-            <Receipt size={14} className="reports-metric-icon" />
+            <Receipt size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="reports-metric-val">{formatCurrency(executiveTelemetry.payablesTotal)}</div>
+          <div className="reports-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {formatCurrency(executiveTelemetry.payablesTotal)}
+          </div>
           <div className="reports-metric-sub">
             {executiveTelemetry.payablesCount} supplier {executiveTelemetry.payablesCount === 1 ? 'bill' : 'bills'} · pending settlement
           </div>
@@ -405,9 +409,11 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
         <div className="reports-metric-card">
           <div className="reports-metric-header">
             <span className="reports-metric-label">INVENTORY VALUATION</span>
-            <Boxes size={14} className="reports-metric-icon" />
+            <Boxes size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="reports-metric-val">{formatCurrency(executiveTelemetry.inventoryValuation)}</div>
+          <div className="reports-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {formatCurrency(executiveTelemetry.inventoryValuation)}
+          </div>
           <div className="reports-metric-sub">
             Across {executiveTelemetry.activeItemCount} catalog SKUs · weighted avg cost
           </div>
@@ -416,9 +422,11 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
         <div className="reports-metric-card">
           <div className="reports-metric-header">
             <span className="reports-metric-label">GROSS PROFIT MARGIN</span>
-            <Percent size={14} className="reports-metric-icon" />
+            <Percent size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="reports-metric-val">{executiveTelemetry.grossMarginPercent}% Margin</div>
+          <div className="reports-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {executiveTelemetry.grossMarginPercent}% Margin
+          </div>
           <div className="reports-metric-sub">
             {formatCurrency(executiveTelemetry.grossMarginAmount)} net margin on priced items
           </div>
@@ -482,20 +490,19 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             type="button"
-            className="mini-action"
+            className="sales-action-btn secondary"
             onClick={() => setRefreshIndex((prev) => prev + 1)}
             title="Refresh active report data"
           >
-            <RefreshCw size={13} className={loading ? 'spin' : ''} />
+            <RefreshCw size={12} className={loading ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
           {activeTab === 'operational' && canExport && (
             <button
               type="button"
-              className="button button-secondary"
+              className="sales-action-btn secondary"
               disabled={exporting}
               onClick={() => void exportCsv()}
-              style={{ height: '30px', fontSize: '12px' }}
             >
               <Download size={13} />
               <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
@@ -666,32 +673,32 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
                 <thead>
                   {marginReport ? (
                     <tr>
-                      <th style={{ width: '100px' }}>PERIOD</th>
-                      <th style={{ width: '140px' }}>SKU</th>
-                      <th>ITEM NAME</th>
-                      <th style={{ textAlign: 'right', width: '100px' }}>NET UNITS</th>
-                      <th style={{ textAlign: 'right', width: '120px' }}>NET SALES</th>
-                      <th style={{ textAlign: 'right', width: '120px' }}>EST. COGS</th>
-                      <th style={{ textAlign: 'right', width: '130px' }}>GROSS MARGIN</th>
-                      <th style={{ textAlign: 'right', width: '90px' }}>MARGIN %</th>
+                      <th style={{ width: '10%' }}>PERIOD</th>
+                      <th style={{ width: '14%' }}>SKU</th>
+                      <th style={{ width: '26%' }}>ITEM NAME</th>
+                      <th style={{ textAlign: 'right', width: '8%' }}>NET UNITS</th>
+                      <th style={{ textAlign: 'right', width: '12%' }}>NET SALES</th>
+                      <th style={{ textAlign: 'right', width: '11%' }}>EST. COGS</th>
+                      <th style={{ textAlign: 'right', width: '11%' }}>GROSS MARGIN</th>
+                      <th style={{ textAlign: 'right', width: '8%' }}>MARGIN %</th>
                     </tr>
                   ) : valuationReport ? (
                     <tr>
-                      <th style={{ width: '160px' }}>SKU</th>
-                      <th>ITEM NAME</th>
-                      <th style={{ textAlign: 'right', width: '110px' }}>ON HAND</th>
-                      <th style={{ textAlign: 'right', width: '180px' }}>WEIGHTED AVG. COST</th>
-                      <th style={{ textAlign: 'right', width: '180px' }}>EST. STOCK VALUE</th>
+                      <th style={{ width: '18%' }}>SKU</th>
+                      <th style={{ width: '36%' }}>ITEM NAME</th>
+                      <th style={{ textAlign: 'right', width: '12%' }}>ON HAND</th>
+                      <th style={{ textAlign: 'right', width: '17%' }}>WEIGHTED AVG. COST</th>
+                      <th style={{ textAlign: 'right', width: '17%' }}>EST. STOCK VALUE</th>
                     </tr>
                   ) : (
                     <tr>
-                      <th style={{ width: '150px' }}>REFERENCE</th>
-                      <th>{kind === 'receivables' ? 'CUSTOMER' : 'SUPPLIER'}</th>
-                      <th style={{ width: '120px' }}>DUE DATE</th>
-                      <th style={{ width: '130px' }}>AGING STATUS</th>
-                      <th style={{ textAlign: 'right', width: '130px' }}>ORIGINAL</th>
-                      <th style={{ textAlign: 'right', width: '130px' }}>PAID / CREDITED</th>
-                      <th style={{ textAlign: 'right', width: '130px' }}>OPEN BALANCE</th>
+                      <th style={{ width: '16%' }}>REFERENCE</th>
+                      <th style={{ width: '28%' }}>{kind === 'receivables' ? 'CUSTOMER' : 'SUPPLIER'}</th>
+                      <th style={{ width: '12%' }}>DUE DATE</th>
+                      <th style={{ width: '12%' }}>AGING STATUS</th>
+                      <th style={{ textAlign: 'right', width: '11%' }}>ORIGINAL</th>
+                      <th style={{ textAlign: 'right', width: '10%' }}>PAID / CREDITED</th>
+                      <th style={{ textAlign: 'right', width: '11%' }}>OPEN BALANCE</th>
                     </tr>
                   )}
                 </thead>
@@ -714,8 +721,8 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
                           <td style={{ color: 'var(--sp-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                             {row.period}
                           </td>
-                          <td className="ref-cell" style={{ fontWeight: 500 }}>
-                            {row.sku}
+                          <td>
+                            <span className="sales-ref-badge">{row.sku}</span>
                           </td>
                           <td style={{ color: 'var(--sp-text)' }}>{row.itemName}</td>
                           <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
@@ -730,7 +737,7 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
                           <td
                             style={{
                               textAlign: 'right',
-                              fontWeight: 600,
+                              fontWeight: 500,
                               fontVariantNumeric: 'tabular-nums',
                               color: Number(row.estimatedGrossMargin) >= 0 ? '#10b981' : '#f43f5e'
                             }}
@@ -740,7 +747,7 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
                           <td
                             style={{
                               textAlign: 'right',
-                              fontWeight: 600,
+                              fontWeight: 500,
                               fontVariantNumeric: 'tabular-nums'
                             }}
                           >
@@ -759,8 +766,8 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
                     filteredValuationRows.length ? (
                       filteredValuationRows.map((row) => (
                         <tr key={row.sku}>
-                          <td className="ref-cell" style={{ fontWeight: 500 }}>
-                            {row.sku}
+                          <td>
+                            <span className="sales-ref-badge">{row.sku}</span>
                           </td>
                           <td style={{ color: 'var(--sp-text)' }}>{row.itemName}</td>
                           <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
@@ -780,7 +787,7 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
                           <td
                             style={{
                               textAlign: 'right',
-                              fontWeight: 600,
+                              fontWeight: 500,
                               fontVariantNumeric: 'tabular-nums'
                             }}
                           >
@@ -798,8 +805,8 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
                   ) : filteredAgingRows.length ? (
                     filteredAgingRows.map((row) => (
                       <tr key={row.reference}>
-                        <td className="ref-cell" style={{ fontWeight: 500 }}>
-                          {row.reference}
+                        <td>
+                          <span className="sales-ref-badge">{row.reference}</span>
                         </td>
                         <td style={{ fontWeight: 500, color: 'var(--sp-text)' }}>
                           {row.counterparty}

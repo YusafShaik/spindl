@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
-import { Check, ChevronDown, Download, Menu, Plus, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Download, Menu, Plus, Boxes, Building2, FileText, ShoppingCart, UserPlus, Receipt } from 'lucide-react';
 import { API, apiFetch } from './lib/api/client.ts';
 import { navModuleCode } from './app/navigation.ts';
 import { Dashboard } from './features/overview/Dashboard.tsx';
@@ -9,6 +9,7 @@ import { AuthPage } from './features/auth/AuthPage.tsx';
 import { useAuthActions, type AuthSession } from './features/auth/useAuthActions.ts';
 import { CustomerDirectory } from './features/customers/CustomerDirectory.tsx';
 import { TransactionRegister } from './features/transactions/TransactionRegister.tsx';
+import { GeneralLedgerPanel } from './features/gl/GeneralLedgerPanel.tsx';
 import { ProductDirectory } from './features/inventory/ProductDirectory.tsx';
 import { InventoryPanel } from './features/inventory/InventoryPanel.tsx';
 import { useInventoryActions } from './features/inventory/useInventoryActions.ts';
@@ -39,6 +40,11 @@ import { TenantSettingsPanel } from './features/settings/TenantSettingsPanel.tsx
 import { TeamPanel } from './features/team/TeamPanel.tsx';
 import { useTeamActions } from './features/team/useTeamActions.ts';
 import { ManufacturingPanel } from './features/manufacturing/ManufacturingPanel.tsx';
+import { MrpPanel } from './features/mrp/MrpPanel.tsx';
+import { EngineeringChangePanel } from './features/engineering/EngineeringChangePanel.tsx';
+import { MaintenancePanel } from './features/maintenance/MaintenancePanel.tsx';
+import { LogisticsPanel } from './features/logistics/LogisticsPanel.tsx';
+import { WorkforcePanel } from './features/workforce/WorkforcePanel.tsx';
 import { PosPanel } from './features/pos/PosPanel.tsx';
 import { useTenantModules } from './app/useTenantModules.ts';
 import { useTenantData } from './app/useTenantData.ts';
@@ -145,12 +151,114 @@ function App() {
       onMobileOpenChange={setMobileNav}
     />
     <main className="main-area">
-      <header className="topbar"><button className="mobile-menu" onClick={() => setMobileNav(!mobileNav)}><Menu size={19}/></button><div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><b>{section}</b></div><div className="top-actions"><div className="api-indicator"><i className={apiOnline ? 'online' : ''}></i>{apiOnline ? 'PostgreSQL connected' : 'API unavailable'}</div><NotificationCenter notify={notify}/><span className="top-divider"></span><button className="top-avatar">AS</button></div></header>
+      <header className="topbar">
+        <button className="mobile-menu" onClick={() => setMobileNav(!mobileNav)}>
+          <Menu size={18} />
+        </button>
+        <div className="breadcrumbs">
+          <span>Workspace</span>
+          <span className="crumb-slash">/</span>
+          <b>{section}</b>
+        </div>
+        <div className="top-actions">
+          <div className="api-indicator">
+            <i className={apiOnline ? 'online' : ''} />
+            <span>{apiOnline ? 'Connected' : 'Offline'}</span>
+          </div>
+          <NotificationCenter notify={notify} />
+          <span className="top-divider" />
+          <button className="top-avatar" title={session?.name || 'User'}>
+            {session?.name ? session.name.split(/\s+/).map((n) => n[0]).slice(0, 2).join('').toUpperCase() : 'U'}
+          </button>
+        </div>
+      </header>
       <div className="content-wrap">
-        <div className="page-heading"><div><div className="eyebrow"><Sparkles size={13}/> THURSDAY, 13 NOVEMBER 2026</div><h1>{section === 'Overview' ? 'Good morning, Arjun' : section}</h1><p>{section === 'Overview' ? 'Here’s what’s happening across your business today.' : `Keep your ${section.toLowerCase()} up to date and moving.`}</p></div><div className="heading-actions">{!['Reports','Audit log','Settings','POS','Warehouses'].includes(section)&&<button className="button button-secondary" disabled={saving} onClick={() => ['Customers','Products','Imports'].includes(section)?exportMasterData(section==='Customers'?'CUSTOMERS':section==='Products'?'ITEMS':importResource):notify('Export is not available for this view yet')}><Download size={15}/>{saving?'Preparing…':['Customers','Products','Imports'].includes(section)?'Export CSV':'Export'}</button>}{!['Reports','Audit log','Settings','POS','Warehouses'].includes(section)&&<div className="new-wrap"><button className="button button-primary" onClick={() => section==='Leads'?document.querySelector<HTMLInputElement>('.lead-create-form input[name="name"]')?.focus():setShowNew(!showNew)}><Plus size={16}/> New {section === 'Leads' ? 'lead' : section === 'Customers' ? 'customer' : section === 'Products' || section === 'Inventory' ? 'item' : section === 'Purchases' ? 'purchase' : section === 'Sales' ? 'quote' : 'transaction'}<ChevronDown size={14}/></button>{showNew && <div className="new-menu"><button onClick={() => createSample('Customer')}>New customer</button><button onClick={() => createSample('Product')}>New product</button><button onClick={() => createSample('Supplier')}>New supplier</button><button onClick={() => createSample('Purchase order')}>New purchase order</button><button onClick={() => createSample('Quotation')}>New quotation</button><button onClick={() => createSample('Sales order')}>New sales order</button></div>}</div>}</div></div>
+        {!['Reports', 'Audit log', 'Settings', 'POS', 'Warehouses', 'Production', 'Planning (MRP)', 'Engineering (ECO)', 'Maintenance', 'Workforce', 'Logistics', 'Products', 'Inventory', 'Sales', 'Purchases', 'Quality', 'Customers', 'Team', 'Leads', 'Transactions', 'Accounting (GL)'].includes(section) && (
+          <div className="page-heading">
+            <div className="page-title-wrap">
+              <h1>{section === 'Overview' ? 'Overview' : section}</h1>
+            </div>
+            <div className="heading-actions">
+              {['Customers', 'Products', 'Imports'].includes(section) && (
+                <button
+                  className="button button-secondary"
+                  disabled={saving}
+                  onClick={() =>
+                    ['Customers', 'Products', 'Imports'].includes(section)
+                      ? exportMasterData(section === 'Customers' ? 'CUSTOMERS' : section === 'Products' ? 'ITEMS' : importResource)
+                      : notify('Export is not available for this view yet')
+                  }
+                >
+                  <Download size={14} />
+                  <span>{saving ? 'Exporting…' : 'Export CSV'}</span>
+                </button>
+              )}
+              <div className="new-wrap">
+                <button
+                  className="button button-primary"
+                  onClick={() =>
+                    section === 'Leads'
+                      ? document.querySelector<HTMLInputElement>('.lead-create-form input[name="name"]')?.focus()
+                      : setShowNew(!showNew)
+                  }
+                >
+                  <Plus size={14} />
+                  <span>
+                    New{' '}
+                    {section === 'Leads'
+                      ? 'lead'
+                      : section === 'Customers'
+                      ? 'customer'
+                      : section === 'Products' || section === 'Inventory'
+                      ? 'item'
+                      : section === 'Purchases'
+                      ? 'purchase'
+                      : section === 'Sales'
+                      ? 'quote'
+                      : 'transaction'}
+                  </span>
+                  <ChevronDown size={13} />
+                </button>
+                {showNew && (
+                  <div className="new-menu">
+                    <button onClick={() => { createSample('Customer'); setShowNew(false); }}>
+                      <UserPlus size={13} className="menu-icon" />
+                      <span>New customer</span>
+                    </button>
+                    <button onClick={() => { createSample('Product'); setShowNew(false); }}>
+                      <Boxes size={13} className="menu-icon" />
+                      <span>New product</span>
+                    </button>
+                    <button onClick={() => { createSample('Supplier'); setShowNew(false); }}>
+                      <Building2 size={13} className="menu-icon" />
+                      <span>New supplier</span>
+                    </button>
+                    <button onClick={() => { createSample('Purchase order'); setShowNew(false); }}>
+                      <Receipt size={13} className="menu-icon" />
+                      <span>New purchase order</span>
+                    </button>
+                    <button onClick={() => { createSample('Quotation'); setShowNew(false); }}>
+                      <FileText size={13} className="menu-icon" />
+                      <span>New quotation</span>
+                    </button>
+                    <button onClick={() => { createSample('Sales order'); setShowNew(false); }}>
+                      <ShoppingCart size={13} className="menu-icon" />
+                      <span>New sales order</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {section === 'POS' ? <PosPanel items={items} customers={customers} role={session?.role} userId={session?.userId} notify={notify} />
         : section === 'Production' ? <ManufacturingPanel items={items} boms={boms} workOrders={workOrders} workCenters={workCenters} loading={productionLoading} request={productionRequest} notify={notify} role={session?.role} />
+        : section === 'Planning (MRP)' ? <MrpPanel items={items} role={session?.role} notify={notify} />
+        : section === 'Engineering (ECO)' ? <EngineeringChangePanel items={items} role={session?.role} notify={notify} />
+        : section === 'Maintenance' ? <MaintenancePanel items={items} role={session?.role} notify={notify} />
+        : section === 'Logistics' ? <LogisticsPanel items={items} customers={customers} role={session?.role} notify={notify} />
+        : section === 'Workforce' ? <WorkforcePanel role={session?.role} notify={notify} />
         : section === 'Leads' ? <LeadPanel items={items} notify={notify} onConverted={async()=>{const [customerData,quoteData]=await Promise.all([apiFetch(`${API}/customers`).then(r=>r.json()),apiFetch(`${API}/quotes`).then(r=>r.json())]);setCustomers(customerData);setQuotes(quoteData);}} />
         : section === 'Quality' ? <QualityPanel role={session?.role} notify={notify} onRefresh={async()=>{const [itemData,movementData,summary]=await Promise.all([apiFetch(`${API}/items`).then(r=>r.json()),apiFetch(`${API}/inventory/movements`).then(r=>r.json()),apiFetch(`${API}/dashboard/summary`).then(r=>r.json())]);setItems(itemData);setMovements(movementData);setMetrics(summary);}} />
         : section === 'Team' ? <TeamPanel members={teamMembers} invitations={teamInvitations} roles={teamRoles} latestInvite={latestInvite} loading={teamLoading} saving={saving} session={session} ownershipLink={ownershipLink} onInvite={inviteMember} onRole={(id,role)=>updateMember(id,'role',role)} onActive={(id,active)=>updateMember(id,'active',active)} onScope={updateMemberScope} onOwnershipRequest={ownershipRequest} onOwnershipConfirm={ownershipConfirm} onResend={resendInvitation} onCopy={(message='Invitation link copied')=>notify(message)} />
@@ -170,12 +278,41 @@ function App() {
           onPayment={openBillPayment}
           onCredit={openSupplierCredit}
           onNewSupplier={() => createSample('Supplier')}
+          onNewOrder={() => createSample('Purchase order')}
           requisitionSection={<PurchaseRequisitionPanel requisitions={purchaseRequisitions} suppliers={suppliers} items={items} role={session?.role} notify={notify} onRequisitions={setPurchaseRequisitions} onCreatedOrder={order => setPurchaseOrders(list => [order, ...list])} />}
           reorderSection={<ReorderSuggestions suppliers={suppliers} notify={notify} onCreated={order => setPurchaseOrders(list => [order, ...list])} />}
           requisitions={purchaseRequisitions}
         />
-        : section === 'Sales' ? <SalesDirectory quotes={quotes} orders={salesOrders} invoices={invoices} customerCredits={customerCredits} query={query} setQuery={setQuery} onQuoteAction={quoteAction} onDispatch={openDispatch} onInvoice={openInvoice} onPayment={openPayment} onCredit={openCustomerCredit} onRefund={openRefund} />
-        : section === 'Transactions' ? <TransactionRegister invoiceSettings={<InvoiceSettingsPanel role={session?.role} notify={notify} />} data={transactions} type={transactionType} setType={setTransactionType} from={transactionFrom} setFrom={setTransactionFrom} to={transactionTo} setTo={setTransactionTo} />
+        : section === 'Sales' ? <SalesDirectory
+          quotes={quotes}
+          orders={salesOrders}
+          invoices={invoices}
+          customerCredits={customerCredits}
+          query={query}
+          setQuery={setQuery}
+          onQuoteAction={quoteAction}
+          onDispatch={openDispatch}
+          onInvoice={openInvoice}
+          onPayment={openPayment}
+          onCredit={openCustomerCredit}
+          onRefund={openRefund}
+          onNewQuote={() => createSample('Quotation')}
+          onNewOrder={() => createSample('Sales order')}
+        />
+        : (section === 'Transactions' || section === 'Accounting (GL)') ? (
+          <GeneralLedgerPanel
+            role={session?.role}
+            notify={notify}
+            legacyData={transactions}
+            legacyType={transactionType}
+            setLegacyType={setTransactionType}
+            legacyFrom={transactionFrom}
+            setLegacyFrom={setTransactionFrom}
+            legacyTo={transactionTo}
+            setLegacyTo={setTransactionTo}
+            invoiceSettings={<InvoiceSettingsPanel role={session?.role} notify={notify} />}
+          />
+        )
         : section === 'Reports' ? <OperationalReports notify={notify} role={session?.role} />
         : section === 'Settings' ? <TenantSettingsPanel role={session?.role} notify={notify} onModulesChange={codes=>{setEnabledModules(codes);if(!codes.includes(navModuleCode(section)))setSection('Overview');}} onSaved={name=>{const updated={...session,tenantName:name};setSession(updated);localStorage.setItem('spindl.session',JSON.stringify(updated));}}/>
         : section === 'Audit log' ? <AuditExplorer notify={notify} role={session?.role}/>

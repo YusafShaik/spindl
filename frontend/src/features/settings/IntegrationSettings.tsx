@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Key,
   Lock,
+  Plus,
   RotateCcw,
   Shield,
   Trash2,
@@ -153,11 +154,11 @@ export function TenantApiTokensPanel({ role, notify }: TenantApiTokensPanelProps
   };
 
   return (
-    <section className="panel tenant-settings-panel">
-      <div className="panel-header">
+    <section className="sales-table-card tenant-settings-panel">
+      <div className="sales-card-header">
         <div>
-          <h2>API tokens</h2>
-          <p>
+          <h2 className="sales-card-title">API tokens</h2>
+          <p className="sales-card-subtitle">
             Create scoped Bearer credentials for trusted scripts and automated integrations. The secret token is shown once and cannot be recovered.
           </p>
         </div>
@@ -297,17 +298,17 @@ export function TenantApiTokensPanel({ role, notify }: TenantApiTokensPanelProps
             </p>
           </div>
         ) : (
-          <div className="integration-table-wrap">
-            <table className="integration-table">
+          <div className="sales-table-scroll">
+            <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th>TOKEN NAME</th>
-                  <th>PREFIX</th>
-                  <th>SCOPES</th>
-                  <th>EXPIRES</th>
-                  <th>LAST USED</th>
-                  <th>STATUS</th>
-                  {canManage && <th style={{ textAlign: 'right' }}>ACTION</th>}
+                  <th style={{ width: '20%' }}>TOKEN NAME</th>
+                  <th style={{ width: '14%' }}>PREFIX</th>
+                  <th style={{ width: '26%' }}>SCOPES</th>
+                  <th style={{ width: '14%' }}>EXPIRES</th>
+                  <th style={{ width: '14%' }}>LAST USED</th>
+                  <th style={{ width: '6%' }}>STATUS</th>
+                  {canManage && <th style={{ width: '6%', textAlign: 'right' }}>ACTION</th>}
                 </tr>
               </thead>
               <tbody>
@@ -355,8 +356,8 @@ export function TenantApiTokensPanel({ role, notify }: TenantApiTokensPanelProps
                         {!token.revokedAt && (
                           <button
                             type="button"
-                            className="mini-action"
-                            style={{ color: 'var(--sp-error, #ef4444)' }}
+                            className="sales-action-btn secondary"
+                            style={{ height: '24px', fontSize: '11px', padding: '0 8px', color: 'var(--sp-danger)' }}
                             onClick={() => revoke(token)}
                           >
                             Revoke
@@ -477,11 +478,11 @@ export function TenantWebhooksPanel({ role, notify }: TenantWebhooksPanelProps) 
   };
 
   return (
-    <section className="panel tenant-settings-panel">
-      <div className="panel-header">
+    <section className="sales-table-card tenant-settings-panel">
+      <div className="sales-card-header">
         <div>
-          <h2>Signed webhooks</h2>
-          <p>
+          <h2 className="sales-card-title">Signed webhooks</h2>
+          <p className="sales-card-subtitle">
             Stream transaction and approval events to external HTTPS endpoints. Outbound HTTP requests carry an HMAC-SHA256 signature and retry automatically with dead-letter protection.
           </p>
         </div>
@@ -512,11 +513,12 @@ export function TenantWebhooksPanel({ role, notify }: TenantWebhooksPanelProps) 
               />
             </label>
             <button
-              className="button button-primary"
+              className="sales-action-btn primary"
               disabled={saving || !name.trim() || !targetUrl.trim() || !selected.length}
               style={{ height: '32px' }}
             >
-              {saving ? 'Saving…' : 'Add webhook'}
+              <Plus size={13} />
+              <span>{saving ? 'Saving…' : 'Add webhook'}</span>
             </button>
           </div>
 
@@ -621,16 +623,16 @@ export function TenantWebhooksPanel({ role, notify }: TenantWebhooksPanelProps) 
             </p>
           </div>
         ) : (
-          <div className="integration-table-wrap">
-            <table className="integration-table">
+          <div className="sales-table-scroll">
+            <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th>NAME</th>
-                  <th>DESTINATION URL</th>
-                  <th>TRIGGER EVENTS</th>
-                  <th>DEAD LETTERS</th>
-                  <th>STATUS</th>
-                  {canManage && <th style={{ textAlign: 'right' }}>ACTION</th>}
+                  <th style={{ width: '20%' }}>NAME</th>
+                  <th style={{ width: '28%' }}>DESTINATION URL</th>
+                  <th style={{ width: '26%' }}>TRIGGER EVENTS</th>
+                  <th style={{ width: '10%' }}>DEAD LETTERS</th>
+                  <th style={{ width: '8%' }}>STATUS</th>
+                  {canManage && <th style={{ width: '8%', textAlign: 'right' }}>ACTION</th>}
                 </tr>
               </thead>
               <tbody>
@@ -667,7 +669,8 @@ export function TenantWebhooksPanel({ role, notify }: TenantWebhooksPanelProps) 
                         {endpoint.active && (
                           <button
                             type="button"
-                            className="mini-action muted"
+                            className="sales-action-btn secondary"
+                            style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
                             onClick={() => deactivate(endpoint)}
                           >
                             Disable
@@ -699,17 +702,17 @@ export function TenantWebhooksPanel({ role, notify }: TenantWebhooksPanelProps) 
             </p>
           </div>
         ) : (
-          <div className="integration-table-wrap">
-            <table className="integration-table">
+          <div className="sales-table-scroll">
+            <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th>ENDPOINT</th>
-                  <th>EVENT</th>
-                  <th>ATTEMPTS</th>
-                  <th>HTTP STATUS</th>
-                  <th>QUEUED AT</th>
-                  <th>STATUS</th>
-                  {canManage && <th style={{ textAlign: 'right' }}>ACTION</th>}
+                  <th style={{ width: '20%' }}>ENDPOINT</th>
+                  <th style={{ width: '20%' }}>EVENT</th>
+                  <th style={{ width: '10%' }}>ATTEMPTS</th>
+                  <th style={{ width: '12%' }}>HTTP STATUS</th>
+                  <th style={{ width: '16%' }}>QUEUED AT</th>
+                  <th style={{ width: '12%' }}>STATUS</th>
+                  {canManage && <th style={{ width: '10%', textAlign: 'right' }}>ACTION</th>}
                 </tr>
               </thead>
               <tbody>
@@ -761,7 +764,8 @@ export function TenantWebhooksPanel({ role, notify }: TenantWebhooksPanelProps) 
                         {delivery.status === 'DEAD' && (
                           <button
                             type="button"
-                            className="mini-action"
+                            className="sales-action-btn secondary"
+                            style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
                             onClick={() => replay(delivery)}
                             title="Replay webhook payload"
                           >

@@ -90,16 +90,86 @@ export function PlanUsagePanel({ role, notify }: PlanSettingsPanelsProps) {
     finally { setSaving(false); }
   };
 
-  return <section className="panel tenant-settings-panel">
-    <div className="panel-header"><div><h2>Plan and usage</h2><p>{plan ? `${plan.displayName} · version ${plan.version} · ${formatAuditLabel(plan.status)}` : 'Loading plan…'}</p></div></div>
-    {plan && <>
-      <div className="tenant-settings-meta"><div><small>SEATS</small><b>{plan.activeSeats} active · {plan.pendingInvitations} invited · {plan.seatLimit} limit</b></div><div><small>STORAGE USED</small><b>{formatBytes(plan.storageUsedBytes)} / {plan.storageLimitMb.toLocaleString()} MB</b></div><div><small>API USAGE THIS MONTH</small><b>{Number(plan.apiCallsUsed || 0).toLocaleString()} / {plan.apiCallsPerMonth.toLocaleString()} calls</b></div></div>
-      <form className="team-invite-form" onSubmit={(event) => void showPreview(event)}><label>Compare a plan<select value={choice} onChange={(event) => { setChoice(event.target.value); setPreview(null); }}>{[['TRIAL', 'Trial'], ['STARTER_CRM', 'Starter CRM'], ['INVENTORY_LITE', 'Inventory Lite'], ['COMMERCE_OPS', 'Commerce Ops'], ['MANUFACTURING', 'Manufacturing']].map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></label><button className="button button-secondary" disabled={saving || !canEdit}>{saving ? 'Calculating…' : 'Preview plan change'}</button></form>
-      {preview && <div className="team-invite-link"><div><b>{preview.targetPlanName} · effective {preview.effectiveDate}</b><small>{preview.message} Target limits: {preview.targetSeatLimit} seats, {preview.storageLimitMb.toLocaleString()} MB storage, {preview.apiCallsPerMonth.toLocaleString()} API calls/month. Current usage: {preview.seatsInUse} seats, {formatBytes(preview.storageUsedBytes)} storage, {Number(preview.apiCallsUsed || 0).toLocaleString()} API calls this month.{preview.overages.length ? ` Overages: ${preview.overages.join('; ')}.` : ' No seat, storage, or API overages.'}{preview.blockedModules?.length ? ` Modules to disable: ${preview.blockedModules.join(', ')}.` : ''}</small></div>{canEdit && <button className="mini-action" disabled={saving || requests.some((request) => ['REQUESTED', 'APPROVED'].includes(request.status)) || (preview.targetPlanCode === preview.currentPlanCode && preview.targetVersion === preview.currentVersion)} onClick={() => void requestPlan()}>{requests.some((request) => ['REQUESTED', 'APPROVED'].includes(request.status)) ? 'Request pending or scheduled' : 'Request plan change'}</button>}</div>}
-      {requests.map((request) => <div className="team-invite-link" key={request.id}><div><b>{request.targetPlanCode.replaceAll('_', ' ')} · {formatAuditLabel(request.status)}</b><small>{request.currentPlanCode.replaceAll('_', ' ')} → {request.targetPlanCode.replaceAll('_', ' ')} · effective {request.effectiveDate} · submitted {new Date(request.requestedAt).toLocaleDateString()}{request.status === 'REQUESTED' ? ' · Awaiting commercial review' : request.status === 'APPROVED' ? ` · Approved, applies ${request.effectiveDate}` : request.status === 'APPLIED' ? ` · Applied ${request.appliedAt ? new Date(request.appliedAt).toLocaleDateString() : ''}` : request.status === 'REJECTED' ? ` · ${request.reviewNote || 'Rejected'}` : ''}</small></div>{request.status === 'REQUESTED' && canEdit && <button className="mini-action muted" disabled={saving} onClick={() => void cancelPlanRequest(request.id)}>Cancel request</button>}</div>)}
-      {!canEdit && <p className="form-note">Only workspace owners and admins can preview plan changes.</p>}
-    </>}
-  </section>;
+  return (
+    <section className="sales-table-card tenant-settings-panel">
+      <div className="sales-card-header">
+        <div>
+          <h2 className="sales-card-title">Plan and usage</h2>
+          <p className="sales-card-subtitle">{plan ? `${plan.displayName} · version ${plan.version} · ${formatAuditLabel(plan.status)}` : 'Loading plan…'}</p>
+        </div>
+      </div>
+      {plan && (
+        <>
+          <div className="tenant-settings-meta">
+            <div>
+              <small>SEATS</small>
+              <b>{plan.activeSeats} active · {plan.pendingInvitations} invited · {plan.seatLimit} limit</b>
+            </div>
+            <div>
+              <small>STORAGE USED</small>
+              <b>{formatBytes(plan.storageUsedBytes)} / {plan.storageLimitMb.toLocaleString()} MB</b>
+            </div>
+            <div>
+              <small>API USAGE THIS MONTH</small>
+              <b>{Number(plan.apiCallsUsed || 0).toLocaleString()} / {plan.apiCallsPerMonth.toLocaleString()} calls</b>
+            </div>
+          </div>
+          <form className="team-invite-form" onSubmit={(event) => void showPreview(event)}>
+            <label>
+              Compare a plan
+              <select value={choice} onChange={(event) => { setChoice(event.target.value); setPreview(null); }}>
+                {[['TRIAL', 'Trial'], ['STARTER_CRM', 'Starter CRM'], ['INVENTORY_LITE', 'Inventory Lite'], ['COMMERCE_OPS', 'Commerce Ops'], ['MANUFACTURING', 'Manufacturing']].map(([code, name]) => (
+                  <option key={code} value={code}>{name}</option>
+                ))}
+              </select>
+            </label>
+            <button className="sales-action-btn secondary" disabled={saving || !canEdit}>
+              {saving ? 'Calculating…' : 'Preview plan change'}
+            </button>
+          </form>
+          {preview && (
+            <div className="team-invite-link">
+              <div>
+                <b>{preview.targetPlanName} · effective {preview.effectiveDate}</b>
+                <small>
+                  {preview.message} Target limits: {preview.targetSeatLimit} seats, {preview.storageLimitMb.toLocaleString()} MB storage, {preview.apiCallsPerMonth.toLocaleString()} API calls/month. Current usage: {preview.seatsInUse} seats, {formatBytes(preview.storageUsedBytes)} storage, {Number(preview.apiCallsUsed || 0).toLocaleString()} API calls this month.
+                  {preview.overages.length ? ` Overages: ${preview.overages.join('; ')}.` : ' No seat, storage, or API overages.'}
+                  {preview.blockedModules?.length ? ` Modules to disable: ${preview.blockedModules.join(', ')}.` : ''}
+                </small>
+              </div>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="sales-action-btn primary"
+                  disabled={saving || requests.some((request) => ['REQUESTED', 'APPROVED'].includes(request.status)) || (preview.targetPlanCode === preview.currentPlanCode && preview.targetVersion === preview.currentVersion)}
+                  onClick={() => void requestPlan()}
+                >
+                  {requests.some((request) => ['REQUESTED', 'APPROVED'].includes(request.status)) ? 'Request pending or scheduled' : 'Request plan change'}
+                </button>
+              )}
+            </div>
+          )}
+          {requests.map((request) => (
+            <div className="team-invite-link" key={request.id}>
+              <div>
+                <b>{request.targetPlanCode.replaceAll('_', ' ')} · {formatAuditLabel(request.status)}</b>
+                <small>
+                  {request.currentPlanCode.replaceAll('_', ' ')} → {request.targetPlanCode.replaceAll('_', ' ')} · effective {request.effectiveDate} · submitted {new Date(request.requestedAt).toLocaleDateString()}
+                  {request.status === 'REQUESTED' ? ' · Awaiting commercial review' : request.status === 'APPROVED' ? ` · Approved, applies ${request.effectiveDate}` : request.status === 'APPLIED' ? ` · Applied ${request.appliedAt ? new Date(request.appliedAt).toLocaleDateString() : ''}` : request.status === 'REJECTED' ? ` · ${request.reviewNote || 'Rejected'}` : ''}
+                </small>
+              </div>
+              {request.status === 'REQUESTED' && canEdit && (
+                <button type="button" className="sales-action-btn secondary" disabled={saving} onClick={() => void cancelPlanRequest(request.id)}>
+                  Cancel request
+                </button>
+              )}
+            </div>
+          ))}
+          {!canEdit && <p className="form-note">Only workspace owners and admins can preview plan changes.</p>}
+        </>
+      )}
+    </section>
+  );
 }
 
 export function PlatformPlanReviewPanel({ notify }: Omit<PlanSettingsPanelsProps, 'role'>) {
@@ -128,5 +198,36 @@ export function PlatformPlanReviewPanel({ notify }: Omit<PlanSettingsPanelsProps
     finally { setBusy(false); }
   };
   if (!allowed) return null;
-  return <section className="panel tenant-settings-panel"><div className="panel-header"><div><h2>Platform plan review</h2><p>Commercial reviewers can approve upgrades, schedule downgrades, or reject requests with a reason. Decisions are audited in the affected workspace.</p></div></div>{requests.length ? requests.map((request) => <div className="team-invite-link" key={request.id}><div><b>{request.tenantName} · {request.currentPlanCode} → {request.targetPlanCode}</b><small>{request.status} · effective {request.effectiveDate} · requested {new Date(request.requestedAt).toLocaleString()}{request.reviewNote ? ` · ${request.reviewNote}` : ''}</small><input value={notes[request.id] || ''} onChange={(event) => setNotes((current) => ({ ...current, [request.id]: event.target.value }))} maxLength={500} placeholder="Review note (required for rejection)"/></div>{request.status === 'REQUESTED' && <div className="import-actions"><button className="mini-action" disabled={busy} onClick={() => void review(request.id, 'approve')}>Approve</button><button className="mini-action muted" disabled={busy || !notes[request.id]?.trim()} onClick={() => void review(request.id, 'reject')}>Reject</button></div>}</div>) : <p className="empty-cell">No plan requests are awaiting review or scheduled.</p>}</section>;
+  return (
+    <section className="sales-table-card tenant-settings-panel">
+      <div className="sales-card-header">
+        <div>
+          <h2 className="sales-card-title">Platform plan review</h2>
+          <p className="sales-card-subtitle">Commercial reviewers can approve upgrades, schedule downgrades, or reject requests with a reason. Decisions are audited in the affected workspace.</p>
+        </div>
+      </div>
+      {requests.length ? (
+        requests.map((request) => (
+          <div className="team-invite-link" key={request.id}>
+            <div>
+              <b>{request.tenantName} · {request.currentPlanCode} → {request.targetPlanCode}</b>
+              <small>
+                {request.status} · effective {request.effectiveDate} · requested {new Date(request.requestedAt).toLocaleString()}
+                {request.reviewNote ? ` · ${request.reviewNote}` : ''}
+              </small>
+              <input value={notes[request.id] || ''} onChange={(event) => setNotes((current) => ({ ...current, [request.id]: event.target.value }))} maxLength={500} placeholder="Review note (required for rejection)" />
+            </div>
+            {request.status === 'REQUESTED' && (
+              <div className="import-actions" style={{ display: 'flex', gap: '6px' }}>
+                <button className="sales-action-btn primary" disabled={busy} onClick={() => void review(request.id, 'approve')}>Approve</button>
+                <button className="sales-action-btn secondary" disabled={busy || !notes[request.id]?.trim()} onClick={() => void review(request.id, 'reject')}>Reject</button>
+              </div>
+            )}
+          </div>
+        ))
+      ) : (
+        <p className="empty-cell">No plan requests are awaiting review or scheduled.</p>
+      )}
+    </section>
+  );
 }

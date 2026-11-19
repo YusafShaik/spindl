@@ -21,6 +21,8 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrderEntity,UUI
     @Query("select o from SalesOrderEntity o where o.tenantId=:tenantId and o.id=:id")
     Optional<SalesOrderEntity> findForUpdateByTenantIdAndId(@Param("tenantId") UUID tenantId,@Param("id") UUID id);
     long countByTenantIdAndCustomerId(UUID tenantId, UUID customerId);
+    @Query("select o.customer.id, count(o) from SalesOrderEntity o where o.tenantId=:tenantId group by o.customer.id")
+    List<Object[]> countOrdersGroupedByCustomer(@Param("tenantId") UUID tenantId);
     long countByTenantIdAndStatusIn(UUID tenantId, Collection<String> statuses);
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("update SalesOrderEntity o set o.customer=:target where o.tenantId=:tenantId and o.customer.id=:sourceId")

@@ -110,15 +110,137 @@ export function TenantRolesPanel({ role, notify }: { role?: string; notify: (mes
     return { ...current, resource, ...(!valid ? { scope: 'ALL' } : {}) };
   });
 
-  return <section className="panel tenant-settings-panel"><div className="panel-header"><div><h2>Workspace roles</h2><p>Clone a built-in role and customize its permissions. Tenant role administration is restricted to owners and admins.</p></div></div>
-    <form className="tenant-settings-form" onSubmit={(event) => void createRole(event)}><label>Role code<input name="roleCode" required maxLength={24} pattern="[A-Za-z][A-Za-z0-9_]{1,23}" placeholder="SALES_LEAD"/></label><label>Display name<input name="displayName" required maxLength={80} placeholder="Sales lead"/></label><label>Description<input name="description" maxLength={240} placeholder="Manages quotes and customer follow-up"/></label><label>Clone permissions from<select name="cloneFrom" defaultValue=""><option value="">Start with no permissions</option>{roles.map((item) => <option key={item.roleCode} value={item.roleCode}>{item.displayName} ({item.roleCode})</option>)}</select></label><button className="button button-primary" disabled={busy}>{busy ? 'Creating…' : 'Create custom role'}</button></form>
-    <div className="tenant-settings-meta">{roles.filter((item) => item.systemRole).map((item) => <div key={item.roleCode}><small>{item.roleCode}</small><b>{item.displayName} · {item.permissions.length} permissions</b></div>)}</div>
-    <label>Custom role to edit<select value={selectedCode} onChange={(event) => setSelectedCode(event.target.value)}><option value="">Select a custom role</option>{roles.filter((item) => !item.systemRole).map((item) => <option key={item.roleCode} value={item.roleCode}>{item.displayName} ({item.roleCode})</option>)}</select></label>
-    {selected && <form className="tenant-settings-form" onSubmit={(event) => void saveRole(event)}><label>Display name<input name="displayName" required maxLength={80} value={selected.displayName} onChange={(event) => setRoles((rows) => rows.map((row) => row.roleCode === selectedCode ? { ...row, displayName: event.target.value } : row))}/></label><label>Description<input name="description" maxLength={240} value={selected.description} onChange={(event) => setRoles((rows) => rows.map((row) => row.roleCode === selectedCode ? { ...row, description: event.target.value } : row))}/></label>
-      <p className="form-note">CRM leads and inventory cycle counts support own, direct-report team, assigned-branch, and all-record scopes. Other resources require all-record access.</p>
-      <div className="tenant-modules-grid">{draft.map((grant, index) => <article className="tenant-module-card" key={`${grant.module}-${grant.resource}-${grant.action}-${grant.scope}`}><div><b>{grant.module} · {grant.resource}</b><small>{grant.action} · {scopeLabels[grant.scope] || grant.scope}</small></div><button type="button" className="mini-action" onClick={() => setDraft((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}>Remove</button></article>)}</div>
-      <div className="bom-draft-line"><label>Module<select value={grantDraft.module} onChange={(event) => updateModule(event.target.value)}>{modules.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Resource<input value={grantDraft.resource} onChange={(event) => updateResource(event.target.value)} required maxLength={64} placeholder="leads or cycle-counts"/></label><label>Action<select value={grantDraft.action} onChange={(event) => setGrantDraft((value) => ({ ...value, action: event.target.value, ...(event.target.value === '*' ? { scope: 'ALL' } : {}) }))}>{actions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>{(leadScopeAvailable || cycleCountScopeAvailable) && <label>Scope<select value={grantDraft.scope} onChange={(event) => setGrantDraft((value) => ({ ...value, scope: event.target.value }))}><option value="ALL">All records</option><option value="OWN">My records</option><option value="TEAM">My direct reports</option><option value="BRANCH">Assigned branches</option></select></label>}<button type="button" className="button button-secondary" onClick={addGrant}>Add permission</button></div>
-      <div className="production-form-actions"><button className="button button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save role'}</button><button type="button" className="button button-secondary" disabled={busy} onClick={() => void deleteRole()}>Delete role</button></div>
-    </form>}
-  </section>;
+  return (
+    <section className="sales-table-card tenant-settings-panel">
+      <div className="sales-card-header">
+        <div>
+          <h2 className="sales-card-title">Workspace roles</h2>
+          <p className="sales-card-subtitle">Clone a built-in role and customize its permissions. Tenant role administration is restricted to owners and admins.</p>
+        </div>
+      </div>
+      <form className="tenant-settings-form" onSubmit={(event) => void createRole(event)}>
+        <label>
+          Role code
+          <input name="roleCode" required maxLength={24} pattern="[A-Za-z][A-Za-z0-9_]{1,23}" placeholder="SALES_LEAD" />
+        </label>
+        <label>
+          Display name
+          <input name="displayName" required maxLength={80} placeholder="Sales lead" />
+        </label>
+        <label>
+          Description
+          <input name="description" maxLength={240} placeholder="Manages quotes and customer follow-up" />
+        </label>
+        <label>
+          Clone permissions from
+          <select name="cloneFrom" defaultValue="">
+            <option value="">Start with no permissions</option>
+            {roles.map((item) => (
+              <option key={item.roleCode} value={item.roleCode}>
+                {item.displayName} ({item.roleCode})
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="sales-action-btn primary" disabled={busy}>
+          {busy ? 'Creating…' : 'Create custom role'}
+        </button>
+      </form>
+
+      <div className="tenant-settings-meta">
+        {roles.filter((item) => item.systemRole).map((item) => (
+          <div key={item.roleCode}>
+            <small>{item.roleCode}</small>
+            <b>{item.displayName} · {item.permissions.length} permissions</b>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: '14px' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', color: 'var(--sp-text-muted)' }}>
+          Custom role to edit
+          <select value={selectedCode} onChange={(event) => setSelectedCode(event.target.value)} style={{ height: '32px', fontSize: '12px', border: '1px solid var(--sp-border)', borderRadius: '6px', background: 'var(--sp-surface)' }}>
+            <option value="">Select a custom role</option>
+            {roles.filter((item) => !item.systemRole).map((item) => (
+              <option key={item.roleCode} value={item.roleCode}>
+                {item.displayName} ({item.roleCode})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {selected && (
+        <form className="tenant-settings-form" style={{ marginTop: '14px' }} onSubmit={(event) => void saveRole(event)}>
+          <label>
+            Display name
+            <input name="displayName" required maxLength={80} value={selected.displayName} onChange={(event) => setRoles((rows) => rows.map((row) => row.roleCode === selectedCode ? { ...row, displayName: event.target.value } : row))} />
+          </label>
+          <label>
+            Description
+            <input name="description" maxLength={240} value={selected.description} onChange={(event) => setRoles((rows) => rows.map((row) => row.roleCode === selectedCode ? { ...row, description: event.target.value } : row))} />
+          </label>
+          <p className="form-note">CRM leads and inventory cycle counts support own, direct-report team, assigned-branch, and all-record scopes. Other resources require all-record access.</p>
+          <div className="tenant-modules-grid">
+            {draft.map((grant, index) => (
+              <article className="tenant-module-card" key={`${grant.module}-${grant.resource}-${grant.action}-${grant.scope}`}>
+                <div>
+                  <b>{grant.module} · {grant.resource}</b>
+                  <small>{grant.action} · {scopeLabels[grant.scope] || grant.scope}</small>
+                </div>
+                <button
+                  type="button"
+                  className="sales-action-btn secondary"
+                  style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
+                  onClick={() => setDraft((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}
+                >
+                  Remove
+                </button>
+              </article>
+            ))}
+          </div>
+          <div className="bom-draft-line" style={{ display: 'flex', gap: '8px', alignItems: 'end', flexWrap: 'wrap', marginTop: '12px' }}>
+            <label>
+              Module
+              <select value={grantDraft.module} onChange={(event) => updateModule(event.target.value)}>
+                {modules.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+            <label>
+              Resource
+              <input value={grantDraft.resource} onChange={(event) => updateResource(event.target.value)} required maxLength={64} placeholder="leads or cycle-counts" />
+            </label>
+            <label>
+              Action
+              <select value={grantDraft.action} onChange={(event) => setGrantDraft((value) => ({ ...value, action: event.target.value, ...(event.target.value === '*' ? { scope: 'ALL' } : {}) }))}>
+                {actions.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+            {(leadScopeAvailable || cycleCountScopeAvailable) && (
+              <label>
+                Scope
+                <select value={grantDraft.scope} onChange={(event) => setGrantDraft((value) => ({ ...value, scope: event.target.value }))}>
+                  <option value="ALL">All records</option>
+                  <option value="OWN">My records</option>
+                  <option value="TEAM">My direct reports</option>
+                  <option value="BRANCH">Assigned branches</option>
+                </select>
+              </label>
+            )}
+            <button type="button" className="sales-action-btn secondary" onClick={addGrant} style={{ height: '32px' }}>
+              Add permission
+            </button>
+          </div>
+          <div className="production-form-actions" style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            <button className="sales-action-btn primary" disabled={busy}>
+              {busy ? 'Saving…' : 'Save role'}
+            </button>
+            <button type="button" className="sales-action-btn secondary" disabled={busy} onClick={() => void deleteRole()}>
+              Delete role
+            </button>
+          </div>
+        </form>
+      )}
+    </section>
+  );
 }

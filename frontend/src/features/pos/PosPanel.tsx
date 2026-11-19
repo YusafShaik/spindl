@@ -13,6 +13,8 @@ import {
   DollarSign,
   Download,
   Filter,
+  LayoutGrid,
+  LayoutList,
   Monitor,
   Package,
   Plus,
@@ -255,6 +257,41 @@ function downloadCsv(filename: string, headers: string[], rows: (string | number
   document.body.removeChild(link);
 }
 
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatTime(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
+function formatDateTime(dateStr?: string | null): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${date} · ${time}`;
+  } catch {
+    return dateStr;
+  }
+}
+
 export function PosPanel({ items, customers, role, userId, notify }: PosPanelProps) {
   // Navigation & Data States
   const [activeTab, setActiveTab] = useState<'terminal' | 'shifts' | 'receipts' | 'registers'>('terminal');
@@ -276,16 +313,19 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
   const [customerId, setCustomerId] = useState<string>('');
   const [tenderMethod, setTenderMethod] = useState<'CASH' | 'CARD' | 'UPI' | 'OTHER'>('CASH');
   const [tenderReference, setTenderReference] = useState<string>('');
+  const [cashTendered, setCashTendered] = useState<string>('');
+  const [catalogueView, setCatalogueView] = useState<'grid' | 'table'>('grid');
   const [productSearch, setProductSearch] = useState<string>('');
-  const [productCategoryFilter, setProductCategoryFilter] = useState<'ALL' | 'FINISHED' | 'SERVICE'>('ALL');
+  const [productCategoryFilter, setProductCategoryFilter] = useState<string>('ALL');
   const [productInStockOnly, setProductInStockOnly] = useState(false);
   const [receiptModal, setReceiptModal] = useState<PosReceipt | null>(null);
   const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null);
   const [editingBasketLineId, setEditingBasketLineId] = useState<string | null>(null);
 
-  // Search & Filters for Receipts
+  // Search & Filters for Receipts & Registers
   const [receiptSearch, setReceiptSearch] = useState<string>('');
   const [receiptStatusFilter, setReceiptStatusFilter] = useState<'ALL' | 'POSTED' | 'VOIDED' | 'REFUNDED' | 'PARTIAL_REFUND'>('ALL');
+  const [registerSearch, setRegisterSearch] = useState<string>('');
 
   // Modals States
   const [isOpenShiftModalOpen, setIsOpenShiftModalOpen] = useState(false);
@@ -425,15 +465,56 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
     return Math.round((due + taxAmount) * 100) / 100;
   }, [due, taxAmount]);
 
-  // Product Catalogue filters
+  // Product Catalogue filters & categorization
   const sellableProducts = useMemo(() => {
-    return items.filter((item) => ['FINISHED', 'SERVICE'].includes(item.itemType) && item.active !== false);
+    return items.filter(
+      (item) =>
+        item.active !== false &&
+        item.unitPrice !== undefined &&
+        item.unitPrice !== null &&
+        Number(item.unitPrice) > 0
+    );
   }, [items]);
+
+  const availableCategories = useMemo(() => {
+    const catMap = new Map<string, number>();
+    sellableProducts.forEach((item) => {
+      const cat =
+        item.category ||
+        (item.itemType === 'SERVICE'
+          ? 'Services'
+          : item.itemType === 'FINISHED'
+          ? 'Finished Goods'
+          : item.itemType === 'RAW'
+          ? 'Raw Materials'
+          : item.itemType === 'WIP'
+          ? 'Sub-Assemblies'
+          : 'General');
+      catMap.set(cat, (catMap.get(cat) || 0) + 1);
+    });
+    return [
+      { id: 'ALL', label: 'All Items', count: sellableProducts.length },
+      ...Array.from(catMap.entries()).map(([id, count]) => ({ id, label: id, count }))
+    ];
+  }, [sellableProducts]);
 
   const filteredProducts = useMemo(() => {
     let result = sellableProducts;
     if (productCategoryFilter !== 'ALL') {
-      result = result.filter((item) => item.itemType === productCategoryFilter);
+      result = result.filter((item) => {
+        const cat =
+          item.category ||
+          (item.itemType === 'SERVICE'
+            ? 'Services'
+            : item.itemType === 'FINISHED'
+            ? 'Finished Goods'
+            : item.itemType === 'RAW'
+            ? 'Raw Materials'
+            : item.itemType === 'WIP'
+            ? 'Sub-Assemblies'
+            : 'General');
+        return cat === productCategoryFilter || item.itemType === productCategoryFilter;
+      });
     }
     if (productInStockOnly) {
       result = result.filter((item) => item.itemType === 'SERVICE' || (item.available ?? item.stock ?? 0) > 0);
@@ -449,6 +530,31 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
     }
     return result;
   }, [sellableProducts, productCategoryFilter, productInStockOnly, productSearch]);
+
+  // Cash Tender & Quick Change Calculations
+  const numericCashTendered = useMemo(() => {
+    const parsed = parseFloat(cashTendered);
+    return isNaN(parsed) ? 0 : parsed;
+  }, [cashTendered]);
+
+  const changeDue = useMemo(() => {
+    if (tenderMethod !== 'CASH' || !numericCashTendered || numericCashTendered < totalDue) return 0;
+    return Math.round((numericCashTendered - totalDue) * 100) / 100;
+  }, [tenderMethod, numericCashTendered, totalDue]);
+
+  const quickCashOptions = useMemo(() => {
+    if (totalDue <= 0) return [];
+    const opts: number[] = [totalDue]; // Exact
+    const roundSteps = [100, 500, 1000, 2000, 5000];
+    for (const step of roundSteps) {
+      const rounded = Math.ceil(totalDue / step) * step;
+      if (rounded > totalDue && !opts.includes(rounded)) {
+        opts.push(rounded);
+      }
+      if (opts.length >= 4) break;
+    }
+    return opts;
+  }, [totalDue]);
 
   // Basket actions
   const addProduct = (item: PosItem): void => {
@@ -484,6 +590,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
   const clearBasket = (): void => {
     setBasket([]);
     setEditingBasketLineId(null);
+    setCashTendered('');
   };
 
   // Barcode Scan Handler
@@ -555,6 +662,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
       setReceiptModal(receiptData);
       setBasket([]);
       setTenderReference('');
+      setCashTendered('');
       notify(`${saved.receiptNumber} posted successfully`);
       await refresh();
       return true;
@@ -913,7 +1021,9 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
   // Receipts Table Filtered List
   const visibleReceipts = useMemo(() => {
     let list = salesHistory;
-    if (receiptStatusFilter !== 'ALL') {
+    if (receiptStatusFilter === 'REFUNDED') {
+      list = list.filter((s) => s.status === 'REFUNDED' || s.status === 'PARTIAL_REFUND');
+    } else if (receiptStatusFilter !== 'ALL') {
       list = list.filter((s) => s.status === receiptStatusFilter);
     }
     if (receiptSearch.trim()) {
@@ -929,6 +1039,21 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
     }
     return list;
   }, [salesHistory, receiptStatusFilter, receiptSearch, customers]);
+
+  // Registers Filtered List
+  const filteredRegisters = useMemo(() => {
+    if (!registerSearch.trim()) return registers;
+    const q = registerSearch.toLowerCase().trim();
+    return registers.filter((r) => {
+      const cashier = cashiers.find((c) => c.userId === r.assignedCashierUserId);
+      return (
+        r.code.toLowerCase().includes(q) ||
+        r.name.toLowerCase().includes(q) ||
+        r.warehouseName.toLowerCase().includes(q) ||
+        (cashier && cashier.name.toLowerCase().includes(q))
+      );
+    });
+  }, [registers, registerSearch, cashiers]);
 
   // Export Receipts CSV
   const exportReceiptsCsv = (): void => {
@@ -964,18 +1089,18 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
   };
 
   return (
-    <div className="reports-screen-layout pos-screen-layout">
+    <div className="sales-screen-layout pos-screen-layout">
       {/* 1. Executive Telemetry Strip — 4 Monochrome Linear Metric Cards */}
       <div className="sales-metric-strip">
-        <div className="reports-metric-card">
-          <div className="reports-metric-header">
-            <span className="reports-metric-label">REGISTER SHIFT</span>
-            <Store size={14} className="reports-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">REGISTER SHIFT</span>
+            <Store size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="reports-metric-val">
+          <div className="sales-metric-val">
             {currentSession ? currentSession.registerCode : 'Shift Closed'}
           </div>
-          <div className="reports-metric-sub">
+          <div className="sales-metric-sub">
             {currentSession
               ? `${currentSession.registerName} · ${currentSession.warehouseName}`
               : registers.length > 0
@@ -984,43 +1109,43 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
           </div>
         </div>
 
-        <div className="reports-metric-card">
-          <div className="reports-metric-header">
-            <span className="reports-metric-label">SHIFT REVENUE</span>
-            <DollarSign size={14} className="reports-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">SHIFT REVENUE</span>
+            <DollarSign size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="reports-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
             {formatCurrency(shiftSalesRevenue)}
           </div>
-          <div className="reports-metric-sub">
+          <div className="sales-metric-sub">
             {salesHistory.length} receipts posted in active shift
           </div>
         </div>
 
-        <div className="reports-metric-card">
-          <div className="reports-metric-header">
-            <span className="reports-metric-label">DRAWER CASH</span>
-            <Coins size={14} className="reports-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">DRAWER CASH</span>
+            <Coins size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="reports-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
             {currentSession ? formatCurrency(currentDrawerCash) : '—'}
           </div>
-          <div className="reports-metric-sub">
+          <div className="sales-metric-sub">
             {currentSession
               ? `Float ${formatCurrency(currentSession.openingFloat)} · ${formatCurrency(shiftCashRevenue)} cash in`
               : 'Open shift to initialize drawer'}
           </div>
         </div>
 
-        <div className="reports-metric-card">
-          <div className="reports-metric-header">
-            <span className="reports-metric-label">STORE SCOPE & TAX</span>
-            <Tag size={14} className="reports-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">STORE SCOPE & TAX</span>
+            <Tag size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="reports-metric-val">
+          <div className="sales-metric-val">
             {tax.taxCode} ({Number(tax.taxRate || 0)}%)
           </div>
-          <div className="reports-metric-sub">
+          <div className="sales-metric-sub">
             {sellableProducts.length} sellable SKUs · {openSessionsCount} active open shifts
           </div>
         </div>
@@ -1041,10 +1166,9 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
           </div>
           <button
             type="button"
-            className="button button-primary"
+            className="sales-action-btn primary"
             disabled={busy}
             onClick={() => void postCheckout(pendingCheckout)}
-            style={{ height: '30px', fontSize: '12px', padding: '0 12px' }}
           >
             {busy ? 'Syncing…' : 'Retry sync now'}
           </button>
@@ -1052,70 +1176,68 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
       )}
 
       {/* 2. Linear Sub-Navigation Tabs & Controls */}
-      <div className="reports-subnav-container">
-        <div className="reports-subnav-tabs">
+      <div className="sales-subnav-container">
+        <div className="sales-subnav-tabs">
           <button
             type="button"
-            className={`reports-subnav-tab ${activeTab === 'terminal' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'terminal' ? 'active' : ''}`}
             onClick={() => setActiveTab('terminal')}
           >
             <ShoppingCart size={13} />
             <span>Register Terminal</span>
-            {basket.length > 0 && <span className="reports-subnav-badge">{basket.length}</span>}
+            {basket.length > 0 && <span className="sales-subnav-badge">{basket.length}</span>}
           </button>
 
           <button
             type="button"
-            className={`reports-subnav-tab ${activeTab === 'shifts' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'shifts' ? 'active' : ''}`}
             onClick={() => setActiveTab('shifts')}
           >
             <Clock size={13} />
             <span>Shifts & Drawers</span>
-            {openSessionsCount > 0 && <span className="reports-subnav-badge">{openSessionsCount}</span>}
+            {openSessionsCount > 0 && <span className="sales-subnav-badge">{openSessionsCount}</span>}
           </button>
 
           <button
             type="button"
-            className={`reports-subnav-tab ${activeTab === 'receipts' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'receipts' ? 'active' : ''}`}
             onClick={() => setActiveTab('receipts')}
           >
             <DollarSign size={13} />
             <span>Receipts & Returns</span>
-            {salesHistory.length > 0 && <span className="reports-subnav-badge">{salesHistory.length}</span>}
+            {salesHistory.length > 0 && <span className="sales-subnav-badge">{salesHistory.length}</span>}
           </button>
 
           {manager && (
             <button
               type="button"
-              className={`reports-subnav-tab ${activeTab === 'registers' ? 'active' : ''}`}
+              className={`sales-subnav-tab ${activeTab === 'registers' ? 'active' : ''}`}
               onClick={() => setActiveTab('registers')}
             >
               <Sliders size={13} />
               <span>Register Setup</span>
-              <span className="reports-subnav-badge">{registers.length}</span>
+              <span className="sales-subnav-badge">{registers.length}</span>
             </button>
           )}
         </div>
 
-        <div className="action-row" style={{ gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             type="button"
-            className="button button-secondary"
+            className="sales-action-btn secondary"
             onClick={() => void refresh()}
             disabled={loading || busy}
             title="Refresh POS registers and sessions"
-            style={{ height: '32px', padding: '0 10px', fontSize: '12px' }}
           >
-            <RefreshCw size={13} className={loading || busy ? 'spin' : ''} />
+            <RefreshCw size={12} className={loading || busy ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
 
           {!currentSession && registers.length > 0 && (
             <button
               type="button"
-              className="button button-primary"
+              className="sales-action-btn primary"
               onClick={() => setIsOpenShiftModalOpen(true)}
-              style={{ height: '32px', padding: '0 12px', fontSize: '12px' }}
             >
               <Store size={13} />
               <span>Open Shift</span>
@@ -1125,9 +1247,8 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
           {currentSession && manager && (
             <button
               type="button"
-              className="button button-secondary"
+              className="sales-action-btn secondary"
               onClick={() => triggerCloseShift(currentSession)}
-              style={{ height: '32px', padding: '0 12px', fontSize: '12px' }}
             >
               <Clock size={13} />
               <span>Close Shift</span>
@@ -1137,9 +1258,8 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
           {manager && activeTab === 'registers' && (
             <button
               type="button"
-              className="button button-primary"
+              className="sales-action-btn primary"
               onClick={() => setIsNewRegisterModalOpen(true)}
-              style={{ height: '32px', padding: '0 12px', fontSize: '12px' }}
             >
               <Plus size={13} />
               <span>New Register</span>
@@ -1175,106 +1295,257 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
             )}
 
             {/* Filter & Barcode Search Bar */}
-            <div className="table-controls" style={{ marginBottom: '12px' }}>
-              <div className="search-box" style={{ flex: 1, minWidth: '240px' }}>
-                <Search size={14} />
+            <div className="sales-filter-toolbar" style={{ marginBottom: '8px' }}>
+              <div className="sales-search-box" style={{ flex: 1, minWidth: '240px' }}>
+                <Search size={13} className="sales-search-icon" />
                 <input
                   ref={searchInputRef}
-                  className="search-input"
+                  className="sales-search-input"
                   placeholder="Scan barcode [Enter] or search SKU / item name…"
                   value={productSearch}
                   disabled={!!pendingCheckout}
                   onChange={(e) => setProductSearch(e.target.value)}
                   onKeyDown={handleProductScan}
                 />
-              </div>
-
-              <div className="filter-group">
-                <select
-                  className="filter-select"
-                  value={productCategoryFilter}
-                  onChange={(e) => setProductCategoryFilter(e.target.value as 'ALL' | 'FINISHED' | 'SERVICE')}
-                >
-                  <option value="ALL">All Categories</option>
-                  <option value="FINISHED">Finished Goods</option>
-                  <option value="SERVICE">Services</option>
-                </select>
-
-                <label className="pos-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={productInStockOnly}
-                    onChange={(e) => setProductInStockOnly(e.target.checked)}
-                  />
-                  <span>In stock only</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Product Catalogue Grid */}
-            <div className="pos-catalogue-grid">
-              {filteredProducts.map((item) => {
-                const stockVal = item.available ?? item.stock ?? 0;
-                const isService = item.itemType === 'SERVICE';
-                const isOutOfStock = !isService && stockVal <= 0;
-
-                return (
-                  <div
-                    key={item.id}
-                    className={`pos-product-card ${isOutOfStock ? 'out-of-stock' : ''}`}
-                    onClick={() => {
-                      if (!isOutOfStock && !pendingCheckout) {
-                        addProduct(item);
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
+                {productSearch ? (
+                  <button
+                    type="button"
+                    className="sales-search-clear"
+                    onClick={() => setProductSearch('')}
                   >
-                    <div className="pos-product-top">
-                      <span className="station-code-pill" style={{ fontSize: '10px', padding: '1px 5px' }}>
-                        {item.sku}
-                      </span>
-                      <span
-                        className={`status-chip ${
-                          isService ? 'status-chip-subtle' : isOutOfStock ? 'status-chip-danger' : 'status-chip-success'
-                        }`}
-                        style={{ fontSize: '10px', height: '18px', padding: '0 6px' }}
-                      >
-                        {isService ? 'Service' : isOutOfStock ? 'Out of stock' : `${stockVal} available`}
-                      </span>
-                    </div>
+                    <X size={12} />
+                  </button>
+                ) : (
+                  <kbd className="sales-search-kbd">/</kbd>
+                )}
+              </div>
 
-                    <div className="pos-product-name" title={item.name}>
-                      {item.name}
-                    </div>
-
-                    <div className="pos-product-bottom">
-                      <div className="pos-product-price" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {formatCurrency(item.unitPrice)}
-                      </div>
-                      <button
-                        type="button"
-                        className="button button-secondary pos-add-btn"
-                        disabled={isOutOfStock || !!pendingCheckout}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          addProduct(item);
-                        }}
-                      >
-                        <Plus size={12} />
-                        <span>Add</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {!filteredProducts.length && (
-                <div className="empty-cell" style={{ gridColumn: '1 / -1', padding: '36px 16px' }}>
-                  No sellable items match your search or filter.
+              <div className="sales-filter-group" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* Linear View Mode Switcher */}
+                <div className="pos-view-toggle">
+                  <button
+                    type="button"
+                    className={`pos-view-btn ${catalogueView === 'grid' ? 'active' : ''}`}
+                    onClick={() => setCatalogueView('grid')}
+                    title="Card Grid View"
+                  >
+                    <LayoutGrid size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`pos-view-btn ${catalogueView === 'table' ? 'active' : ''}`}
+                    onClick={() => setCatalogueView('table')}
+                    title="High-Density Scanner Table"
+                  >
+                    <LayoutList size={13} />
+                  </button>
                 </div>
-              )}
+
+                {/* In Stock Toggle Pill */}
+                <button
+                  type="button"
+                  className={`pos-toggle-pill ${productInStockOnly ? 'active' : ''}`}
+                  onClick={() => setProductInStockOnly(!productInStockOnly)}
+                >
+                  <span>In stock only</span>
+                </button>
+              </div>
             </div>
+
+            {/* Linear Category Filter Pills */}
+            <div className="pos-category-pills">
+              {availableCategories.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  className={`pos-category-pill ${productCategoryFilter === cat.id ? 'active' : ''}`}
+                  onClick={() => setProductCategoryFilter(cat.id)}
+                >
+                  <span>{cat.label}</span>
+                  <span className="pos-category-count">{cat.count}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Product Catalogue View: Grid or High-Density Table */}
+            {catalogueView === 'grid' ? (
+              <div className="pos-catalogue-grid">
+                {filteredProducts.map((item) => {
+                  const stockVal = item.available ?? item.stock ?? 0;
+                  const isService = item.itemType === 'SERVICE';
+                  const isOutOfStock = !isService && stockVal <= 0;
+                  const isLowStock = !isService && stockVal > 0 && stockVal <= 10;
+                  const catName =
+                    item.category ||
+                    (isService
+                      ? 'Service'
+                      : item.itemType === 'FINISHED'
+                      ? 'Finished Good'
+                      : item.itemType === 'RAW'
+                      ? 'Raw Material'
+                      : item.itemType === 'WIP'
+                      ? 'Sub-Assembly'
+                      : 'Inventory');
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`pos-product-card ${isOutOfStock ? 'out-of-stock' : ''}`}
+                      onClick={() => {
+                        if (!isOutOfStock && !pendingCheckout) {
+                          addProduct(item);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="pos-product-top">
+                        <span className="pos-product-sku-pill">{item.sku}</span>
+                        <span
+                          className={`pos-product-stock-pill ${
+                            isService
+                              ? 'service'
+                              : isOutOfStock
+                              ? 'out-of-stock'
+                              : isLowStock
+                              ? 'low-stock'
+                              : 'in-stock'
+                          }`}
+                        >
+                          {isService ? 'Service' : isOutOfStock ? 'Out of stock' : `${stockVal} in stock`}
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="pos-product-name" title={item.name}>
+                          {item.name}
+                        </div>
+                        <div className="pos-product-cat">{catName}</div>
+                      </div>
+
+                      <div className="pos-product-bottom">
+                        <div className="pos-product-price">
+                          {formatCurrency(item.unitPrice)}
+                        </div>
+                        <button
+                          type="button"
+                          className="pos-card-add-btn"
+                          disabled={isOutOfStock || !!pendingCheckout}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addProduct(item);
+                          }}
+                        >
+                          <Plus size={11} />
+                          <span>Add</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {!filteredProducts.length && (
+                  <div className="empty-cell" style={{ gridColumn: '1 / -1', padding: '36px 16px' }}>
+                    No sellable items match your search or filter.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="pos-catalogue-table-card">
+                <table className="pos-catalogue-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '130px' }}>SKU</th>
+                      <th>Product Name</th>
+                      <th style={{ width: '130px' }}>Category</th>
+                      <th style={{ width: '120px' }}>Availability</th>
+                      <th style={{ width: '110px', textAlign: 'right' }}>Price</th>
+                      <th style={{ width: '80px', textAlign: 'center' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProducts.map((item) => {
+                      const stockVal = item.available ?? item.stock ?? 0;
+                      const isService = item.itemType === 'SERVICE';
+                      const isOutOfStock = !isService && stockVal <= 0;
+                      const isLowStock = !isService && stockVal > 0 && stockVal <= 10;
+                      const catName =
+                        item.category ||
+                        (isService
+                          ? 'Service'
+                          : item.itemType === 'FINISHED'
+                          ? 'Finished Good'
+                          : item.itemType === 'RAW'
+                          ? 'Raw Material'
+                          : item.itemType === 'WIP'
+                          ? 'Sub-Assembly'
+                          : 'Inventory');
+
+                      return (
+                        <tr
+                          key={item.id}
+                          className={`pos-table-row ${isOutOfStock ? 'out-of-stock' : ''}`}
+                          onClick={() => {
+                            if (!isOutOfStock && !pendingCheckout) {
+                              addProduct(item);
+                            }
+                          }}
+                        >
+                          <td>
+                            <span className="pos-product-sku-pill">{item.sku}</span>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>{item.name}</div>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>{catName}</span>
+                          </td>
+                          <td>
+                            <span
+                              className={`pos-product-stock-pill ${
+                                isService
+                                  ? 'service'
+                                  : isOutOfStock
+                                  ? 'out-of-stock'
+                                  : isLowStock
+                                  ? 'low-stock'
+                                  : 'in-stock'
+                              }`}
+                            >
+                              {isService ? 'Service' : isOutOfStock ? 'Out of stock' : `${stockVal} units`}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500, fontSize: '12.5px', color: 'var(--sp-text)' }}>
+                            {formatCurrency(item.unitPrice)}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="pos-card-add-btn"
+                              disabled={isOutOfStock || !!pendingCheckout}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addProduct(item);
+                              }}
+                            >
+                              <Plus size={11} />
+                              <span>Add</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!filteredProducts.length && (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--sp-text-muted)' }}>
+                          No sellable items match your search or filter.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Right Column: Interactive Basket & Checkout */}
@@ -1294,7 +1565,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                     type="button"
                     className="button-link-muted"
                     onClick={clearBasket}
-                    style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}
+                    style={{ fontSize: '11px', color: 'var(--sp-text-muted)', cursor: 'pointer', background: 'none', border: 'none' }}
                   >
                     Clear basket
                   </button>
@@ -1304,21 +1575,23 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
               {/* Customer Selector */}
               <div className="pos-customer-selector">
                 <label className="pos-input-label">Customer (Optional)</label>
-                <select
-                  className="filter-select"
-                  style={{ width: '100%', height: '32px', fontSize: '12px' }}
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                >
-                  <option value="">Walk-in Customer (Unregistered)</option>
-                  {customers
-                    .filter((c) => c.active !== false)
-                    .map((cust) => (
-                      <option key={cust.id} value={cust.id}>
-                        {cust.name}
-                      </option>
-                    ))}
-                </select>
+                <div className="pos-customer-input-wrap">
+                  <User size={13} style={{ color: 'var(--sp-text-muted)', flexShrink: 0 }} />
+                  <select
+                    className="pos-customer-select"
+                    value={customerId}
+                    onChange={(e) => setCustomerId(e.target.value)}
+                  >
+                    <option value="">Walk-in Customer (Unregistered)</option>
+                    {customers
+                      .filter((c) => c.active !== false)
+                      .map((cust) => (
+                        <option key={cust.id} value={cust.id}>
+                          {cust.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
 
               {/* Basket Lines List */}
@@ -1491,6 +1764,72 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                   ))}
                 </div>
 
+                {/* Cash Flow Helper: Quick Denominations & Change Calculator */}
+                {tenderMethod === 'CASH' && totalDue > 0 && (
+                  <div className="pos-cash-flow-box">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span className="pos-input-label">Quick Cash Tender</span>
+                      {changeDue > 0 && (
+                        <span style={{ fontSize: '10.5px', color: 'var(--sp-success)', fontWeight: 600 }}>
+                          Change: {formatCurrency(changeDue)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="pos-quick-cash-grid">
+                      {quickCashOptions.map((amt, idx) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          className={`pos-quick-cash-btn ${idx === 0 ? 'exact' : ''}`}
+                          onClick={() => setCashTendered(String(amt))}
+                        >
+                          {idx === 0 ? `Exact (${formatCurrency(amt)})` : formatCurrency(amt)}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder={`Enter cash amount (e.g. ${totalDue})`}
+                        className="sales-search-input"
+                        style={{
+                          height: '28px',
+                          fontSize: '11.5px',
+                          background: 'var(--sp-surface)',
+                          border: '1px solid var(--sp-border)',
+                          borderRadius: '4px',
+                          padding: '0 8px',
+                          fontVariantNumeric: 'tabular-nums',
+                          flex: 1
+                        }}
+                        value={cashTendered}
+                        onChange={(e) => setCashTendered(e.target.value)}
+                      />
+                      {cashTendered && (
+                        <button
+                          type="button"
+                          className="sales-search-clear"
+                          onClick={() => setCashTendered('')}
+                          style={{ position: 'static' }}
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {changeDue > 0 && (
+                      <div className="pos-change-due-box">
+                        <span>Change to Customer</span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(changeDue)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {tenderMethod !== 'CASH' && (
                   <div style={{ marginTop: '8px' }}>
                     <input
@@ -1505,7 +1844,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
 
                 <button
                   type="submit"
-                  className="button button-primary pos-post-sale-btn"
+                  className="sales-action-btn primary pos-post-sale-btn"
                   disabled={busy || !basket.length || !currentSession || !!pendingCheckout}
                 >
                   {pendingCheckout
@@ -1514,7 +1853,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                     ? 'Posting sale…'
                     : !currentSession
                     ? 'Shift Closed'
-                    : `Post Sale · ${formatCurrency(totalDue)}`}
+                    : `⚡ Post Sale · ${formatCurrency(totalDue)}`}
                 </button>
               </form>
             </div>
@@ -1525,91 +1864,133 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
       {/* TAB 2: SHIFTS & DRAWERS */}
       {activeTab === 'shifts' && (
         <div className="pos-shifts-layout">
-          {/* Active Cashier Shift Card */}
-          <div className="panel directory-panel" style={{ marginBottom: '16px' }}>
-            <div className="panel-header directory-top">
-              <div>
-                <h2>Active Cashier Shift</h2>
-                <p>Register drawer float and session sales balance</p>
-              </div>
-              {currentSession && manager && (
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={() => triggerCloseShift(currentSession)}
-                  style={{ height: '32px', fontSize: '12px' }}
-                >
-                  Close Shift & Count Cash
-                </button>
-              )}
-            </div>
-
-            {currentSession ? (
-              <div className="pos-shift-detail-grid">
-                <div className="pos-shift-detail-card">
-                  <span className="reports-metric-label">REGISTER TERMINAL</span>
-                  <b>{currentSession.registerCode}</b>
-                  <span>{currentSession.registerName} · {currentSession.warehouseName}</span>
-                </div>
-
-                <div className="pos-shift-detail-card">
-                  <span className="reports-metric-label">SHIFT STATUS & TIME</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span className="status-chip status-chip-success" style={{ height: '20px', padding: '0 7px' }}>
-                      OPEN
+          {/* Active Cashier Shift Linear Control Strip */}
+          {currentSession ? (
+            <div
+              className="sales-table-card"
+              style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '16px',
+                background: 'var(--sp-surface)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <span className="sales-ref-badge" style={{ fontSize: '13px', padding: '4px 10px' }}>
+                  {currentSession.registerCode}
+                </span>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--sp-text)' }}>
+                      {currentSession.registerName}
                     </span>
-                    <b>Opened {new Date(currentSession.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b>
+                    <span className="sales-warehouse-pill">
+                      {currentSession.warehouseName}
+                    </span>
+                    <Status label="OPEN" />
                   </div>
-                  <span>{new Date(currentSession.openedAt).toLocaleDateString()}</span>
-                </div>
-
-                <div className="pos-shift-detail-card">
-                  <span className="reports-metric-label">OPENING CASH FLOAT</span>
-                  <b style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(currentSession.openingFloat)}</b>
-                  <span>Initial drawer cash baseline</span>
-                </div>
-
-                <div className="pos-shift-detail-card">
-                  <span className="reports-metric-label">EXPECTED DRAWER CASH</span>
-                  <b style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(currentDrawerCash)}</b>
-                  <span>Float + {formatCurrency(shiftCashRevenue)} cash sales</span>
+                  <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', marginTop: '3px' }}>
+                    Opened on {formatDate(currentSession.openedAt)} at {formatTime(currentSession.openedAt)}
+                  </div>
                 </div>
               </div>
-            ) : (
-              <div className="empty-cell" style={{ padding: '24px 16px' }}>
-                <Store size={22} style={{ color: 'var(--sp-text-muted)', strokeWidth: 1.5, marginBottom: '6px' }} />
-                <div>No active register shift is currently open for your user account.</div>
-                <button
-                  type="button"
-                  className="button button-primary"
-                  onClick={() => setIsOpenShiftModalOpen(true)}
-                  style={{ marginTop: '12px', height: '30px', fontSize: '12px' }}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                <div style={{ textAlign: 'right', fontSize: '11.5px' }}>
+                  <div style={{ color: 'var(--sp-text-muted)' }}>Opening Float</div>
+                  <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: 'var(--sp-text)' }}>
+                    {formatCurrency(currentSession.openingFloat)}
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'right', fontSize: '11.5px' }}>
+                  <div style={{ color: 'var(--sp-text-muted)' }}>Cash Sales</div>
+                  <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: 'var(--sp-success)' }}>
+                    +{formatCurrency(shiftCashRevenue)}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '6px',
+                    background: 'var(--sp-surface-subtle)',
+                    border: '1px solid var(--sp-border)',
+                    textAlign: 'right'
+                  }}
                 >
-                  Open Cashier Shift
-                </button>
-              </div>
-            )}
-          </div>
+                  <div style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
+                    Expected Drawer Cash
+                  </div>
+                  <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: '15px', color: 'var(--sp-text)' }}>
+                    {formatCurrency(currentDrawerCash)}
+                  </div>
+                </div>
 
-          {/* All Open Shifts Across Terminals (for Managers) */}
-          <div className="panel directory-panel" style={{ marginBottom: '16px' }}>
-            <div className="panel-header directory-top">
+                {manager && (
+                  <button
+                    type="button"
+                    className="sales-action-btn secondary"
+                    onClick={() => triggerCloseShift(currentSession)}
+                    style={{ height: '32px' }}
+                  >
+                    <Clock size={13} />
+                    <span>Close Shift</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div
+              className="sales-table-card"
+              style={{
+                padding: '24px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'var(--sp-surface)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Store size={22} style={{ color: 'var(--sp-text-muted)' }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--sp-text)' }}>No Active Register Shift</div>
+                  <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>Open a terminal shift to begin scanning items and managing cash drawers.</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="sales-action-btn primary"
+                onClick={() => setIsOpenShiftModalOpen(true)}
+              >
+                <Store size={13} />
+                <span>Open Shift</span>
+              </button>
+            </div>
+          )}
+
+          {/* All Open Shifts Across Terminals */}
+          <div className="sales-table-card">
+            <div className="sales-card-header">
               <div>
-                <h2>Active Open Shifts</h2>
-                <p>Terminals currently operating on the shop floor</p>
+                <h3 className="sales-card-title">Active Open Shifts</h3>
+                <p className="sales-card-subtitle">Terminals currently operating on the shop floor</p>
               </div>
             </div>
 
-            <div className="table-wrap">
-              <table className="data-table">
+            <div className="sales-table-scroll">
+              <table className="sales-table">
                 <thead>
                   <tr>
                     <th>Register</th>
                     <th>Store Warehouse</th>
-                    <th>Cashier User</th>
+                    <th>Cashier</th>
                     <th>Opened At</th>
                     <th style={{ textAlign: 'right' }}>Opening Float</th>
-                    <th>Status</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
                     <th style={{ textAlign: 'right' }}>Action</th>
                   </tr>
                 </thead>
@@ -1617,37 +1998,53 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                   {sessions
                     .filter((s) => s.status === 'OPEN')
                     .map((s) => (
-                      <tr key={s.id}>
+                      <tr key={s.id} className="sales-row">
                         <td>
-                          <b>{s.registerCode}</b>
-                          <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>{s.registerName}</div>
+                          <span className="sales-ref-badge">{s.registerCode}</span>
+                          <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px', marginTop: '2px' }}>
+                            {s.registerName}
+                          </div>
                         </td>
-                        <td>{s.warehouseName}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <WarehouseIcon size={12} style={{ color: 'var(--sp-text-muted)' }} />
+                            <span className="sales-warehouse-pill">{s.warehouseName}</span>
+                          </div>
+                        </td>
                         <td>
                           {s.cashierUserId === userId ? (
-                            <span className="status-chip status-chip-brand">Current User</span>
+                            <span className="sales-warehouse-pill" style={{ background: 'var(--sp-brand-soft)', color: 'var(--sp-brand)' }}>
+                              Current User
+                            </span>
                           ) : (
-                            <span style={{ fontSize: '12px', color: 'var(--sp-text-secondary)' }}>
-                              {s.cashierUserId.slice(0, 8)}…
+                            <span style={{ fontSize: '12px', color: 'var(--sp-text)' }}>
+                              Cashier {s.cashierUserId.slice(0, 6).toUpperCase()}
                             </span>
                           )}
                         </td>
-                        <td style={{ fontVariantNumeric: 'tabular-nums' }}>{new Date(s.openedAt).toLocaleString()}</td>
-                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        <td>
+                          <div className="sales-date-cell">
+                            {formatDate(s.openedAt)}
+                            <span style={{ fontSize: '10px', color: 'var(--sp-text-muted)', marginLeft: '4px' }}>
+                              {formatTime(s.openedAt)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
                           {formatCurrency(s.openingFloat)}
                         </td>
-                        <td>
-                          <span className="status-chip status-chip-success">OPEN</span>
+                        <td style={{ textAlign: 'center' }}>
+                          <Status label={s.status} />
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           {manager && (
                             <button
                               type="button"
-                              className="button button-secondary"
+                              className="sales-action-btn secondary"
                               onClick={() => triggerCloseShift(s)}
-                              style={{ height: '26px', fontSize: '11.5px', padding: '0 8px' }}
+                              style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
                             >
-                              Close Shift
+                              <span>Close Shift</span>
                             </button>
                           )}
                         </td>
@@ -1656,7 +2053,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
 
                   {!sessions.filter((s) => s.status === 'OPEN').length && (
                     <tr>
-                      <td colSpan={7} className="empty-cell">
+                      <td colSpan={7} className="empty-cell" style={{ padding: '32px 0', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
                         No active open shifts on any register terminal.
                       </td>
                     </tr>
@@ -1667,16 +2064,16 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
           </div>
 
           {/* Shift History Ledger */}
-          <div className="panel directory-panel">
-            <div className="panel-header directory-top">
+          <div className="sales-table-card">
+            <div className="sales-card-header">
               <div>
-                <h2>Shift History Ledger</h2>
-                <p>Closed register shifts, cash reconciliation, and variance telemetry</p>
+                <h3 className="sales-card-title">Shift History Ledger</h3>
+                <p className="sales-card-subtitle">Closed register shifts, cash reconciliation, and variance telemetry</p>
               </div>
             </div>
 
-            <div className="table-wrap">
-              <table className="data-table">
+            <div className="sales-table-scroll">
+              <table className="sales-table">
                 <thead>
                   <tr>
                     <th>Register</th>
@@ -1686,7 +2083,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                     <th style={{ textAlign: 'right' }}>Expected Cash</th>
                     <th style={{ textAlign: 'right' }}>Counted Cash</th>
                     <th style={{ textAlign: 'right' }}>Variance</th>
-                    <th>Status</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1694,41 +2091,63 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                     .filter((s) => s.status === 'CLOSED')
                     .map((s) => {
                       const variance = Number(s.cashVariance || 0);
+                      const isBalanced = Math.abs(variance) < 0.01;
                       return (
-                        <tr key={s.id}>
+                        <tr key={s.id} className="sales-row">
                           <td>
-                            <b>{s.registerCode}</b>
-                            <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>{s.warehouseName}</div>
+                            <span className="sales-ref-badge">{s.registerCode}</span>
+                            <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px', marginTop: '2px' }}>
+                              {s.warehouseName}
+                            </div>
                           </td>
-                          <td style={{ fontVariantNumeric: 'tabular-nums' }}>{new Date(s.openedAt).toLocaleString()}</td>
-                          <td style={{ fontVariantNumeric: 'tabular-nums' }}>
-                            {s.closedAt ? new Date(s.closedAt).toLocaleString() : '—'}
+                          <td>
+                            <div className="sales-date-cell">
+                              {formatDate(s.openedAt)}
+                              <span style={{ fontSize: '10px', color: 'var(--sp-text-muted)', marginLeft: '4px' }}>
+                                {formatTime(s.openedAt)}
+                              </span>
+                            </div>
                           </td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          <td>
+                            <div className="sales-date-cell">
+                              {s.closedAt ? (
+                                <>
+                                  {formatDate(s.closedAt)}
+                                  <span style={{ fontSize: '10px', color: 'var(--sp-text-muted)', marginLeft: '4px' }}>
+                                    {formatTime(s.closedAt)}
+                                  </span>
+                                </>
+                              ) : (
+                                '—'
+                              )}
+                            </div>
+                          </td>
+                          <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
                             {formatCurrency(s.openingFloat)}
                           </td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
                             {s.expectedCash != null ? formatCurrency(s.expectedCash) : '—'}
                           </td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
                             {s.countedCash != null ? formatCurrency(s.countedCash) : '—'}
                           </td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                            <span
-                              className={`status-chip ${
-                                variance === 0
-                                  ? 'status-chip-success'
-                                  : variance > 0
-                                  ? 'status-chip-warning'
-                                  : 'status-chip-danger'
-                              }`}
-                              style={{ fontSize: '11px', height: '18px', padding: '0 6px' }}
-                            >
-                              {variance >= 0 ? `+${formatCurrency(variance)}` : formatCurrency(variance)}
-                            </span>
+                          <td style={{ textAlign: 'right' }}>
+                            {isBalanced ? (
+                              <span className="sales-sub-highlight" style={{ fontSize: '11px' }}>
+                                Balanced (₹0.00)
+                              </span>
+                            ) : variance > 0 ? (
+                              <span className="sales-sub-warning" style={{ fontSize: '11px' }}>
+                                +{formatCurrency(variance)}
+                              </span>
+                            ) : (
+                              <span className="sales-fulfillment-tag pending" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', fontSize: '11px' }}>
+                                {formatCurrency(variance)}
+                              </span>
+                            )}
                           </td>
-                          <td>
-                            <span className="status-chip status-chip-subtle">CLOSED</span>
+                          <td style={{ textAlign: 'center' }}>
+                            <Status label={s.status} />
                           </td>
                         </tr>
                       );
@@ -1736,7 +2155,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
 
                   {!sessions.filter((s) => s.status === 'CLOSED').length && (
                     <tr>
-                      <td colSpan={8} className="empty-cell">
+                      <td colSpan={8} className="empty-cell" style={{ padding: '32px 0', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
                         No closed shift records found.
                       </td>
                     </tr>
@@ -1751,91 +2170,127 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
       {/* TAB 3: RECEIPTS & RETURNS */}
       {activeTab === 'receipts' && (
         <div className="pos-receipts-layout">
-          <div className="panel directory-panel">
-            <div className="panel-header directory-top">
+          <div className="sales-table-card">
+            <div className="sales-card-header">
               <div>
-                <h2>Receipts & Returns Ledger</h2>
-                <p>Transactions posted on register shifts with item-level returns and voiding</p>
-              </div>
-
-              <div className="action-row" style={{ gap: '8px' }}>
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={exportReceiptsCsv}
-                  disabled={!visibleReceipts.length}
-                  style={{ height: '32px', fontSize: '12px', padding: '0 10px' }}
-                >
-                  <Download size={13} />
-                  <span>Export CSV</span>
-                </button>
+                <h2 className="sales-card-title">Receipts & Returns Ledger</h2>
+                <p className="sales-card-subtitle">Transactions posted on register shifts with item-level returns and voiding</p>
               </div>
             </div>
 
-            {/* Filter Bar */}
-            <div className="table-controls" style={{ marginBottom: '12px' }}>
-              <div className="search-box" style={{ flex: 1, minWidth: '220px' }}>
-                <Search size={14} />
-                <input
-                  className="search-input"
-                  placeholder="Search receipt #, customer name, SKU…"
-                  value={receiptSearch}
-                  onChange={(e) => setReceiptSearch(e.target.value)}
-                />
+            {/* Linear Toolbar for Receipts */}
+            <div className="sales-toolbar" style={{ padding: '10px 16px', borderBottom: '1px solid var(--sp-border)' }}>
+              <div className="sales-filter-pills">
+                <button
+                  type="button"
+                  className={`sales-filter-pill ${receiptStatusFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setReceiptStatusFilter('ALL')}
+                >
+                  All Receipts
+                  <span className="sales-filter-count">{salesHistory.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sales-filter-pill ${receiptStatusFilter === 'POSTED' ? 'active' : ''}`}
+                  onClick={() => setReceiptStatusFilter('POSTED')}
+                >
+                  Posted
+                  <span className="sales-filter-count">
+                    {salesHistory.filter((s) => s.status === 'POSTED').length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`sales-filter-pill ${receiptStatusFilter === 'REFUNDED' ? 'active' : ''}`}
+                  onClick={() => setReceiptStatusFilter('REFUNDED')}
+                >
+                  Refunded
+                  <span className="sales-filter-count">
+                    {salesHistory.filter((s) => ['REFUNDED', 'PARTIAL_REFUND'].includes(s.status)).length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`sales-filter-pill ${receiptStatusFilter === 'VOIDED' ? 'active' : ''}`}
+                  onClick={() => setReceiptStatusFilter('VOIDED')}
+                >
+                  Voided
+                  <span className="sales-filter-count">
+                    {salesHistory.filter((s) => s.status === 'VOIDED').length}
+                  </span>
+                </button>
               </div>
 
-              <div className="filter-group">
-                <label className="pos-mini-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div className="sales-toolbar-right" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ fontSize: '12px', color: 'var(--sp-text-muted)' }}>Shift:</span>
                   <select
-                    className="filter-select"
+                    className="sales-filter-select"
                     value={receiptSessionId}
                     onChange={(e) => {
                       setReceiptSessionId(e.target.value);
                       void loadSales(e.target.value);
                     }}
+                    style={{ maxWidth: '240px' }}
                   >
                     {sessions.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.registerCode} · {new Date(s.openedAt).toLocaleDateString()} {new Date(s.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({s.status})
+                        {s.registerCode} · {formatDate(s.openedAt)} {formatTime(s.openedAt)} ({s.status})
                       </option>
                     ))}
                   </select>
-                </label>
+                </div>
 
-                <select
-                  className="filter-select"
-                  value={receiptStatusFilter}
-                  onChange={(e) =>
-                    setReceiptStatusFilter(
-                      e.target.value as 'ALL' | 'POSTED' | 'VOIDED' | 'REFUNDED' | 'PARTIAL_REFUND'
-                    )
-                  }
+                <div className="sales-search-box" style={{ width: '230px' }}>
+                  <Search size={13} className="sales-search-icon" />
+                  <input
+                    className="sales-search-input"
+                    placeholder="Search receipt #, customer…"
+                    value={receiptSearch}
+                    onChange={(e) => setReceiptSearch(e.target.value)}
+                  />
+                  {receiptSearch ? (
+                    <button
+                      type="button"
+                      className="sales-search-clear"
+                      onClick={() => setReceiptSearch('')}
+                    >
+                      <X size={12} />
+                    </button>
+                  ) : (
+                    <kbd className="sales-search-kbd">/</kbd>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  className="sales-action-btn secondary"
+                  onClick={exportReceiptsCsv}
+                  disabled={!visibleReceipts.length}
+                  title="Export Receipts as CSV"
+                  style={{ height: '30px', fontSize: '12px' }}
                 >
-                  <option value="ALL">All Statuses</option>
-                  <option value="POSTED">Posted</option>
-                  <option value="VOIDED">Voided</option>
-                  <option value="REFUNDED">Refunded</option>
-                  <option value="PARTIAL_REFUND">Partial Refund</option>
-                </select>
+                  <Download size={13} />
+                  <span>Export</span>
+                </button>
               </div>
             </div>
 
             {/* Receipts Table */}
-            <div className="table-wrap">
-              <table className="data-table">
+            <div className="sales-table-scroll">
+              <table className="sales-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '32px' }}></th>
-                    <th>Receipt #</th>
-                    <th>Posted Date</th>
+                    <th style={{ width: '28px' }}></th>
+                    <th style={{ width: '130px' }}>Receipt #</th>
+                    <th style={{ width: '120px' }}>Posted Date</th>
                     <th>Customer</th>
-                    <th>Tender</th>
-                    <th style={{ textAlign: 'center' }}>Items</th>
-                    <th style={{ textAlign: 'right' }}>Total</th>
-                    <th style={{ textAlign: 'right' }}>Refunded</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: 'right' }}>Actions</th>
+                    <th style={{ width: '110px' }}>Tender</th>
+                    <th style={{ width: '45px', textAlign: 'center' }}>Items</th>
+                    <th style={{ width: '90px', textAlign: 'right' }}>Total</th>
+                    <th style={{ width: '80px', textAlign: 'right' }}>Refunded</th>
+                    <th style={{ width: '85px', textAlign: 'center' }}>Status</th>
+                    <th style={{ width: '155px', textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1858,24 +2313,56 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                     return (
                       <Fragment key={sale.id}>
                         <tr
-                          className={isExpanded ? 'row-expanded' : ''}
+                          className={`sales-row ${isExpanded ? 'row-expanded' : ''}`}
                           onClick={() => setExpandedSaleId(isExpanded ? null : sale.id)}
                           style={{ cursor: 'pointer' }}
                         >
-                          <td style={{ color: 'var(--sp-text-muted)' }}>
+                          <td style={{ color: 'var(--sp-text-muted)', textAlign: 'center' }}>
                             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                           </td>
                           <td>
-                            <b style={{ color: 'var(--sp-text)' }}>{sale.receiptNumber}</b>
+                            <span className="sales-ref-badge interactive">{sale.receiptNumber}</span>
                           </td>
-                          <td style={{ fontVariantNumeric: 'tabular-nums' }}>
-                            {new Date(sale.postedAt).toLocaleString()}
+                          <td>
+                            <div className="sales-date-cell">
+                              {formatDate(sale.postedAt)}
+                              <span style={{ fontSize: '10px', color: 'var(--sp-text-muted)', marginLeft: '4px' }}>
+                                {formatTime(sale.postedAt)}
+                              </span>
+                            </div>
                           </td>
-                          <td>{cust?.name || 'Walk-in Customer'}</td>
+                          <td>
+                            <span
+                              style={{
+                                fontWeight: 500,
+                                color: 'var(--sp-text)',
+                                display: 'inline-block',
+                                maxWidth: '170px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                verticalAlign: 'middle'
+                              }}
+                              title={cust?.name || 'Walk-in Customer'}
+                            >
+                              {cust?.name || 'Walk-in Customer'}
+                            </span>
+                          </td>
                           <td>
                             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                               {(sale.tenders || []).map((t, idx) => (
-                                <span key={idx} className="station-code-pill" style={{ fontSize: '10px' }}>
+                                <span
+                                  key={idx}
+                                  className="station-code-pill"
+                                  style={{
+                                    fontSize: '10px',
+                                    maxWidth: '120px',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                  title={t.reference ? `${t.method} · ${t.reference}` : t.method}
+                                >
                                   {t.method}
                                   {t.reference ? ` · ${t.reference}` : ''}
                                 </span>
@@ -1885,34 +2372,26 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                           <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
                             {sale.lines.length}
                           </td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                          <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
                             {formatCurrency(sale.total)}
                           </td>
                           <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                             {sale.refundedTotal > 0 ? (
-                              <span style={{ color: 'var(--sp-danger)' }}>{formatCurrency(sale.refundedTotal)}</span>
+                              <span style={{ color: 'var(--sp-danger)', fontWeight: 500 }}>
+                                -{formatCurrency(sale.refundedTotal)}
+                              </span>
                             ) : (
-                              '—'
+                              <span style={{ color: 'var(--sp-text-muted)' }}>—</span>
                             )}
                           </td>
-                          <td>
-                            <span
-                              className={`status-chip ${
-                                sale.status === 'POSTED'
-                                  ? 'status-chip-success'
-                                  : sale.status === 'VOIDED'
-                                  ? 'status-chip-danger'
-                                  : 'status-chip-warning'
-                              }`}
-                            >
-                              {sale.status}
-                            </span>
+                          <td style={{ textAlign: 'center' }}>
+                            <Status label={sale.status} />
                           </td>
                           <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                            <div className="action-row" style={{ justifyContent: 'flex-end', gap: '6px' }}>
+                            <div className="action-row" style={{ justifyContent: 'flex-end', gap: '4px' }}>
                               <button
                                 type="button"
-                                className="button button-secondary"
+                                className="sales-action-btn secondary"
                                 onClick={() => {
                                   setReceiptModal({
                                     receiptNumber: sale.receiptNumber,
@@ -1933,7 +2412,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                                     tenders: sale.tenders
                                   });
                                 }}
-                                style={{ height: '24px', fontSize: '11px', padding: '0 7px' }}
+                                style={{ height: '24px', fontSize: '11px', padding: '0 6px' }}
                                 title="View printable receipt"
                               >
                                 <Printer size={12} />
@@ -1943,9 +2422,9 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                               {canRefund && (
                                 <button
                                   type="button"
-                                  className="button button-secondary"
+                                  className="sales-action-btn secondary"
                                   onClick={() => openRefundModal(sale)}
-                                  style={{ height: '24px', fontSize: '11px', padding: '0 7px' }}
+                                  style={{ height: '24px', fontSize: '11px', padding: '0 6px' }}
                                 >
                                   <RotateCcw size={12} />
                                   <span>Refund</span>
@@ -1955,10 +2434,10 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                               {canVoid && (
                                 <button
                                   type="button"
-                                  className="button button-secondary"
+                                  className="sales-action-btn secondary"
                                   disabled={busy}
                                   onClick={() => void handleVoidSale(sale)}
-                                  style={{ height: '24px', fontSize: '11px', padding: '0 7px', color: 'var(--sp-danger)' }}
+                                  style={{ height: '24px', fontSize: '11px', padding: '0 6px', color: 'var(--sp-danger)' }}
                                   title="Void cash sale and restore stock"
                                 >
                                   <span>Void</span>
@@ -1982,16 +2461,16 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                                   </span>
                                 </div>
 
-                                <table className="data-table" style={{ background: 'var(--sp-surface)' }}>
+                                <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed', background: 'var(--sp-surface)' }}>
                                   <thead>
                                     <tr>
-                                      <th>SKU</th>
-                                      <th>Item Description</th>
-                                      <th style={{ textAlign: 'right' }}>Quantity</th>
-                                      <th style={{ textAlign: 'right' }}>Unit Price</th>
-                                      <th style={{ textAlign: 'right' }}>Line Total</th>
-                                      <th style={{ textAlign: 'right' }}>Refundable Units</th>
-                                      <th style={{ textAlign: 'right' }}>Refunded Units</th>
+                                      <th style={{ width: '15%' }}>SKU</th>
+                                      <th style={{ width: '30%' }}>Item Description</th>
+                                      <th style={{ width: '10%', textAlign: 'right' }}>Quantity</th>
+                                      <th style={{ width: '12%', textAlign: 'right' }}>Unit Price</th>
+                                      <th style={{ width: '13%', textAlign: 'right' }}>Line Total</th>
+                                      <th style={{ width: '10%', textAlign: 'right' }}>Refundable Units</th>
+                                      <th style={{ width: '10%', textAlign: 'right' }}>Refunded Units</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -2036,8 +2515,8 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
 
                   {!visibleReceipts.length && (
                     <tr>
-                      <td colSpan={10} className="empty-cell">
-                        No sales receipts recorded on this session.
+                      <td colSpan={10} className="empty-cell" style={{ padding: '32px 0', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
+                        No sales receipts found matching your filter criteria.
                       </td>
                     </tr>
                   )}
@@ -2051,45 +2530,90 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
       {/* TAB 4: REGISTER SETUP (MANAGERS ONLY) */}
       {activeTab === 'registers' && manager && (
         <div className="pos-registers-layout">
-          <div className="panel directory-panel">
-            <div className="panel-header directory-top">
+          <div className="sales-table-card">
+            <div className="sales-card-header">
               <div>
-                <h2>Configured POS Terminals</h2>
-                <p>Hardware registers mapped to shop warehouses and assigned cashiers</p>
+                <h2 className="sales-card-title">Configured POS Terminals</h2>
+                <p className="sales-card-subtitle">Hardware registers mapped to shop warehouses and assigned cashiers</p>
               </div>
-
               <button
                 type="button"
-                className="button button-primary"
+                className="sales-action-btn primary"
                 onClick={() => setIsNewRegisterModalOpen(true)}
-                style={{ height: '32px', fontSize: '12px', padding: '0 12px' }}
               >
-                <Plus size={13} />
-                <span>Add Register</span>
+                <Plus size={14} />
+                <span>New Register</span>
               </button>
             </div>
 
-            <div className="table-wrap">
-              <table className="data-table">
+            {/* Linear Toolbar for Registers */}
+            <div className="sales-toolbar" style={{ padding: '10px 16px', borderBottom: '1px solid var(--sp-border)' }}>
+              <div className="sales-filter-pills">
+                <button
+                  type="button"
+                  className="sales-filter-pill active"
+                >
+                  All Terminals
+                  <span className="sales-filter-count">{registers.length}</span>
+                </button>
+              </div>
+
+              <div className="sales-toolbar-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="sales-search-box" style={{ width: '260px' }}>
+                  <Search size={13} className="sales-search-icon" />
+                  <input
+                    className="sales-search-input"
+                    placeholder="Search code, terminal, cashier…"
+                    value={registerSearch}
+                    onChange={(e) => setRegisterSearch(e.target.value)}
+                  />
+                  {registerSearch ? (
+                    <button
+                      type="button"
+                      className="sales-search-clear"
+                      onClick={() => setRegisterSearch('')}
+                    >
+                      <X size={12} />
+                    </button>
+                  ) : (
+                    <kbd className="sales-search-kbd">/</kbd>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="sales-table-scroll">
+              <table className="sales-table">
                 <thead>
                   <tr>
-                    <th>Register Code</th>
-                    <th>Terminal Name</th>
-                    <th>Store Warehouse</th>
+                    <th style={{ width: '120px' }}>Register Code</th>
+                    <th style={{ width: '260px' }}>Terminal Name</th>
+                    <th style={{ width: '200px' }}>Store Warehouse</th>
                     <th>Assigned Cashier</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: 'right' }}>Actions</th>
+                    <th style={{ width: '100px', textAlign: 'center' }}>Status</th>
+                    <th style={{ width: '110px', textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {registers.map((reg) => {
+                  {filteredRegisters.map((reg) => {
                     const assignedCashier = cashiers.find((c) => c.userId === reg.assignedCashierUserId);
+                    const cashierInitials = assignedCashier?.name
+                      ? assignedCashier.name
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')
+                          .toUpperCase()
+                          .slice(0, 2)
+                      : 'U';
+
                     return (
-                      <tr key={reg.id}>
+                      <tr key={reg.id} className="sales-row">
                         <td>
-                          <b>{reg.code}</b>
+                          <span className="sales-ref-badge">{reg.code}</span>
                         </td>
-                        <td>{reg.name}</td>
+                        <td>
+                          <b style={{ color: 'var(--sp-text)', fontSize: '13px' }}>{reg.name}</b>
+                        </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <WarehouseIcon size={13} style={{ color: 'var(--sp-text-muted)' }} />
@@ -2098,10 +2622,15 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                         </td>
                         <td>
                           {assignedCashier ? (
-                            <div>
-                              <span>{assignedCashier.name}</span>
-                              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                                {assignedCashier.email} · {assignedCashier.role}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div className="sales-customer-avatar">
+                                {cashierInitials}
+                              </div>
+                              <div>
+                                <span style={{ fontWeight: 500, color: 'var(--sp-text)' }}>{assignedCashier.name}</span>
+                                <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+                                  {assignedCashier.email} · {assignedCashier.role}
+                                </div>
                               </div>
                             </div>
                           ) : (
@@ -2110,17 +2639,17 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                             </span>
                           )}
                         </td>
-                        <td>
-                          <span className="status-chip status-chip-success">ACTIVE</span>
+                        <td style={{ textAlign: 'center' }}>
+                          <Status label="ACTIVE" />
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <button
                             type="button"
-                            className="button button-secondary"
+                            className="sales-action-btn secondary"
                             onClick={() => {
                               setActiveTab('shifts');
                             }}
-                            style={{ height: '26px', fontSize: '11.5px', padding: '0 8px' }}
+                            style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
                           >
                             View Shifts
                           </button>
@@ -2129,10 +2658,10 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                     );
                   })}
 
-                  {!registers.length && (
+                  {!filteredRegisters.length && (
                     <tr>
-                      <td colSpan={6} className="empty-cell">
-                        No registers configured yet. Click "Add Register" to connect a POS terminal to a warehouse.
+                      <td colSpan={6} className="empty-cell" style={{ padding: '32px 0', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
+                        {registerSearch ? 'No registers match your search filter.' : 'No registers configured yet. Click "New Register" above to connect a POS terminal to a warehouse.'}
                       </td>
                     </tr>
                   )}

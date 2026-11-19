@@ -369,64 +369,66 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
   }, [result.items]);
 
   return (
-    <div className="audit-screen-layout">
+    <div className="sales-screen-layout audit-screen-layout">
       {/* 1. Executive Telemetry KPI Strip — Monochrome Linear Architecture */}
       <div className="sales-metric-strip">
-        <div className="audit-metric-card">
-          <div className="audit-metric-header">
-            <span className="audit-metric-label">TOTAL LOGGED EVENTS</span>
-            <Activity size={14} className="audit-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">TOTAL LOGGED EVENTS</span>
+            <Activity size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="audit-metric-val">{result.totalElements}</div>
-          <div className="audit-metric-sub">
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {result.totalElements}
+          </div>
+          <div className="sales-metric-sub">
             100% immutable ledger · {uniqueEventTypesCount} event types
           </div>
         </div>
 
-        <div className="audit-metric-card">
-          <div className="audit-metric-header">
-            <span className="audit-metric-label">AUTHENTICATED ACTORS</span>
-            <Users size={14} className="audit-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">AUTHENTICATED ACTORS</span>
+            <Users size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="audit-metric-val">
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
             {uniqueActorsCount} {uniqueActorsCount === 1 ? 'Actor' : 'Actors'}
           </div>
-          <div className="audit-metric-sub">
+          <div className="sales-metric-sub">
             Attributed identity · cryptographically verified
           </div>
         </div>
 
-        <div className="audit-metric-card">
-          <div className="audit-metric-header">
-            <span className="audit-metric-label">DATA RETENTION & MASKING</span>
-            <ShieldCheck size={14} className="audit-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">DATA RETENTION & MASKING</span>
+            <ShieldCheck size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="audit-metric-val">SOC 2 / ISO 27001</div>
-          <div className="audit-metric-sub">
+          <div className="sales-metric-val">SOC 2 / ISO 27001</div>
+          <div className="sales-metric-sub">
             Zero cleartext secrets · PII & tokens redacted
           </div>
         </div>
 
-        <div className="audit-metric-card">
-          <div className="audit-metric-header">
-            <span className="audit-metric-label">EXPORT PRIVILEGES</span>
-            <Download size={14} className="audit-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">EXPORT PRIVILEGES</span>
+            <Download size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="audit-metric-val">
+          <div className="sales-metric-val">
             {canExport ? 'Export Privileged' : 'Auditor Access'}
           </div>
-          <div className="audit-metric-sub">
+          <div className="sales-metric-sub">
             365-day retention window · CSV pipeline
           </div>
         </div>
       </div>
 
       {/* 2. Linear Sub-Navigation Tabs */}
-      <div className="audit-subnav-container">
-        <div className="audit-subnav-tabs">
+      <div className="sales-subnav-container">
+        <div className="sales-subnav-tabs">
           <button
             type="button"
-            className={`audit-subnav-tab ${activeTab === 'all' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'all' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('all');
               setActivePill('ALL');
@@ -436,12 +438,12 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
           >
             <ListFilter size={13} />
             <span>All Activity</span>
-            <span className="audit-subnav-badge">{result.totalElements}</span>
+            <span className="sales-subnav-badge">{result.totalElements}</span>
           </button>
 
           <button
             type="button"
-            className={`audit-subnav-tab ${activeTab === 'security' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'security' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('security');
               setActivePill('ALL_SECURITY');
@@ -451,12 +453,12 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
           >
             <Shield size={13} />
             <span>Security & Access</span>
-            <span className="audit-subnav-badge">{securityEventsCount}</span>
+            <span className="sales-subnav-badge">{securityEventsCount}</span>
           </button>
 
           <button
             type="button"
-            className={`audit-subnav-tab ${activeTab === 'operations' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'operations' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('operations');
               setActivePill('ALL_OPERATIONS');
@@ -466,37 +468,38 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
           >
             <Layers size={13} />
             <span>Commercial & Ops</span>
-            <span className="audit-subnav-badge">{operationsEventsCount}</span>
+            <span className="sales-subnav-badge">{operationsEventsCount}</span>
           </button>
 
           <button
             type="button"
-            className={`audit-subnav-tab ${activeTab === 'compliance' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'compliance' ? 'active' : ''}`}
             onClick={() => setActiveTab('compliance')}
           >
             <FileSpreadsheet size={13} />
             <span>Compliance & Export</span>
-            <span className="audit-subnav-badge">SOC 2</span>
+            <span className="sales-subnav-badge">SOC 2</span>
           </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             type="button"
-            className="mini-action"
+            className="sales-action-btn secondary"
             onClick={() => setRefreshIndex((prev) => prev + 1)}
+            disabled={loading}
             title="Refresh audit event stream"
           >
-            <RefreshCw size={13} className={loading ? 'spin' : ''} />
+            <RefreshCw size={12} className={loading ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
           {canExport && (
             <button
               type="button"
-              className="button button-secondary"
+              className="sales-action-btn secondary"
               disabled={exporting}
               onClick={exportCsv}
-              style={{ height: '30px', fontSize: '12px' }}
+              title="Export Audit Trail as CSV"
             >
               <Download size={13} />
               <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
@@ -635,13 +638,142 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
       ) : (
         /* View Branch: Tabs 1, 2, 3 (Audit Register & Event Feed) */
         <>
-          {/* 3. Linear Toolbar: Search + Monochrome Segmented Category Controls */}
-          <div className="audit-toolbar">
-            <div className="audit-toolbar-left">
-              <div className="audit-search-field">
-                <Search size={14} style={{ color: 'var(--sp-text-muted)' }} />
+          {/* 3. Linear Toolbar: Category Pills on Left, Search + Filters on Right */}
+          <div className="sales-filter-toolbar">
+            <div className="sales-pill-group">
+              {activeTab === 'all' && (
+                <>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'ALL' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('ALL', '')}
+                  >
+                    <span>All</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'TENANT' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('TENANT', 'TENANT')}
+                  >
+                    <span>Tenant</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'MEMBER' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('MEMBER', 'MEMBER')}
+                  >
+                    <span>Access</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'PURCHASE' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('PURCHASE', 'PURCHASE')}
+                  >
+                    <span>Purchases</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'QUALITY' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('QUALITY', 'QUALITY')}
+                  >
+                    <span>Quality</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'CRM' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('CRM', 'CRM')}
+                  >
+                    <span>CRM</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'EXPORTS' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('EXPORTS', 'EXPORT')}
+                  >
+                    <span>Exports</span>
+                  </button>
+                </>
+              )}
+
+              {activeTab === 'security' && (
+                <>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'ALL_SECURITY' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('ALL_SECURITY', 'MEMBER')}
+                  >
+                    <span>All Security</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'MODULES' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('MODULES', 'MODULE')}
+                  >
+                    <span>Modules</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'ROLES' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('ROLES', 'ROLE')}
+                  >
+                    <span>Roles</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'INVITES' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('INVITES', 'INVITED')}
+                  >
+                    <span>Invites</span>
+                  </button>
+                </>
+              )}
+
+              {activeTab === 'operations' && (
+                <>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'ALL_OPERATIONS' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('ALL_OPERATIONS', '')}
+                  >
+                    <span>All Ops</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'OPS_PURCHASING' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('OPS_PURCHASING', 'PURCHASE')}
+                  >
+                    <span>Purchases</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'OPS_QUALITY' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('OPS_QUALITY', 'QUALITY')}
+                  >
+                    <span>Quality</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'OPS_CRM' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('OPS_CRM', 'CRM')}
+                  >
+                    <span>CRM</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${activePill === 'OPS_FINANCE' ? 'active' : ''}`}
+                    onClick={() => handlePillClick('OPS_FINANCE', 'FINANCE')}
+                  >
+                    <span>Finance</span>
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="sales-filter-group">
+              <div className="sales-search-box" style={{ minWidth: '240px' }}>
+                <Search size={13} className="sales-search-icon" />
                 <input
-                  className="audit-search-input"
+                  className="sales-search-input"
                   placeholder={
                     activeTab === 'security'
                       ? 'Filter security, roles, modules…'
@@ -661,149 +793,19 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
                     <X size={12} />
                   </button>
                 ) : (
-                  <span className="sales-search-shortcut">/</span>
+                  <kbd className="sales-search-kbd">/</kbd>
                 )}
               </div>
 
-              {/* Linear Segmented Category Group */}
-              <div className="audit-category-group">
-                {activeTab === 'all' && (
-                  <>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'ALL' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('ALL', '')}
-                    >
-                      All
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'TENANT' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('TENANT', 'TENANT')}
-                    >
-                      Tenant
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'MEMBER' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('MEMBER', 'MEMBER')}
-                    >
-                      Access
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'PURCHASE' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('PURCHASE', 'PURCHASE')}
-                    >
-                      Purchases
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'QUALITY' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('QUALITY', 'QUALITY')}
-                    >
-                      Quality
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'CRM' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('CRM', 'CRM')}
-                    >
-                      CRM
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'EXPORTS' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('EXPORTS', 'EXPORT')}
-                    >
-                      Exports
-                    </button>
-                  </>
-                )}
-
-                {activeTab === 'security' && (
-                  <>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'ALL_SECURITY' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('ALL_SECURITY', 'MEMBER')}
-                    >
-                      All Security
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'MODULES' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('MODULES', 'MODULE')}
-                    >
-                      Modules
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'ROLES' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('ROLES', 'ROLE')}
-                    >
-                      Roles
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'INVITES' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('INVITES', 'INVITED')}
-                    >
-                      Invites
-                    </button>
-                  </>
-                )}
-
-                {activeTab === 'operations' && (
-                  <>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'ALL_OPERATIONS' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('ALL_OPERATIONS', '')}
-                    >
-                      All Ops
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'OPS_PURCHASING' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('OPS_PURCHASING', 'PURCHASE')}
-                    >
-                      Purchases
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'OPS_QUALITY' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('OPS_QUALITY', 'QUALITY')}
-                    >
-                      Quality
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'OPS_CRM' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('OPS_CRM', 'CRM')}
-                    >
-                      CRM
-                    </button>
-                    <button
-                      type="button"
-                      className={`audit-category-btn ${activePill === 'OPS_FINANCE' ? 'active' : ''}`}
-                      onClick={() => handlePillClick('OPS_FINANCE', 'FINANCE')}
-                    >
-                      Finance
-                    </button>
-                  </>
-                )}
-              </div>
+              <button
+                type="button"
+                className={`sales-action-btn secondary ${showAdvancedFilters || activeFiltersCount > 0 ? 'active' : ''}`}
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              >
+                <Filter size={13} />
+                <span>Filters {activeFiltersCount > 0 && `(${activeFiltersCount})`}</span>
+              </button>
             </div>
-
-            <button
-              type="button"
-              className={`mini-action ${showAdvancedFilters || activeFiltersCount > 0 ? 'active' : ''}`}
-              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            >
-              <Filter size={13} />
-              <span>Filters {activeFiltersCount > 0 && `(${activeFiltersCount})`}</span>
-            </button>
           </div>
 
           {/* 4. Collapsible Advanced Filters Drawer */}
@@ -878,7 +880,7 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   type="button"
-                  className="button button-secondary"
+                  className="sales-action-btn secondary"
                   onClick={resetFilters}
                   style={{ height: '30px', fontSize: '12px' }}
                 >
@@ -889,16 +891,16 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
           )}
 
           {/* 5. Linear Event Ledger Table */}
-          <div className="audit-table-panel">
-            <div className="table-scroll" style={{ margin: 0 }}>
-              <table className="audit-table">
+          <div className="sales-table-card">
+            <div className="sales-table-scroll">
+              <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '130px' }}>TIME</th>
-                    <th style={{ width: '220px' }}>ACTOR</th>
-                    <th style={{ width: '320px' }}>ACTION</th>
-                    <th style={{ width: '240px' }}>TARGET ENTITY</th>
-                    <th style={{ width: '100px', textAlign: 'right' }}>DETAILS</th>
+                    <th style={{ width: '12%' }}>TIME</th>
+                    <th style={{ width: '22%' }}>ACTOR</th>
+                    <th style={{ width: '32%' }}>ACTION</th>
+                    <th style={{ width: '24%' }}>TARGET ENTITY</th>
+                    <th style={{ width: '10%', textAlign: 'right' }}>DETAILS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -926,7 +928,7 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
                           </span>
                           <button
                             type="button"
-                            className="button button-secondary"
+                            className="sales-action-btn secondary"
                             onClick={resetFilters}
                             style={{ height: '28px', fontSize: '11.5px', marginTop: '6px' }}
                           >
@@ -1013,14 +1015,15 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
                           <td style={{ textAlign: 'right' }}>
                             <button
                               type="button"
-                              className="audit-row-action"
+                              className="sales-action-btn secondary"
                               onClick={() => setSelectedEvent(event)}
+                              style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
                               title="Inspect event details"
                             >
                               <Eye size={12} />
                               <span>Inspect</span>
                               {detailCount > 0 && (
-                                <span style={{ opacity: 0.6, fontSize: '10.5px' }}>({detailCount})</span>
+                                <span style={{ opacity: 0.6, fontSize: '10px' }}>({detailCount})</span>
                               )}
                             </button>
                           </td>
@@ -1033,7 +1036,7 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
             </div>
 
             {/* 6. Linear High-Density Pagination Bar */}
-            <div className="movement-pagination" style={{ margin: 0, padding: '8px 14px', borderTop: '1px solid var(--sp-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: 0, padding: '8px 14px', borderTop: '1px solid var(--sp-border)' }}>
               <span style={{ fontSize: '12px', color: 'var(--sp-text-muted)' }}>
                 Showing {result.totalElements ? page * 50 + 1 : 0}–
                 {Math.min((page + 1) * 50, result.totalElements)} of {result.totalElements} events
@@ -1041,23 +1044,23 @@ export function AuditExplorer({ notify, role }: AuditExplorerProps) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <button
                   type="button"
-                  className="mini-action muted"
+                  className="sales-action-btn secondary"
                   disabled={page === 0 || loading}
                   onClick={() => setPage((current) => Math.max(0, current - 1))}
-                  style={{ height: '26px' }}
+                  style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
                 >
                   <ChevronLeft size={13} />
                   <span>Prev</span>
                 </button>
-                <span style={{ fontSize: '12px', color: 'var(--sp-text-muted)', padding: '0 4px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--sp-text-muted)', padding: '0 4px', fontVariantNumeric: 'tabular-nums' }}>
                   Page {result.totalPages ? page + 1 : 0} of {result.totalPages}
                 </span>
                 <button
                   type="button"
-                  className="mini-action muted"
+                  className="sales-action-btn secondary"
                   disabled={!result.totalPages || page >= result.totalPages - 1 || loading}
                   onClick={() => setPage((current) => current + 1)}
-                  style={{ height: '26px' }}
+                  style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
                 >
                   <span>Next</span>
                   <ChevronRight size={13} />

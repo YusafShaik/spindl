@@ -347,7 +347,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">INSPECTION QUEUE</span>
-            <ClipboardCheck size={14} className="sales-metric-icon quotes" />
+            <ClipboardCheck size={13} className="sales-metric-icon" />
           </div>
           <div className="sales-metric-val">{pendingLots.length} <small style={{ fontSize: '13px', fontWeight: 400, color: 'var(--sp-text-muted)' }}>lots</small></div>
           <div className="sales-metric-sub">
@@ -358,29 +358,33 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">QUARANTINE & HOLD</span>
-            <ShieldAlert size={14} className="sales-metric-icon credits" />
+            <ShieldAlert size={13} className="sales-metric-icon" />
           </div>
           <div className="sales-metric-val">{totalHeldStock.toLocaleString()} <small style={{ fontSize: '13px', fontWeight: 400, color: 'var(--sp-text-muted)' }}>PCS</small></div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">Quarantine hold</span> · Zero unauthorized release
+            {totalHeldStock > 0 ? (
+              <span className="sales-sub-warning">{totalHeldStock} in hold</span>
+            ) : (
+              <span className="sales-sub-highlight">Quarantine clear</span>
+            )} · Zero unauthorized release
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">ACCEPTANCE YIELD (FPY)</span>
-            <Award size={14} className="sales-metric-icon orders" />
+            <Award size={13} className="sales-metric-icon" />
           </div>
           <div className="sales-metric-val">{firstPassYield}%</div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">{totalPassedUnits} passed</span> · {totalRejectedUnits} scrapped
+            <span className="sales-sub-highlight">{totalPassedUnits} passed</span> · {totalRejectedUnits > 0 ? <span className="sales-sub-warning">{totalRejectedUnits} scrapped</span> : '0 scrapped'}
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">QC GATE COVERAGE</span>
-            <SlidersHorizontal size={14} className="sales-metric-icon trend" />
+            <SlidersHorizontal size={13} className="sales-metric-icon" />
           </div>
           <div className="sales-metric-val">{activeRulesCount} <small style={{ fontSize: '13px', fontWeight: 400, color: 'var(--sp-text-muted)' }}>/ {items.length} items</small></div>
           <div className="sales-metric-sub">
@@ -397,7 +401,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
             className={`sales-subnav-tab ${activeTab === 'queue' ? 'active' : ''}`}
             onClick={() => setActiveTab('queue')}
           >
-            <ClipboardCheck size={14} />
+            <ClipboardCheck size={13} />
             <span>Inspection Queue</span>
             <span className="sales-subnav-badge">{pendingLots.length}</span>
           </button>
@@ -407,7 +411,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
             className={`sales-subnav-tab ${activeTab === 'rules' ? 'active' : ''}`}
             onClick={() => setActiveTab('rules')}
           >
-            <ShieldCheck size={14} />
+            <ShieldCheck size={13} />
             <span>Inspection Rules</span>
             <span className="sales-subnav-badge">{items.length}</span>
           </button>
@@ -417,7 +421,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
             className={`sales-subnav-tab ${activeTab === 'history' ? 'active' : ''}`}
             onClick={() => setActiveTab('history')}
           >
-            <History size={14} />
+            <History size={13} />
             <span>Completed History</span>
             <span className="sales-subnav-badge">{completedLots.length}</span>
           </button>
@@ -427,74 +431,63 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
             className={`sales-subnav-tab ${activeTab === 'standards' ? 'active' : ''}`}
             onClick={() => setActiveTab('standards')}
           >
-            <Award size={14} />
+            <Award size={13} />
             <span>Standards & Gates</span>
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="sales-subnav-actions">
           <button
             type="button"
-            className="sales-action-btn"
-            onClick={exportQCReport}
-            title="Export full QC lots ledger"
+            className="button button-secondary"
+            onClick={load}
+            disabled={loading || saving}
+            title="Refresh quality ledger"
+            style={{ height: '30px', padding: '0 10px', fontSize: '12px' }}
           >
-            <Download size={13} />
-            <span>Export QC Report</span>
+            <RotateCcw size={13} className={loading || saving ? 'spin' : ''} />
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
-      {/* 3. Dynamic Search & Filters Toolbar */}
+      {/* 3. Standardized Linear Toolbar */}
       {activeTab !== 'standards' && (
         <div className="sales-toolbar">
-          <div className="sales-search-box">
-            <Search size={14} />
-            <input
-              className="sales-search-input"
-              placeholder={
-                activeTab === 'queue'
-                  ? 'Search queue by SKU, lot, source ref (PO/WO)...'
-                  : activeTab === 'rules'
-                  ? 'Search items by SKU, name, unit...'
-                  : 'Search history by lot, source ref, SKU...'
-              }
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <kbd className="sales-kbd">/</kbd>
-          </div>
-
-          <div className="sales-filter-pills">
+          <div className="sales-pill-group">
             {activeTab === 'queue' && (
               <>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${queueFilter === 'ALL' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${queueFilter === 'ALL' ? 'active' : ''}`}
                   onClick={() => setQueueFilter('ALL')}
                 >
-                  All <span>{pendingLots.length}</span>
+                  <span>All</span>
+                  <span className="sales-pill-count">{pendingLots.length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${queueFilter === 'PURCHASE_RECEIPT' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${queueFilter === 'PURCHASE_RECEIPT' ? 'active' : ''}`}
                   onClick={() => setQueueFilter('PURCHASE_RECEIPT')}
                 >
-                  Purchase Receipts <span>{pendingLots.filter(l => l.sourceType === 'PURCHASE_RECEIPT').length}</span>
+                  <span>Purchase Receipts</span>
+                  <span className="sales-pill-count">{pendingLots.filter(l => l.sourceType === 'PURCHASE_RECEIPT').length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${queueFilter === 'WORK_ORDER_OUTPUT' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${queueFilter === 'WORK_ORDER_OUTPUT' ? 'active' : ''}`}
                   onClick={() => setQueueFilter('WORK_ORDER_OUTPUT')}
                 >
-                  Work Orders <span>{pendingLots.filter(l => l.sourceType === 'WORK_ORDER_OUTPUT').length}</span>
+                  <span>Work Orders</span>
+                  <span className="sales-pill-count">{pendingLots.filter(l => l.sourceType === 'WORK_ORDER_OUTPUT').length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${queueFilter === 'OPENING_STOCK' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${queueFilter === 'OPENING_STOCK' ? 'active' : ''}`}
                   onClick={() => setQueueFilter('OPENING_STOCK')}
                 >
-                  Opening Stock <span>{pendingLots.filter(l => l.sourceType === 'OPENING_STOCK').length}</span>
+                  <span>Opening Stock</span>
+                  <span className="sales-pill-count">{pendingLots.filter(l => l.sourceType === 'OPENING_STOCK').length}</span>
                 </button>
               </>
             )}
@@ -503,24 +496,27 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
               <>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${rulesFilter === 'ALL' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${rulesFilter === 'ALL' ? 'active' : ''}`}
                   onClick={() => setRulesFilter('ALL')}
                 >
-                  All Items <span>{items.length}</span>
+                  <span>All Items</span>
+                  <span className="sales-pill-count">{items.length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${rulesFilter === 'REQUIRED' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${rulesFilter === 'REQUIRED' ? 'active' : ''}`}
                   onClick={() => setRulesFilter('REQUIRED')}
                 >
-                  Mandatory QC <span>{items.filter(i => i.inspectionRequired).length}</span>
+                  <span>Mandatory QC</span>
+                  <span className="sales-pill-count">{items.filter(i => i.inspectionRequired).length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${rulesFilter === 'STANDARD' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${rulesFilter === 'STANDARD' ? 'active' : ''}`}
                   onClick={() => setRulesFilter('STANDARD')}
                 >
-                  Direct Release <span>{items.filter(i => !i.inspectionRequired).length}</span>
+                  <span>Direct Release</span>
+                  <span className="sales-pill-count">{items.filter(i => !i.inspectionRequired).length}</span>
                 </button>
               </>
             )}
@@ -529,34 +525,79 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
               <>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${historyFilter === 'ALL' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${historyFilter === 'ALL' ? 'active' : ''}`}
                   onClick={() => setHistoryFilter('ALL')}
                 >
-                  All History <span>{completedLots.length}</span>
+                  <span>All History</span>
+                  <span className="sales-pill-count">{completedLots.length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${historyFilter === 'RELEASED' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${historyFilter === 'RELEASED' ? 'active' : ''}`}
                   onClick={() => setHistoryFilter('RELEASED')}
                 >
-                  Released <span>{completedLots.filter(l => l.status === 'RELEASED').length}</span>
+                  <span>Released</span>
+                  <span className="sales-pill-count">{completedLots.filter(l => l.status === 'RELEASED').length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${historyFilter === 'MIXED' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${historyFilter === 'MIXED' ? 'active' : ''}`}
                   onClick={() => setHistoryFilter('MIXED')}
                 >
-                  Mixed <span>{completedLots.filter(l => l.status === 'MIXED').length}</span>
+                  <span>Mixed</span>
+                  <span className="sales-pill-count">{completedLots.filter(l => l.status === 'MIXED').length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${historyFilter === 'REJECTED' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${historyFilter === 'REJECTED' ? 'active' : ''}`}
                   onClick={() => setHistoryFilter('REJECTED')}
                 >
-                  Rejected <span>{completedLots.filter(l => l.status === 'REJECTED').length}</span>
+                  <span>Rejected</span>
+                  <span className="sales-pill-count">{completedLots.filter(l => l.status === 'REJECTED').length}</span>
                 </button>
               </>
             )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="sales-search-box">
+              <Search size={13} className="sales-search-icon" />
+              <input
+                className="sales-search-input"
+                placeholder={
+                  activeTab === 'queue'
+                    ? 'Filter queue by SKU, lot, source ref…'
+                    : activeTab === 'rules'
+                    ? 'Filter items by SKU, name, unit…'
+                    : 'Filter history by lot, source ref, SKU…'
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  className="sales-search-clear"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              ) : (
+                <span className="sales-search-kbd">/</span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={exportQCReport}
+              style={{ height: '30px', fontSize: '12px' }}
+              title="Export full QC lots ledger"
+            >
+              <Download size={13} />
+              <span>Export CSV</span>
+            </button>
           </div>
         </div>
       )}
@@ -570,12 +611,12 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
             <table className="sales-table">
               <thead>
                 <tr>
-                  <th style={{ width: '150px' }}>SOURCE REF</th>
-                  <th>ITEM SPECIFICATION</th>
-                  <th style={{ width: '135px' }}>ORIGIN TYPE</th>
-                  <th style={{ width: '85px' }}>LOT QTY</th>
-                  <th style={{ width: '175px' }}>DISPOSITION STATUS</th>
-                  <th style={{ textAlign: 'right', width: '160px' }}>ACTIONS</th>
+                  <th style={{ width: '18%' }}>SOURCE REF</th>
+                  <th style={{ width: '30%' }}>ITEM SPECIFICATION</th>
+                  <th style={{ width: '15%' }}>ORIGIN TYPE</th>
+                  <th style={{ width: '10%', textAlign: 'right' }}>LOT QTY</th>
+                  <th style={{ width: '15%' }}>DISPOSITION STATUS</th>
+                  <th style={{ width: '12%', textAlign: 'right' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -596,7 +637,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                     return (
                       <tr key={lot.id} className="sales-row">
                         <td>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                             <span className="sales-ref-badge" title={lot.sourceReference} style={{ alignSelf: 'flex-start' }}>
                               {truncateRef(lot.sourceReference)}
                             </span>
@@ -606,10 +647,10 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                           </div>
                         </td>
 
-                        <td>
+                        <td style={{ maxWidth: '260px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontWeight: 600, color: 'var(--sp-text)', fontSize: '12.5px' }}>
+                              <span style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>
                                 {lot.sku}
                               </span>
                               <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>·</span>
@@ -617,7 +658,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                                 {lot.warehouseCode} ({lot.warehouseName})
                               </span>
                             </div>
-                            <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--sp-text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '250px' }}>
                               {lot.itemName}
                             </span>
                           </div>
@@ -630,13 +671,8 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                           </span>
                         </td>
 
-                        <td>
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
-                              {lot.quantity.toLocaleString()}
-                            </span>
-                            <span style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)' }}>total units</span>
-                          </div>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                          <b>{lot.quantity.toLocaleString()}</b>
                         </td>
 
                         <td>
@@ -647,7 +683,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                               {remainingPercent > 0 && <div className="quality-progress-seg remaining" style={{ width: `${remainingPercent}%` }} />}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
-                              <span style={{ fontWeight: 600, color: '#d97706' }}>
+                              <span style={{ fontWeight: 500, color: '#d97706' }}>
                                 {lot.remainingQuantity.toLocaleString()} awaiting
                               </span>
                               {lot.passedQuantity > 0 && (
@@ -660,27 +696,27 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                           </div>
                         </td>
 
-                        <td>
-                          <div className="sales-actions-cell">
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
                             <button
                               type="button"
-                              className="sales-action-btn primary"
+                              className="mini-action"
                               onClick={() => openInspectModal(lot)}
                               disabled={saving}
+                              style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
                             >
-                              <ClipboardCheck size={12} />
-                              <span>Inspect</span>
+                              Inspect
                             </button>
 
                             <button
                               type="button"
-                              className="sales-action-btn"
+                              className="mini-action muted"
                               onClick={() => void quickPassAll(lot)}
                               disabled={saving}
                               title="Quickly pass 100% of remaining units to available stock"
+                              style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
                             >
-                              <Check size={12} />
-                              <span>Pass all</span>
+                              Pass all
                             </button>
                           </div>
                         </td>
@@ -715,13 +751,13 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
             <table className="sales-table">
               <thead>
                 <tr>
-                  <th style={{ width: '160px' }}>ITEM SKU</th>
-                  <th>ITEM NAME</th>
-                  <th style={{ width: '120px' }}>ON HAND</th>
-                  <th style={{ width: '140px' }}>QUALITY HOLD</th>
-                  <th style={{ width: '140px' }}>AVAILABLE</th>
-                  <th style={{ width: '180px' }}>GATE POLICY</th>
-                  <th style={{ textAlign: 'right', width: '160px' }}>ACTIONS</th>
+                  <th style={{ width: '14%' }}>ITEM SKU</th>
+                  <th style={{ width: '28%' }}>ITEM NAME</th>
+                  <th style={{ width: '12%', textAlign: 'right' }}>ON HAND</th>
+                  <th style={{ width: '12%', textAlign: 'right' }}>QUALITY HOLD</th>
+                  <th style={{ width: '12%', textAlign: 'right' }}>AVAILABLE</th>
+                  <th style={{ width: '11%' }}>GATE POLICY</th>
+                  <th style={{ width: '11%', textAlign: 'right' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -743,9 +779,9 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                           <span className="sales-ref-badge">{item.sku}</span>
                         </td>
 
-                        <td>
+                        <td style={{ maxWidth: '260px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontWeight: 600, color: 'var(--sp-text)', fontSize: '12.5px' }}>
+                            <span style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>
                               {item.name}
                             </span>
                             <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
@@ -754,15 +790,13 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                           </div>
                         </td>
 
-                        <td>
-                          <span style={{ fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
-                            {item.onHand.toLocaleString()} {item.unit}
-                          </span>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                          <b>{item.onHand.toLocaleString()}</b> {item.unit}
                         </td>
 
-                        <td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
                           {hasHold ? (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: '#d97706', fontVariantNumeric: 'tabular-nums', background: 'rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: '4px', fontSize: '11px' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 500, color: '#d97706', background: 'rgba(245, 158, 11, 0.1)', padding: '2px 7px', borderRadius: '4px', fontSize: '11px' }}>
                               <ShieldAlert size={11} />
                               {item.heldQuantity.toLocaleString()} {item.unit}
                             </span>
@@ -771,34 +805,32 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                           )}
                         </td>
 
-                        <td>
-                          <span style={{ fontWeight: 600, color: '#059669', fontVariantNumeric: 'tabular-nums', background: 'rgba(16, 185, 129, 0.08)', padding: '2px 8px', borderRadius: '4px', fontSize: '11.5px' }}>
-                            {item.availableQuantity.toLocaleString()} {item.unit}
-                          </span>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                          <b>{item.availableQuantity.toLocaleString()}</b> {item.unit}
                         </td>
 
                         <td>
                           {item.inspectionRequired ? (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, color: '#059669', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                              <ShieldCheck size={12} />
-                              Mandatory QC
+                            <span className="sales-sub-highlight" style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <ShieldCheck size={11} />
+                              <span>Mandatory QC</span>
                             </span>
                           ) : (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: 500, color: 'var(--sp-text-muted)', background: 'var(--sp-surface-subtle)', border: '1px solid var(--sp-border)' }}>
-                              <CheckCircle2 size={12} />
+                            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
                               Direct Release
                             </span>
                           )}
                         </td>
 
-                        <td>
-                          <div className="sales-actions-cell">
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                             {canConfigure ? (
                               <button
                                 type="button"
-                                className={`sales-action-btn ${item.inspectionRequired ? '' : 'primary'}`}
+                                className={`mini-action ${item.inspectionRequired ? 'muted' : ''}`}
                                 disabled={saving}
                                 onClick={() => void setRequired(item)}
+                                style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
                                 title={
                                   item.inspectionRequired && hasHold
                                     ? `Cannot disable: ${item.heldQuantity} units in hold must be inspected first`
@@ -807,17 +839,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                                     : 'Enable mandatory inspection gate'
                                 }
                               >
-                                {item.inspectionRequired ? (
-                                  <>
-                                    <MinusCircle size={12} />
-                                    <span>Disable gate</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Plus size={12} />
-                                    <span>Enable gate</span>
-                                  </>
-                                )}
+                                {item.inspectionRequired ? 'Disable gate' : 'Enable gate'}
                               </button>
                             ) : (
                               <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Admin only</span>
@@ -850,14 +872,14 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
             <table className="sales-table">
               <thead>
                 <tr>
-                  <th style={{ width: '180px' }}>LOT REF</th>
-                  <th>ITEM SPECIFICATION</th>
-                  <th style={{ width: '150px' }}>SOURCE ORIGIN</th>
-                  <th style={{ width: '100px' }}>TOTAL</th>
-                  <th style={{ width: '110px' }}>PASSED</th>
-                  <th style={{ width: '110px' }}>SCRAPPED</th>
-                  <th style={{ width: '120px' }}>FINAL STATUS</th>
-                  <th style={{ textAlign: 'right', width: '140px' }}>RECORDED</th>
+                  <th style={{ width: '15%' }}>LOT REF</th>
+                  <th style={{ width: '26%' }}>ITEM SPECIFICATION</th>
+                  <th style={{ width: '15%' }}>SOURCE ORIGIN</th>
+                  <th style={{ width: '9%', textAlign: 'right' }}>TOTAL</th>
+                  <th style={{ width: '9%', textAlign: 'right' }}>PASSED</th>
+                  <th style={{ width: '9%', textAlign: 'right' }}>SCRAPPED</th>
+                  <th style={{ width: '8%' }}>FINAL STATUS</th>
+                  <th style={{ width: '9%', textAlign: 'right' }}>RECORDED</th>
                 </tr>
               </thead>
               <tbody>
@@ -878,12 +900,12 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                         </span>
                       </td>
 
-                      <td>
+                      <td style={{ maxWidth: '240px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: 600, color: 'var(--sp-text)', fontSize: '12.5px' }}>
+                          <span style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>
                             {lot.sku}
                           </span>
-                          <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--sp-text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '230px' }}>
                             {lot.itemName}
                           </span>
                         </div>
@@ -896,21 +918,17 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                         </span>
                       </td>
 
-                      <td>
-                        <span style={{ fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
-                          {lot.quantity.toLocaleString()}
-                        </span>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                        <b>{lot.quantity.toLocaleString()}</b>
                       </td>
 
-                      <td>
-                        <span style={{ fontWeight: 600, color: '#059669', fontVariantNumeric: 'tabular-nums' }}>
-                          +{lot.passedQuantity.toLocaleString()}
-                        </span>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                        <span style={{ color: '#059669' }}>+{lot.passedQuantity.toLocaleString()}</span>
                       </td>
 
-                      <td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
                         {lot.rejectedQuantity > 0 ? (
-                          <span style={{ fontWeight: 600, color: '#dc2626', fontVariantNumeric: 'tabular-nums' }}>
+                          <span style={{ color: '#dc2626' }}>
                             -{lot.rejectedQuantity.toLocaleString()}
                           </span>
                         ) : (
@@ -919,12 +937,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                       </td>
 
                       <td>
-                        <span className={`quality-status-pill ${lot.status}`}>
-                          {lot.status === 'RELEASED' && <CheckCircle2 size={11} />}
-                          {lot.status === 'REJECTED' && <XCircle size={11} />}
-                          {lot.status === 'MIXED' && <AlertTriangle size={11} />}
-                          <span>{lot.status}</span>
-                        </span>
+                        <Status label={lot.status} />
                       </td>
 
                       <td style={{ textAlign: 'right' }}>
@@ -955,7 +968,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
           <div className="sales-table-card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <ShieldCheck size={18} style={{ color: '#6366f1' }} />
+              <ShieldCheck size={18} style={{ color: 'var(--sp-brand)' }} />
               <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--sp-text)' }}>
                 Incoming Receipt Quarantine (Inbound Gate)
               </h3>
@@ -1090,7 +1103,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
           <div className="leads-modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
             <div className="leads-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ClipboardCheck size={16} style={{ color: '#6366f1' }} />
+                <ClipboardCheck size={16} style={{ color: 'var(--sp-brand)' }} />
                 <h3>Quality Inspection · {inspectingLot.sku}</h3>
               </div>
               <button
@@ -1117,7 +1130,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                   </div>
                   <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--sp-border)', display: 'flex', justifyContent: 'space-between', fontSize: '11.5px' }}>
                     <span style={{ color: 'var(--sp-text-muted)' }}>Awaiting disposition:</span>
-                    <span style={{ fontWeight: 600, color: '#d97706' }}>
+                    <span style={{ fontWeight: 500, color: '#d97706' }}>
                       {inspectingLot.remainingQuantity} of {inspectingLot.quantity} units
                     </span>
                   </div>

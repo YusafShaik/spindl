@@ -141,7 +141,7 @@ function EditProductModal({ item, onClose, onRefresh, notify }: EditProductModal
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
               Product / Item Name
             </label>
             <input
@@ -156,7 +156,7 @@ function EditProductModal({ item, onClose, onRefresh, notify }: EditProductModal
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
                 Category
               </label>
               <input
@@ -169,7 +169,7 @@ function EditProductModal({ item, onClose, onRefresh, notify }: EditProductModal
               />
             </div>
             <div>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
                 Item Type
               </label>
               <select
@@ -188,7 +188,7 @@ function EditProductModal({ item, onClose, onRefresh, notify }: EditProductModal
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
                 Unit Price (₹)
               </label>
               <input
@@ -203,7 +203,7 @@ function EditProductModal({ item, onClose, onRefresh, notify }: EditProductModal
               />
             </div>
             <div>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
                 Unit of Measure
               </label>
               <input
@@ -219,7 +219,7 @@ function EditProductModal({ item, onClose, onRefresh, notify }: EditProductModal
           </div>
 
           <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
               Barcode (EAN-13 / Code-128)
             </label>
             <div style={{ position: 'relative' }}>
@@ -229,7 +229,7 @@ function EditProductModal({ item, onClose, onRefresh, notify }: EditProductModal
                 onChange={(e) => setBarcode(e.target.value)}
                 disabled={saving}
                 placeholder="Optional scanner barcode..."
-                style={{ width: '100%', height: '34px', padding: '0 10px 0 30px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', fontFamily: 'var(--sp-font-mono, monospace)' }}
+                style={{ width: '100%', height: '34px', padding: '0 10px 0 30px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}
               />
               <Barcode size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--sp-text-muted)' }} />
             </div>
@@ -302,7 +302,7 @@ function EditThresholdModal({ item, onClose, onRefresh, notify }: EditThresholdM
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
               Minimum Safe Inventory Level ({item.unit})
             </label>
             <input
@@ -376,7 +376,7 @@ function ProductSpecsDrawer({ item, boms = [], onClose, onEdit }: ProductSpecsDr
         {/* Spec Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
           <div style={{ padding: '10px 12px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
-            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Commercial Price</div>
+            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 500 }}>Commercial Price</div>
             <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--sp-text)', marginTop: '2px' }}>
               {formatCurrency(item.unitPrice || item.price)}
             </div>
@@ -384,7 +384,7 @@ function ProductSpecsDrawer({ item, boms = [], onClose, onEdit }: ProductSpecsDr
           </div>
 
           <div style={{ padding: '10px 12px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
-            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Book Value</div>
+            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 500 }}>Total Book Value</div>
             <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--sp-text)', marginTop: '2px' }}>
               {formatCurrency(parseAmount(item.unitPrice || item.price) * (item.stock || 0))}
             </div>
@@ -426,11 +426,11 @@ function ProductSpecsDrawer({ item, boms = [], onClose, onEdit }: ProductSpecsDr
 
         {/* BOM Linkage */}
         {associatedBom && (
-          <div style={{ padding: '12px', background: 'rgba(99, 102, 241, 0.05)', borderRadius: '6px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+          <div style={{ padding: '12px', background: 'var(--sp-surface-subtle)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Layers size={14} color="#6366f1" />
-                <strong style={{ fontSize: '12.5px', color: '#4f46e5' }}>Active Bill of Materials ({associatedBom.revision})</strong>
+                <Layers size={14} style={{ color: 'var(--sp-brand)' }} />
+                <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)' }}>Active Bill of Materials ({associatedBom.revision})</span>
               </div>
               <span className="sales-status-chip completed">{associatedBom.status}</span>
             </div>
@@ -619,54 +619,54 @@ export function ProductDirectory({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">TOTAL CATALOG ITEMS</span>
-            <Boxes size={16} className="sales-metric-icon trend" />
+            <Boxes size={14} className="sales-metric-icon" aria-hidden="true" />
           </div>
-          <div className="sales-metric-val">{data.length} Products</div>
+          <div className="sales-metric-val">{data.length} SKUs</div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">{finishedCount} Finished</span> · {rawCount} Raw · {wipCount} WIP · {serviceCount} Svc
+            <span className="kpi-badge kpi-badge-purple">{finishedCount} Finished</span>
+            <span>{rawCount} Raw · {wipCount} WIP · {serviceCount} Svc</span>
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">PORTFOLIO BOOK VALUE</span>
-            <IndianRupee size={16} className="sales-metric-icon orders" />
+            <IndianRupee size={14} className="sales-metric-icon" aria-hidden="true" />
           </div>
           <div className="sales-metric-val">{formatCurrency(totalValuation)}</div>
           <div className="sales-metric-sub">
-            Total on-hand inventory valuation
+            <span className="kpi-badge kpi-badge-neutral">On-hand assets</span>
+            <span>Total catalog valuation</span>
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">STOCK HEALTH & REORDER</span>
-            {lowStockCount > 0 ? (
-              <AlertTriangle size={16} className="sales-metric-icon credits" style={{ color: '#f59e0b' }} />
-            ) : (
-              <CheckCircle2 size={16} className="sales-metric-icon credits" style={{ color: '#10b981' }} />
-            )}
+            <AlertTriangle size={14} className="sales-metric-icon" aria-hidden="true" />
           </div>
           <div className="sales-metric-val">
-            {lowStockCount} Low Stock
+            {lowStockCount > 0 ? `${lowStockCount} Low Stock` : 'Healthy'}
           </div>
           <div className="sales-metric-sub">
-            <span className={lowStockCount > 0 ? 'sales-sub-warning' : 'sales-sub-highlight'}>
+            <span className={`kpi-badge ${lowStockCount > 0 ? 'kpi-badge-warning' : 'kpi-badge-positive'}`}>
               {inStockPct}%
-            </span> at safe operational level
+            </span>
+            <span>safe operational level</span>
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">ENGINEERING & ASSEMBLIES</span>
-            <Layers size={16} className="sales-metric-icon invoices" />
+            <Layers size={14} className="sales-metric-icon" aria-hidden="true" />
           </div>
           <div className="sales-metric-val">
             {boms.length} Active {boms.length === 1 ? 'Spec' : 'Specs'}
           </div>
           <div className="sales-metric-sub">
-            Bills of materials & sub-assemblies
+            <span className="kpi-badge kpi-badge-neutral">BOMs</span>
+            <span>Production sub-assemblies</span>
           </div>
         </div>
       </div>
@@ -724,18 +724,18 @@ export function ProductDirectory({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             type="button"
-            className="sales-action-btn secondary"
+            className="button button-secondary"
             onClick={exportCatalogCSV}
             title="Export filtered catalog to CSV"
           >
             <Download size={13} />
-            <span>Export Catalog CSV</span>
+            <span>Export CSV</span>
           </button>
 
           {onNewItem && (
             <button
               type="button"
-              className="sales-action-btn primary"
+              className="button button-primary"
               onClick={onNewItem}
             >
               <Plus size={13} />
@@ -749,17 +749,6 @@ export function ProductDirectory({
       {activeTab === 'catalog' && (
         <>
           <div className="sales-toolbar">
-            <div className="sales-search-box">
-              <Search size={14} className="sales-search-icon" />
-              <input
-                className="sales-search-input"
-                placeholder="Search catalog by name, SKU, barcode, or category..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <kbd className="sales-search-kbd">/</kbd>
-            </div>
-
             <div className="sales-pill-group">
               <button
                 type="button"
@@ -804,6 +793,17 @@ export function ProductDirectory({
                 Low Stock {lowStockCount > 0 && <span className="sales-pill-count" style={{ color: '#d97706' }}>{lowStockCount}</span>}
               </button>
             </div>
+
+            <div className="sales-search-box">
+              <Search size={14} className="sales-search-icon" />
+              <input
+                className="sales-search-input"
+                placeholder="Search catalog by name, SKU, barcode, or category..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <kbd className="sales-search-kbd">/</kbd>
+            </div>
           </div>
 
           <div className="sales-table-card">
@@ -811,14 +811,14 @@ export function ProductDirectory({
               <table className="sales-table">
                 <thead>
                   <tr>
-                    <th style={{ minWidth: '240px' }}>PRODUCT & SPECIFICATION</th>
-                    <th style={{ width: '120px' }}>SKU</th>
-                    <th style={{ width: '130px' }}>TYPE</th>
-                    <th style={{ width: '110px' }}>ON HAND</th>
-                    <th style={{ width: '120px' }}>RESERVED / AVAIL</th>
-                    <th style={{ minWidth: '110px' }}>UNIT PRICE</th>
-                    <th style={{ width: '110px' }}>STATUS</th>
-                    <th style={{ minWidth: '180px', textAlign: 'right' }}>ACTIONS</th>
+                    <th style={{ minWidth: '220px' }}>PRODUCT & SPECIFICATION</th>
+                    <th style={{ width: '110px' }}>SKU</th>
+                    <th style={{ width: '120px' }}>TYPE</th>
+                    <th style={{ width: '90px' }}>ON HAND</th>
+                    <th style={{ width: '110px' }}>RESERVED / AVAIL</th>
+                    <th style={{ width: '100px' }}>UNIT PRICE</th>
+                    <th style={{ width: '95px' }}>STATUS</th>
+                    <th style={{ width: '155px', textAlign: 'right' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -846,8 +846,8 @@ export function ProductDirectory({
                               <span className={`sales-customer-avatar ${item.tone || 'lavender'}`}>
                                 {item.mark}
                               </span>
-                              <div className="customer-info-cell">
-                                <strong>{item.name}</strong>
+                              <div className="customer-info-cell" style={{ minWidth: 0, overflow: 'hidden' }}>
+                                <strong style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', display: 'block', maxWidth: '220px' }}>{item.name}</strong>
                                 <small>Category: {item.category}</small>
                                 {item.barcode && (
                                   <div style={{ marginTop: '2px' }}>
@@ -874,7 +874,7 @@ export function ProductDirectory({
 
                           {/* On Hand */}
                           <td>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
                               {item.stock.toLocaleString()}
                             </span>{' '}
                             <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>{item.unit}</span>
@@ -892,7 +892,7 @@ export function ProductDirectory({
 
                           {/* Unit Price */}
                           <td>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
                               {formatCurrency(item.unitPrice || item.price)}
                             </span>
                           </td>
@@ -904,8 +904,8 @@ export function ProductDirectory({
 
                           {/* Actions */}
                           <td style={{ textAlign: 'right' }}>
-                            <div className="sales-actions-cell" style={{ justifyContent: 'flex-end', gap: '6px' }}>
-                              <CustomFieldEditor resource="items" recordId={item.id} />
+                            <div className="sales-actions-cell" style={{ justifyContent: 'flex-end', gap: '5px' }}>
+                              <CustomFieldEditor resource="items" recordId={item.id} label="Fields" />
 
                               <button
                                 type="button"
@@ -1029,7 +1029,7 @@ export function ProductDirectory({
                         </td>
 
                         <td>
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
                             {formatCurrency(price)}
                           </span>
                         </td>
@@ -1041,7 +1041,7 @@ export function ProductDirectory({
                         </td>
 
                         <td>
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
                             {formatCurrency(valuation)}
                           </span>
                         </td>
@@ -1127,7 +1127,7 @@ export function ProductDirectory({
                       <tr key={item.sku} className="sales-row">
                         <td>
                           <strong>{item.name}</strong>
-                          <div style={{ fontSize: '11px', fontFamily: 'var(--sp-font-mono, monospace)', color: 'var(--sp-text-muted)' }}>
+                          <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                             {item.sku}
                           </div>
                         </td>
@@ -1139,7 +1139,7 @@ export function ProductDirectory({
                         </td>
 
                         <td>
-                          <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--sp-text)' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)' }}>
                             {item.stock} {item.unit}
                           </span>
                         </td>
@@ -1151,7 +1151,7 @@ export function ProductDirectory({
                         </td>
 
                         <td>
-                          <span style={{ fontSize: '12.5px', fontWeight: 600, color: isLow ? '#d97706' : 'var(--sp-text)' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 500, color: isLow ? '#d97706' : 'var(--sp-text)' }}>
                             {item.available ?? item.stock} {item.unit}
                           </span>
                         </td>
@@ -1198,7 +1198,7 @@ export function ProductDirectory({
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: '16px' }}>
           {/* BOM Finished Goods Selector */}
           <div className="sales-table-card" style={{ padding: '14px', height: 'fit-content' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--sp-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
               Engineered Assemblies ({boms.length})
             </div>
             {boms.length === 0 ? (
@@ -1287,7 +1287,7 @@ export function ProductDirectory({
                           </div>
 
                           <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
                               {line.quantityPerUnit} {compUnit} / unit
                             </div>
                             <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)', marginTop: '1px' }}>

@@ -31,4 +31,6 @@ public class WarehouseStockEntity {
     public void releaseManufacturingReservation(int quantity){if(quantity<=0||quantity>manufacturingReservedQuantity)throw new IllegalArgumentException("Release exceeds the warehouse manufacturing reservation");manufacturingReservedQuantity-=quantity;}
     public void validateAvailableDecrease(int quantity){if(quantity<=0||quantity>onHand-reservedQuantity-manufacturingReservedQuantity-qualityHoldQuantity)throw new IllegalArgumentException("Decrease exceeds stock available at this warehouse");}
     public void sellAvailable(int quantity){validateAvailableDecrease(quantity);onHand-=quantity;}
+    public void adjustStock(int quantityDelta){if(quantityDelta==0)throw new IllegalArgumentException("Adjustment quantity cannot be zero");if(quantityDelta<0)validateAvailableDecrease(-quantityDelta);onHand=Math.addExact(onHand,quantityDelta);}
+    public void rejectQualityHold(int quantity){if(quantity<=0||quantity>qualityHoldQuantity||quantity>onHand)throw new IllegalArgumentException("Quality rejection exceeds held quantity");qualityHoldQuantity-=quantity;onHand-=quantity;}
 }

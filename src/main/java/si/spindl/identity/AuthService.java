@@ -81,7 +81,9 @@ public class AuthService {
             loginThrottle.recordFailure(email, remoteAddress);
             throw new BadCredentialsException("Invalid email or password");
         }
-        var membership = memberships.findFirstByUserIdAndActiveTrueOrderByCreatedAtAsc(user.getId())
+        var membership = (request.tenantId() != null
+                ? memberships.findByTenantIdAndUserIdAndActiveTrue(request.tenantId(), user.getId())
+                : memberships.findFirstByUserIdAndActiveTrueOrderByCreatedAtAsc(user.getId()))
                 .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
         var tenant = tenants.findSummaryById(membership.getTenantId()).orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
         loginThrottle.recordSuccess(email);
@@ -95,6 +97,23 @@ public class AuthService {
 
     public AuthDtos.AuthResponse issueToken(AppUserEntity user, TenantRepository.TenantSummary tenant, String role) {
         return issueToken(user, tenant, role, null);
+    }
+
+    @Transactional
+    public AuthDtos.AuthResponse switchTenant(UUID userId, UUID targetTenantId) {
+        var user = users.findById(userId).filter(AppUserEntity::isActive).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        var membership = memberships.findByTenantIdAndUserIdAndActiveTrue(targetTenantId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not belong to this workspace"));
+        var tenant = tenants.findSummaryById(targetTenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace not found"));
+        return issueToken(user, tenant, membership.getRole());
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<AuthDtos.WorkspaceView> listWorkspaces(UUID userId) {
+        return memberships.findAllByUserIdAndActiveTrue(userId).stream()
+                .map(m -> tenants.findSummaryById(m.getTenantId()).map(t -> new AuthDtos.WorkspaceView(t.getId(), t.getDisplayName(), t.getSlug(), m.getRole())).orElse(null))
+                .filter(java.util.Objects::nonNull).toList();
     }
 
     private AuthDtos.AuthResponse issueToken(AppUserEntity user, TenantRepository.TenantSummary tenant, String role, String loginSourceHash) {

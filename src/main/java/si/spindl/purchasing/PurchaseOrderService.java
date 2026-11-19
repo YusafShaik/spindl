@@ -134,7 +134,9 @@ public class PurchaseOrderService {
             receipt.addLine(line,warehouse,input.acceptedQuantity(),input.rejectedQuantity());
             if(input.acceptedQuantity()>0){
                 ItemEntity item=items.findActiveForUpdate(tenantId,line.getItem().getId()).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Item is no longer active"));
-                if(item.isQualityInspectionRequired()){item.receiveStockForQuality(input.acceptedQuantity());WarehouseStockEntity balance=warehouseStock.findForUpdate(tenantId,warehouse.getId(),item.getId()).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Stock balance is missing at "+warehouse.getName()));balance.addQualityHold(input.acceptedQuantity());qualityLots.save(new QualityLotEntity(tenantId,item,warehouse,"PURCHASE_RECEIPT",receiptNumber+"/"+line.getId(),input.acceptedQuantity()));}else item.receiveStock(input.acceptedQuantity());
+                WarehouseStockEntity balance=warehouseStock.findForUpdate(tenantId,warehouse.getId(),item.getId()).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Stock balance is missing at "+warehouse.getName()));
+                balance.receiveStock(input.acceptedQuantity());
+                if(item.isQualityInspectionRequired()){item.receiveStockForQuality(input.acceptedQuantity());balance.addQualityHold(input.acceptedQuantity());qualityLots.save(new QualityLotEntity(tenantId,item,warehouse,"PURCHASE_RECEIPT",receiptNumber+"/"+line.getId(),input.acceptedQuantity()));}else item.receiveStock(input.acceptedQuantity());
                 movements.save(new InventoryMovementEntity(tenantId,item,warehouse,input.acceptedQuantity(),"Purchase receipt",receiptNumber,null));
             }
         }
@@ -163,8 +165,10 @@ public class PurchaseOrderService {
             PurchaseOrderLineEntity line=orderLines.get(input.purchaseOrderLineId());
             if(input.quantity()>line.getReturnableQuantity())throw new ResponseStatusException(HttpStatus.CONFLICT,"Return exceeds the accepted quantity still returnable for "+line.getItem().getSku());
             ItemEntity item=items.findForUpdate(tenantId,line.getItem().getId()).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Item no longer exists"));
+            WarehouseEntity main=warehouses.findByTenantIdAndIsDefaultTrueAndActiveTrue(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"No default warehouse is configured"));
+            WarehouseStockEntity balance=warehouseStock.findForUpdate(tenantId,main.getId(),item.getId()).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Stock balance is missing for "+item.getSku()));
             ensureDefaultAvailable(tenantId,item,input.quantity());
-            try{item.adjustStock(-input.quantity());line.returnAccepted(input.quantity());}catch(IllegalArgumentException|ArithmeticException exception){throw new ResponseStatusException(HttpStatus.CONFLICT,exception.getMessage());}
+            try{balance.adjustStock(-input.quantity());item.adjustStock(-input.quantity());line.returnAccepted(input.quantity());}catch(IllegalArgumentException|ArithmeticException exception){throw new ResponseStatusException(HttpStatus.CONFLICT,exception.getMessage());}
             purchaseReturn.addLine(line,input.quantity());
             movements.save(new InventoryMovementEntity(tenantId,item,-input.quantity(),"Purchase return",returnNumber));
         }

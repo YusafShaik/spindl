@@ -272,9 +272,9 @@ export function TenantSettingsPanel({
   }
 
   return (
-    <div className="tenant-settings-layout">
+    <div className="sales-screen-layout tenant-settings-layout">
       {/* 1. Executive Workspace Header Card */}
-      <div className="settings-header-card">
+      <div className="sales-table-card settings-header-card">
         <div className="settings-header-left">
           <div className="settings-avatar-monogram" title={settings.displayName}>
             {monogram}
@@ -329,33 +329,35 @@ export function TenantSettingsPanel({
       </div>
 
       {/* 2. Linear Sub-Navigation Tab Bar */}
-      <nav className="settings-nav-bar" aria-label="Settings sub-navigation">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              className={`settings-nav-btn ${isActive ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <Icon size={13} />
-              {tab.label}
-              {tab.badge && <span className="settings-nav-badge">{tab.badge}</span>}
-            </button>
-          );
-        })}
+      <nav className="sales-subnav-container settings-subnav-container" aria-label="Settings sub-navigation">
+        <div className="sales-subnav-tabs settings-subnav-tabs">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                className={`sales-subnav-tab ${isActive ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <Icon size={13} />
+                <span>{tab.label}</span>
+                {tab.badge && <span className="sales-subnav-badge">{tab.badge}</span>}
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
       {/* 3. Sub-Tab Content Views */}
       {activeTab === 'profile' && (
         <>
-          <section className="panel tenant-settings-panel">
-            <div className="panel-header">
+          <section className="sales-table-card tenant-settings-panel">
+            <div className="sales-card-header">
               <div>
-                <h2>Workspace profile & localisation</h2>
-                <p>Define your enterprise business identity, time zone, primary currency, and accounting fiscal year.</p>
+                <h2 className="sales-card-title">Workspace profile & localisation</h2>
+                <p className="sales-card-subtitle">Define your enterprise business identity, time zone, primary currency, and accounting fiscal year.</p>
               </div>
               <Status label={formatAuditLabel(settings.status)} />
             </div>
@@ -435,7 +437,7 @@ export function TenantSettingsPanel({
               </label>
 
               {canEdit && (
-                <button className="button button-primary" disabled={saving}>
+                <button className="sales-action-btn primary" disabled={saving}>
                   {saving ? 'Saving changes…' : 'Save workspace profile'}
                 </button>
               )}
@@ -467,11 +469,11 @@ export function TenantSettingsPanel({
           </section>
 
           {/* Access & Lifecycle Summary */}
-          <section className="panel tenant-settings-panel">
-            <div className="panel-header">
+          <section className="sales-table-card tenant-settings-panel">
+            <div className="sales-card-header">
               <div>
-                <h2>Workspace access & account lifecycle</h2>
-                <p>Spindl access privileges conform to account billing status and workspace policy.</p>
+                <h2 className="sales-card-title">Workspace access & account lifecycle</h2>
+                <p className="sales-card-subtitle">Spindl access privileges conform to account billing status and workspace policy.</p>
               </div>
             </div>
 
@@ -498,11 +500,11 @@ export function TenantSettingsPanel({
       )}
 
       {activeTab === 'modules' && (
-        <section className="panel tenant-settings-panel">
-          <div className="panel-header">
+        <section className="sales-table-card tenant-settings-panel">
+          <div className="sales-card-header">
             <div>
-              <h2>Workspace modules & features</h2>
-              <p>
+              <h2 className="sales-card-title">Workspace modules & features</h2>
+              <p className="sales-card-subtitle">
                 Configure which operational modules are active in this workspace. Disabling a module hides its
                 navigation and locks its APIs without deleting records.
               </p>
@@ -533,9 +535,10 @@ export function TenantSettingsPanel({
                   {!module.required ? (
                     <button
                       type="button"
-                      className="mini-action"
+                      className="sales-action-btn secondary"
                       disabled={saving || !canEdit || !module.entitled}
                       onClick={() => void toggleModule(module)}
+                      style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
                     >
                       {module.enabled ? 'Disable module' : 'Enable module'}
                     </button>

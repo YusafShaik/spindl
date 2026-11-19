@@ -167,9 +167,11 @@ export function TransactionRegister({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">RECEIVABLES & CASH-IN</span>
-            <ArrowUpRight size={14} className="sales-metric-icon trend" />
+            <ArrowUpRight size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val">{formatCurrency(totalInflow)}</div>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {formatCurrency(totalInflow)}
+          </div>
           <div className="sales-metric-sub">
             <span className="sales-sub-highlight">{formatCurrency(cashInTotal)} settled</span> · {arCount} customer events
           </div>
@@ -178,9 +180,11 @@ export function TransactionRegister({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">PAYABLES & DISBURSEMENTS</span>
-            <ArrowDownLeft size={14} className="sales-metric-icon credits" />
+            <ArrowDownLeft size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val">{formatCurrency(totalOutflow)}</div>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {formatCurrency(totalOutflow)}
+          </div>
           <div className="sales-metric-sub">
             <span className="sales-sub-highlight">{formatCurrency(cashOutTotal)} paid</span> · {apCount} supplier events
           </div>
@@ -189,9 +193,15 @@ export function TransactionRegister({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">NET SETTLED CASH FLOW</span>
-            <Wallet size={14} className="sales-metric-icon orders" />
+            <Wallet size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val" style={{ color: netCashFlow >= 0 ? 'var(--sp-text)' : '#dc2626' }}>
+          <div
+            className="sales-metric-val"
+            style={{
+              color: netCashFlow >= 0 ? 'var(--sp-text)' : '#dc2626',
+              fontVariantNumeric: 'tabular-nums'
+            }}
+          >
             {netCashFlow >= 0 ? '+' : ''}{formatCurrency(netCashFlow)}
           </div>
           <div className="sales-metric-sub">
@@ -202,9 +212,11 @@ export function TransactionRegister({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">STATUTORY TAX ACCRUALS</span>
-            <Receipt size={14} className="sales-metric-icon invoices" />
+            <Receipt size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val">₹ 3,900.05</div>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            ₹ 3,900.05
+          </div>
           <div className="sales-metric-sub">
             <span className="sales-sub-highlight">GST18 @ 18%</span> · Invoiced tax snapshot
           </div>
@@ -253,89 +265,70 @@ export function TransactionRegister({
             <span>Tax Summary & Invoicing Setup</span>
           </button>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {activeTab !== 'tax' && (
-            <button
-              type="button"
-              className="sales-action-btn"
-              onClick={exportLedgerCSV}
-              title="Download full filtered ledger transactions"
-            >
-              <Download size={13} />
-              <span>Export Ledger CSV</span>
-            </button>
-          )}
-        </div>
       </div>
 
       {/* 3. Dynamic Search & Filters Toolbar */}
       {activeTab !== 'tax' && (
         <div className="sales-toolbar" style={{ flexWrap: 'wrap', gap: '10px' }}>
-          <div className="sales-search-box">
-            <Search size={14} />
-            <input
-              className="sales-search-input"
-              placeholder={
-                activeTab === 'receivables'
-                  ? 'Search receivables by invoice #, customer, method...'
-                  : activeTab === 'payables'
-                  ? 'Search payables by bill #, vendor, method...'
-                  : 'Search by reference, counterparty, payment method...'
-              }
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <kbd className="sales-kbd">/</kbd>
-          </div>
-
-          <div className="sales-filter-pills">
+          <div className="sales-pill-group">
             <button
               type="button"
-              className={`sales-filter-pill ${quickPill === 'ALL' ? 'active' : ''}`}
+              className={`sales-pill-btn ${quickPill === 'ALL' ? 'active' : ''}`}
               onClick={() => setQuickPill('ALL')}
             >
-              All <span>{tabFilteredData.length}</span>
+              All <span className="sales-pill-count">{tabFilteredData.length}</span>
             </button>
 
             {activeTab !== 'payables' && (
               <button
                 type="button"
-                className={`sales-filter-pill ${quickPill === 'INVOICE' ? 'active' : ''}`}
+                className={`sales-pill-btn ${quickPill === 'INVOICE' ? 'active' : ''}`}
                 onClick={() => setQuickPill('INVOICE')}
               >
-                Invoices <span>{tabFilteredData.filter((t) => t.type === 'SALES_INVOICE').length}</span>
+                Invoices{' '}
+                <span className="sales-pill-count">
+                  {tabFilteredData.filter((t) => t.type === 'SALES_INVOICE').length}
+                </span>
               </button>
             )}
 
             {activeTab !== 'receivables' && (
               <button
                 type="button"
-                className={`sales-filter-pill ${quickPill === 'BILL' ? 'active' : ''}`}
+                className={`sales-pill-btn ${quickPill === 'BILL' ? 'active' : ''}`}
                 onClick={() => setQuickPill('BILL')}
               >
-                Supplier Bills <span>{tabFilteredData.filter((t) => t.type === 'SUPPLIER_BILL').length}</span>
+                Supplier Bills{' '}
+                <span className="sales-pill-count">
+                  {tabFilteredData.filter((t) => t.type === 'SUPPLIER_BILL').length}
+                </span>
               </button>
             )}
 
             <button
               type="button"
-              className={`sales-filter-pill ${quickPill === 'PAYMENT' ? 'active' : ''}`}
+              className={`sales-pill-btn ${quickPill === 'PAYMENT' ? 'active' : ''}`}
               onClick={() => setQuickPill('PAYMENT')}
             >
-              Payments <span>{tabFilteredData.filter((t) => t.type.includes('PAYMENT') || Boolean(t.method)).length}</span>
+              Payments{' '}
+              <span className="sales-pill-count">
+                {tabFilteredData.filter((t) => t.type.includes('PAYMENT') || Boolean(t.method)).length}
+              </span>
             </button>
 
             <button
               type="button"
-              className={`sales-filter-pill ${quickPill === 'CREDIT' ? 'active' : ''}`}
+              className={`sales-pill-btn ${quickPill === 'CREDIT' ? 'active' : ''}`}
               onClick={() => setQuickPill('CREDIT')}
             >
-              Credits <span>{tabFilteredData.filter((t) => t.type.includes('CREDIT')).length}</span>
+              Credits{' '}
+              <span className="sales-pill-count">
+                {tabFilteredData.filter((t) => t.type.includes('CREDIT')).length}
+              </span>
             </button>
           </div>
 
-          {/* Date range pickers */}
+          {/* Right controls: dates, search, export */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
               From:
@@ -369,6 +362,44 @@ export function TransactionRegister({
                 <span>Reset</span>
               </button>
             )}
+
+            <div className="sales-search-box">
+              <Search size={14} className="sales-search-icon" />
+              <input
+                className="sales-search-input"
+                placeholder={
+                  activeTab === 'receivables'
+                    ? 'Search receivables…'
+                    : activeTab === 'payables'
+                    ? 'Search payables…'
+                    : 'Search reference, counterparty…'
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  className="sales-search-clear"
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              ) : (
+                <kbd className="sales-search-kbd">/</kbd>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="sales-action-btn secondary"
+              onClick={exportLedgerCSV}
+              title="Download full filtered ledger transactions"
+            >
+              <Download size={13} />
+              <span>Export CSV</span>
+            </button>
           </div>
         </div>
       )}

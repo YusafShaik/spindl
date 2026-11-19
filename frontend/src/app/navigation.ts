@@ -1,6 +1,7 @@
 import {
-  Activity, Boxes, ChartNoAxesCombined, Check, ClipboardList, Factory,
-  FileText, LayoutDashboard, Package, ShoppingCart, Upload, Users, Warehouse,
+  Activity, Boxes, ChartNoAxesCombined, Check, ClipboardList, Cpu, Factory,
+  FileText, GitBranch, HardHat, LayoutDashboard, Package, Scale, ShoppingCart, Truck, Upload, Users, Warehouse,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -19,8 +20,12 @@ export const navGroups: NavigationGroup[] = [
   { title: 'WORKSPACE', items: [
     { label: 'Overview', icon: LayoutDashboard }, { label: 'Sales', icon: ShoppingCart, count: '8' },
     { label: 'POS', icon: ShoppingCart }, { label: 'Purchases', icon: ClipboardList },
-    { label: 'Production', icon: Factory }, { label: 'Quality', icon: Check },
-    { label: 'Leads', icon: Users }, { label: 'Transactions', icon: FileText },
+    { label: 'Production', icon: Factory }, { label: 'Planning (MRP)', icon: Cpu },
+    { label: 'Engineering (ECO)', icon: GitBranch },
+    { label: 'Maintenance', icon: Wrench }, { label: 'Quality', icon: Check },
+    { label: 'Workforce', icon: HardHat },
+    { label: 'Logistics', icon: Truck },
+    { label: 'Leads', icon: Users }, { label: 'Accounting (GL)', icon: Scale },
     { label: 'Inventory', icon: Boxes }, { label: 'Customers', icon: Users },
     { label: 'Products', icon: Package },
   ] },
@@ -33,7 +38,9 @@ export const navGroups: NavigationGroup[] = [
 
 const moduleByNavigationLabel: Record<string, string> = {
   Overview: 'dashboard', Sales: 'sales', POS: 'sales', Purchases: 'purchasing',
-  Production: 'manufacturing', Quality: 'quality', Leads: 'crm', Transactions: 'finance',
+  Production: 'manufacturing', 'Planning (MRP)': 'manufacturing', 'Engineering (ECO)': 'manufacturing',
+  Maintenance: 'manufacturing', Quality: 'quality', Workforce: 'manufacturing',
+  Logistics: 'sales', Leads: 'crm', Transactions: 'finance', 'Accounting (GL)': 'finance',
   Inventory: 'inventory', Customers: 'crm', Products: 'catalog', Imports: 'imports',
   Team: 'team', 'Audit log': 'operations', Reports: 'finance', Warehouses: 'inventory',
 };

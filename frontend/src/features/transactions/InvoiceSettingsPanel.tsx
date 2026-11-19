@@ -111,7 +111,7 @@ export function InvoiceSettingsPanel({ role, notify }: InvoiceSettingsPanelProps
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', borderBottom: '1px solid var(--sp-border)', paddingBottom: '12px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <SlidersHorizontal size={15} style={{ color: '#6366f1' }} />
+              <SlidersHorizontal size={15} style={{ color: 'var(--sp-brand)' }} />
               <h3 style={{ margin: 0, fontSize: '13.5px', fontWeight: 600, color: 'var(--sp-text)' }}>
                 Invoice & Statutory Tax Configuration
               </h3>
@@ -124,7 +124,7 @@ export function InvoiceSettingsPanel({ role, notify }: InvoiceSettingsPanelProps
           {settings && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--sp-surface-subtle)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
               <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)', fontWeight: 500 }}>NEXT INVOICE #</span>
-              <span className="sales-ref-badge" style={{ color: '#6366f1', fontWeight: 700 }}>
+              <span className="sales-ref-badge">
                 {settings.invoicePrefix}-{new Date().getFullYear()}-{String(settings.nextInvoiceNumber).padStart(6, '0')}
               </span>
             </div>
@@ -133,7 +133,7 @@ export function InvoiceSettingsPanel({ role, notify }: InvoiceSettingsPanelProps
 
         {settings && (
           <form onSubmit={save} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr) auto', gap: '14px', alignItems: 'flex-end' }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text-muted)' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11.5px', fontWeight: 500, color: 'var(--sp-text-muted)' }}>
               TAX CLASSIFICATION CODE
               <input
                 name="taxCode"
@@ -156,7 +156,7 @@ export function InvoiceSettingsPanel({ role, notify }: InvoiceSettingsPanelProps
               />
             </label>
 
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text-muted)' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11.5px', fontWeight: 500, color: 'var(--sp-text-muted)' }}>
               TAX RATE (%)
               <input
                 name="taxRate"
@@ -180,7 +180,7 @@ export function InvoiceSettingsPanel({ role, notify }: InvoiceSettingsPanelProps
               />
             </label>
 
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text-muted)' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11.5px', fontWeight: 500, color: 'var(--sp-text-muted)' }}>
               INVOICE PREFIX
               <input
                 name="invoicePrefix"
@@ -308,7 +308,7 @@ export function InvoiceSettingsPanel({ role, notify }: InvoiceSettingsPanelProps
                       </span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--sp-text)' }}>
+                      <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--sp-text)' }}>
                         {formatCurrency(row.grossTotal)}
                       </span>
                     </td>

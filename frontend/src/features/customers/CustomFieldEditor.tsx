@@ -26,6 +26,8 @@ interface CustomFieldDefinition {
 interface CustomFieldEditorProps {
   resource: string;
   recordId: string;
+  label?: string;
+  className?: string;
 }
 
 function errorMessage(error: unknown): string {
@@ -59,7 +61,7 @@ function isCustomFieldDefinition(value: unknown): value is CustomFieldDefinition
     && typeof value.published === 'boolean';
 }
 
-export function CustomFieldEditor({ resource, recordId }: CustomFieldEditorProps) {
+export function CustomFieldEditor({ resource, recordId, label = 'Custom fields', className = 'sales-action-btn secondary' }: CustomFieldEditorProps) {
   const [open, setOpen] = useState(false);
   const [fields, setFields] = useState<CustomFieldDefinition[]>([]);
   const [values, setValues] = useState<CustomFieldValues>({});
@@ -127,7 +129,7 @@ export function CustomFieldEditor({ resource, recordId }: CustomFieldEditorProps
   };
 
   return <>
-    <button type="button" className="mini-action muted" onClick={() => { setOpen(true); void load(); }}>Custom fields</button>
+    <button type="button" className={className} onClick={() => { setOpen(true); void load(); }}>{label}</button>
     {open && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setOpen(false); }}>
       <form className="record-modal" onSubmit={save}>
         <div className="modal-title"><div><h2>Additional details</h2><p>Update workspace-defined fields for this record.</p></div><button type="button" disabled={saving} onClick={() => setOpen(false)}>×</button></div>

@@ -530,123 +530,141 @@ export function InventoryWarehousePanel({ items, role, notify, onPosted }: Inven
     <div className="reports-screen-layout warehouse-screen-layout">
       {/* 1. Executive Telemetry Strip — Quiet Monochrome Linear Cards */}
       <div className="sales-metric-strip">
-        <div className="reports-metric-card">
-          <div className="reports-metric-header">
-            <span className="reports-metric-label">FACILITIES & HUBS</span>
-            <Building2 size={14} className="reports-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">FACILITIES & HUBS</span>
+            <Building2 size={13} className="sales-metric-icon" />
           </div>
-          <div className="reports-metric-val">{warehouses.length} Active</div>
-          <div className="reports-metric-sub">
+          <div className="sales-metric-val">{warehouses.length} Active</div>
+          <div className="sales-metric-sub">
             Across {branches.length || 1} enterprise {branches.length === 1 ? 'branch' : 'branches'} · {activeWarehouse?.code || 'MAIN'} active
           </div>
         </div>
 
-        <div className="reports-metric-card">
-          <div className="reports-metric-header">
-            <span className="reports-metric-label">LOCATION ON-HAND</span>
-            <Boxes size={14} className="reports-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">LOCATION ON-HAND</span>
+            <Boxes size={13} className="sales-metric-icon" />
           </div>
-          <div className="reports-metric-val">{selectedWarehouseOnHand.toLocaleString()} Units</div>
-          <div className="reports-metric-sub">
-            In {activeWarehouse?.name || 'Main Warehouse'} · {balances.length} inventory balances
-          </div>
-        </div>
-
-        <div className="reports-metric-card">
-          <div className="reports-metric-header">
-            <span className="reports-metric-label">INTER-FACILITY TRANSFERS</span>
-            <ArrowLeftRight size={14} className="reports-metric-icon" />
-          </div>
-          <div className="reports-metric-val">{inTransitCount} In Transit</div>
-          <div className="reports-metric-sub">
-            {pendingTransfersCount} pending approval · {transfers.length} total movements
+          <div className="sales-metric-val">{selectedWarehouseOnHand.toLocaleString()} Units</div>
+          <div className="sales-metric-sub">
+            <span className="sales-sub-highlight">{balances.length} inventory balances</span> in {activeWarehouse?.name || 'Main Warehouse'}
           </div>
         </div>
 
-        <div className="reports-metric-card">
-          <div className="reports-metric-header">
-            <span className="reports-metric-label">CYCLE COUNT AUDIT</span>
-            <ClipboardCheck size={14} className="reports-metric-icon" />
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">INTER-FACILITY TRANSFERS</span>
+            <ArrowLeftRight size={13} className="sales-metric-icon" />
           </div>
-          <div className="reports-metric-val">
+          <div className="sales-metric-val">{inTransitCount} In Transit</div>
+          <div className="sales-metric-sub">
+            {pendingTransfersCount > 0 ? (
+              <span className="sales-sub-warning">{pendingTransfersCount} pending approval</span>
+            ) : (
+              'All transfers dispatched'
+            )} · {transfers.length} movements
+          </div>
+        </div>
+
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">CYCLE COUNT AUDIT</span>
+            <ClipboardCheck size={13} className="sales-metric-icon" />
+          </div>
+          <div className="sales-metric-val">
             {activeCountSessions > 0 ? `${activeCountSessions} In Progress` : '100% Reconciled'}
           </div>
-          <div className="reports-metric-sub">
-            {cycleCounts.length} total count sessions · {postedCountSessions} posted audits
+          <div className="sales-metric-sub">
+            {cycleCounts.length} count sessions · {postedCountSessions} posted audits
           </div>
         </div>
       </div>
 
       {/* 2. Linear Sub-Navigation Tabs */}
-      <div className="reports-subnav-container">
-        <div className="reports-subnav-tabs">
+      <div className="sales-subnav-container">
+        <div className="sales-subnav-tabs">
           <button
             type="button"
-            className={`reports-subnav-tab ${activeTab === 'stock' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'stock' ? 'active' : ''}`}
             onClick={() => setActiveTab('stock')}
           >
             <Boxes size={13} />
             <span>Location Stock</span>
-            <span className="reports-subnav-badge">{balances.length}</span>
+            <span className="sales-subnav-badge">{balances.length}</span>
           </button>
 
           <button
             type="button"
-            className={`reports-subnav-tab ${activeTab === 'transfers' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'transfers' ? 'active' : ''}`}
             onClick={() => setActiveTab('transfers')}
           >
             <ArrowLeftRight size={13} />
             <span>Stock Transfers</span>
-            <span className="reports-subnav-badge">{transfers.length}</span>
+            <span className="sales-subnav-badge">{transfers.length}</span>
           </button>
 
           <button
             type="button"
-            className={`reports-subnav-tab ${activeTab === 'cycle-counts' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'cycle-counts' ? 'active' : ''}`}
             onClick={() => setActiveTab('cycle-counts')}
           >
             <ClipboardCheck size={13} />
             <span>Cycle Counts</span>
-            <span className="reports-subnav-badge">{cycleCounts.length}</span>
+            <span className="sales-subnav-badge">{cycleCounts.length}</span>
           </button>
 
           <button
             type="button"
-            className={`reports-subnav-tab ${activeTab === 'facilities' ? 'active' : ''}`}
+            className={`sales-subnav-tab ${activeTab === 'facilities' ? 'active' : ''}`}
             onClick={() => setActiveTab('facilities')}
           >
             <Building2 size={13} />
             <span>Facility Directory</span>
-            <span className="reports-subnav-badge">{warehouses.length}</span>
+            <span className="sales-subnav-badge">{warehouses.length}</span>
           </button>
         </div>
 
-        <div className="action-row" style={{ gap: '8px' }}>
+        <div className="sales-subnav-actions">
           <button
             type="button"
             className="button button-secondary"
             onClick={() => setRefreshIndex((k) => k + 1)}
             disabled={loading || saving}
             title="Refresh warehouse ledger"
-            style={{ height: '32px', padding: '0 10px', fontSize: '12px' }}
+            style={{ height: '30px', padding: '0 10px', fontSize: '12px' }}
           >
             <RefreshCw size={13} className={loading || saving ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
 
-          {canManage && (
+          {canManage && activeTab === 'facilities' && (
             <button
               type="button"
-              className="button button-secondary"
+              className="button button-primary"
               onClick={() => setIsAddWarehouseOpen(true)}
-              style={{ height: '32px', fontSize: '12.5px' }}
+              style={{ height: '30px', fontSize: '12.5px' }}
             >
               <Plus size={13} />
               <span>Add Facility</span>
             </button>
           )}
 
-          {canManage && (
+          {canManage && activeTab === 'cycle-counts' && (
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={() => setIsCountModalOpen(true)}
+              disabled={activeCountSessions > 0}
+              title={activeCountSessions > 0 ? 'Finish current count session before starting another' : ''}
+              style={{ height: '30px', fontSize: '12.5px' }}
+            >
+              <Plus size={13} />
+              <span>Start Cycle Count</span>
+            </button>
+          )}
+
+          {canManage && (activeTab === 'stock' || activeTab === 'transfers') && (
             <button
               type="button"
               className="button button-primary"
@@ -655,7 +673,7 @@ export function InventoryWarehousePanel({ items, role, notify, onPosted }: Inven
                 setDestinationWarehouseId(warehouses.find((w) => w.id !== selectedWarehouseId)?.id || '');
                 setIsTransferModalOpen(true);
               }}
-              style={{ height: '32px', fontSize: '12.5px' }}
+              style={{ height: '30px', fontSize: '12.5px' }}
             >
               <ArrowLeftRight size={13} />
               <span>Request Transfer</span>
@@ -668,87 +686,93 @@ export function InventoryWarehousePanel({ items, role, notify, onPosted }: Inven
 
       {/* TAB 1: LOCATION STOCK */}
       {activeTab === 'stock' && (
-        <section className="panel directory-panel" style={{ margin: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Action and Filter Control Bar */}
-          <div className="warehouse-action-bar">
-            <div className="warehouse-location-picker">
-              <label htmlFor="warehouse-select" className="warehouse-picker-label">
-                <WarehouseIcon size={13} />
-                <span>Facility:</span>
-              </label>
-              <select
-                id="warehouse-select"
-                className="warehouse-select-input"
-                value={selectedWarehouseId}
-                onChange={(e) => setSelectedWarehouseId(e.target.value)}
-              >
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name} ({w.code}){w.isDefault ? ' — Primary Hub' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="sales-toolbar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div className="warehouse-location-picker">
+                <label htmlFor="warehouse-select" className="warehouse-picker-label">
+                  <WarehouseIcon size={13} />
+                  <span>Facility:</span>
+                </label>
+                <select
+                  id="warehouse-select"
+                  className="warehouse-select-input"
+                  style={{ height: '28px', fontSize: '12px', padding: '0 8px' }}
+                  value={selectedWarehouseId}
+                  onChange={(e) => setSelectedWarehouseId(e.target.value)}
+                >
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({w.code}){w.isDefault ? ' — Primary Hub' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="warehouse-search-wrapper">
-              <Search size={13} className="warehouse-search-icon" />
-              <input
-                type="text"
-                placeholder="Search SKU or item name… ⌘K"
-                value={stockSearchQuery}
-                onChange={(e) => setStockSearchQuery(e.target.value)}
-                className="warehouse-search-input"
-              />
-              {stockSearchQuery && (
+              <div className="sales-pill-group">
                 <button
                   type="button"
-                  className="warehouse-clear-btn"
-                  onClick={() => setStockSearchQuery('')}
-                  aria-label="Clear search"
+                  className={`sales-pill-btn ${stockFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setStockFilter('ALL')}
                 >
-                  <X size={12} />
+                  <span>All Items</span>
                 </button>
-              )}
+                <button
+                  type="button"
+                  className={`sales-pill-btn ${stockFilter === 'IN_STOCK' ? 'active' : ''}`}
+                  onClick={() => setStockFilter('IN_STOCK')}
+                >
+                  <span>Available</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sales-pill-btn ${stockFilter === 'LOW' ? 'active' : ''}`}
+                  onClick={() => setStockFilter('LOW')}
+                >
+                  <span>Low (≤5)</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sales-pill-btn ${stockFilter === 'QC_HOLD' ? 'active' : ''}`}
+                  onClick={() => setStockFilter('QC_HOLD')}
+                >
+                  <span>QC Hold</span>
+                </button>
+              </div>
             </div>
 
-            <div className="warehouse-filter-pills">
-              <button
-                type="button"
-                className={`warehouse-pill ${stockFilter === 'ALL' ? 'active' : ''}`}
-                onClick={() => setStockFilter('ALL')}
-              >
-                All Items
-              </button>
-              <button
-                type="button"
-                className={`warehouse-pill ${stockFilter === 'IN_STOCK' ? 'active' : ''}`}
-                onClick={() => setStockFilter('IN_STOCK')}
-              >
-                Available
-              </button>
-              <button
-                type="button"
-                className={`warehouse-pill ${stockFilter === 'LOW' ? 'active' : ''}`}
-                onClick={() => setStockFilter('LOW')}
-              >
-                Low (≤5)
-              </button>
-              <button
-                type="button"
-                className={`warehouse-pill ${stockFilter === 'QC_HOLD' ? 'active' : ''}`}
-                onClick={() => setStockFilter('QC_HOLD')}
-              >
-                QC Hold
-              </button>
-            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="sales-search-box">
+                <Search size={13} className="sales-search-icon" />
+                <input
+                  type="text"
+                  placeholder="Filter SKU or item name…"
+                  value={stockSearchQuery}
+                  onChange={(e) => setStockSearchQuery(e.target.value)}
+                  className="sales-search-input"
+                />
+                {stockSearchQuery ? (
+                  <button
+                    type="button"
+                    className="sales-search-clear"
+                    onClick={() => setStockSearchQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <X size={12} />
+                  </button>
+                ) : (
+                  <span className="sales-search-kbd">/</span>
+                )}
+              </div>
 
-            <div className="warehouse-bar-actions">
               <button
                 type="button"
                 className="button button-secondary"
                 onClick={exportStockCsv}
                 disabled={filteredBalances.length === 0}
-                style={{ height: '32px', fontSize: '12px' }}
+                style={{ height: '30px', fontSize: '12px' }}
+                title="Export stock ledger as CSV"
               >
                 <Download size={13} />
                 <span>Export CSV</span>
@@ -757,367 +781,373 @@ export function InventoryWarehousePanel({ items, role, notify, onPosted }: Inven
           </div>
 
           {/* Stock Balances Table */}
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>ITEM & SKU</th>
-                  <th style={{ textAlign: 'right' }}>ON HAND</th>
-                  <th style={{ textAlign: 'right' }}>RESERVED</th>
-                  <th style={{ textAlign: 'right' }}>QC HOLD</th>
-                  <th style={{ textAlign: 'right' }}>AVAILABLE</th>
-                  <th>UNIT</th>
-                  <th>AVAILABILITY</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stockLoading ? (
+          <div className="sales-table-card">
+            <div className="sales-table-scroll">
+              <table className="sales-table">
+                <thead>
                   <tr>
-                    <td colSpan={7} className="empty-cell">
-                      Loading inventory stock for {activeWarehouse?.name || 'facility'}…
-                    </td>
+                    <th style={{ width: '32%' }}>ITEM & SKU</th>
+                    <th style={{ width: '11%', textAlign: 'right' }}>ON HAND</th>
+                    <th style={{ width: '11%', textAlign: 'right' }}>RESERVED</th>
+                    <th style={{ width: '11%', textAlign: 'right' }}>QC HOLD</th>
+                    <th style={{ width: '12%', textAlign: 'right' }}>AVAILABLE</th>
+                    <th style={{ width: '8%' }}>UNIT</th>
+                    <th style={{ width: '15%' }}>AVAILABILITY</th>
                   </tr>
-                ) : filteredBalances.length > 0 ? (
-                  filteredBalances.map((balance) => {
-                    const isAvailable = balance.availableQuantity > 0;
-                    const isQc = balance.qualityHoldQuantity > 0;
-                    const isOutOfStock = balance.onHand === 0;
+                </thead>
+                <tbody>
+                  {stockLoading ? (
+                    <tr>
+                      <td colSpan={7} className="empty-cell">
+                        Loading inventory stock for {activeWarehouse?.name || 'facility'}…
+                      </td>
+                    </tr>
+                  ) : filteredBalances.length > 0 ? (
+                    filteredBalances.map((balance) => {
+                      const isAvailable = balance.availableQuantity > 0;
+                      const isQc = balance.qualityHoldQuantity > 0;
+                      const isOutOfStock = balance.onHand === 0;
 
-                    return (
-                      <tr key={balance.itemId}>
-                        <td>
-                          <b>{balance.sku}</b>
-                          <small className="production-subline">{balance.itemName}</small>
-                        </td>
-                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                          <b>{balance.onHand.toLocaleString()}</b>
-                        </td>
-                        <td
-                          style={{
-                            textAlign: 'right',
-                            fontVariantNumeric: 'tabular-nums',
-                            color: balance.reservedQuantity > 0 ? 'var(--sp-warning)' : 'var(--sp-text-muted)'
-                          }}
-                        >
-                          {balance.reservedQuantity.toLocaleString()}
-                        </td>
-                        <td
-                          style={{
-                            textAlign: 'right',
-                            fontVariantNumeric: 'tabular-nums',
-                            color: isQc ? 'var(--sp-danger)' : 'var(--sp-text-muted)'
-                          }}
-                        >
-                          {balance.qualityHoldQuantity.toLocaleString()}
-                        </td>
-                        <td
-                          style={{
-                            textAlign: 'right',
-                            fontVariantNumeric: 'tabular-nums',
-                            color: isAvailable ? 'var(--sp-text)' : 'var(--sp-text-muted)'
-                          }}
-                        >
-                          <b>{balance.availableQuantity.toLocaleString()}</b>
-                        </td>
-                        <td style={{ color: 'var(--sp-text-secondary)' }}>{balance.unit}</td>
-                        <td>
-                          {isOutOfStock ? (
-                            <Status label="Out of Stock" />
-                          ) : isAvailable ? (
-                            <Status label="In Stock" />
-                          ) : (
-                            <Status label="Reserved / QC" />
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="empty-cell">
-                      No inventory balances found matching criteria in {activeWarehouse?.name || 'this location'}.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                      return (
+                        <tr key={balance.itemId} className="sales-row">
+                          <td style={{ maxWidth: '280px' }}>
+                            <div><span className="sales-ref-badge">{balance.sku}</span></div>
+                            <div className="production-subline" style={{ color: 'var(--sp-text-secondary)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '270px', marginTop: '2px' }}>
+                              {balance.itemName}
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                            <b>{balance.onHand.toLocaleString()}</b>
+                          </td>
+                          <td
+                            style={{
+                              textAlign: 'right',
+                              fontVariantNumeric: 'tabular-nums',
+                              fontSize: '12px',
+                              color: balance.reservedQuantity > 0 ? 'var(--sp-warning)' : 'var(--sp-text-muted)'
+                            }}
+                          >
+                            {balance.reservedQuantity.toLocaleString()}
+                          </td>
+                          <td
+                            style={{
+                              textAlign: 'right',
+                              fontVariantNumeric: 'tabular-nums',
+                              fontSize: '12px',
+                              color: isQc ? 'var(--sp-danger)' : 'var(--sp-text-muted)'
+                            }}
+                          >
+                            {balance.qualityHoldQuantity.toLocaleString()}
+                          </td>
+                          <td
+                            style={{
+                              textAlign: 'right',
+                              fontVariantNumeric: 'tabular-nums',
+                              fontSize: '12px',
+                              color: isAvailable ? 'var(--sp-text)' : 'var(--sp-text-muted)'
+                            }}
+                          >
+                            <b>{balance.availableQuantity.toLocaleString()}</b>
+                          </td>
+                          <td style={{ color: 'var(--sp-text-secondary)', fontSize: '12px' }}>{balance.unit}</td>
+                          <td>
+                            {isOutOfStock ? (
+                              <Status label="Out of Stock" />
+                            ) : isAvailable ? (
+                              <Status label="In Stock" />
+                            ) : (
+                              <Status label="Reserved / QC" />
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="empty-cell">
+                        No inventory balances found matching criteria in {activeWarehouse?.name || 'this location'}.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </section>
+        </div>
       )}
 
       {/* TAB 2: STOCK TRANSFERS */}
       {activeTab === 'transfers' && (
-        <section className="panel directory-panel" style={{ margin: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Action and Filter Control Bar */}
-          <div className="warehouse-action-bar">
-            <div className="warehouse-search-wrapper" style={{ minWidth: '260px' }}>
-              <Search size={13} className="warehouse-search-icon" />
-              <input
-                type="text"
-                placeholder="Search reference, SKU, or route…"
-                value={transferSearchQuery}
-                onChange={(e) => setTransferSearchQuery(e.target.value)}
-                className="warehouse-search-input"
-              />
-              {transferSearchQuery && (
-                <button
-                  type="button"
-                  className="warehouse-clear-btn"
-                  onClick={() => setTransferSearchQuery('')}
-                  aria-label="Clear search"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-
-            <div className="warehouse-filter-pills">
+          <div className="sales-toolbar">
+            <div className="sales-pill-group">
               <button
                 type="button"
-                className={`warehouse-pill ${transferStatusFilter === 'ALL' ? 'active' : ''}`}
+                className={`sales-pill-btn ${transferStatusFilter === 'ALL' ? 'active' : ''}`}
                 onClick={() => setTransferStatusFilter('ALL')}
               >
-                All ({transfers.length})
+                <span>All</span>
+                <span className="sales-pill-count">{transfers.length}</span>
               </button>
               <button
                 type="button"
-                className={`warehouse-pill ${transferStatusFilter === 'DRAFT' ? 'active' : ''}`}
+                className={`sales-pill-btn ${transferStatusFilter === 'DRAFT' ? 'active' : ''}`}
                 onClick={() => setTransferStatusFilter('DRAFT')}
               >
-                Draft ({transfers.filter((t) => t.status === 'DRAFT').length})
+                <span>Draft</span>
+                <span className="sales-pill-count">{transfers.filter((t) => t.status === 'DRAFT').length}</span>
               </button>
               <button
                 type="button"
-                className={`warehouse-pill ${transferStatusFilter === 'APPROVED' ? 'active' : ''}`}
+                className={`sales-pill-btn ${transferStatusFilter === 'APPROVED' ? 'active' : ''}`}
                 onClick={() => setTransferStatusFilter('APPROVED')}
               >
-                Approved ({transfers.filter((t) => t.status === 'APPROVED').length})
+                <span>Approved</span>
+                <span className="sales-pill-count">{transfers.filter((t) => t.status === 'APPROVED').length}</span>
               </button>
               <button
                 type="button"
-                className={`warehouse-pill ${transferStatusFilter === 'IN_TRANSIT' ? 'active' : ''}`}
+                className={`sales-pill-btn ${transferStatusFilter === 'IN_TRANSIT' ? 'active' : ''}`}
                 onClick={() => setTransferStatusFilter('IN_TRANSIT')}
               >
-                In Transit ({transfers.filter((t) => t.status === 'IN_TRANSIT').length})
+                <span>In Transit</span>
+                <span className="sales-pill-count">{transfers.filter((t) => t.status === 'IN_TRANSIT').length}</span>
               </button>
               <button
                 type="button"
-                className={`warehouse-pill ${transferStatusFilter === 'COMPLETED' ? 'active' : ''}`}
+                className={`sales-pill-btn ${transferStatusFilter === 'COMPLETED' ? 'active' : ''}`}
                 onClick={() => setTransferStatusFilter('COMPLETED')}
               >
-                Completed ({transfers.filter((t) => t.status === 'COMPLETED').length})
+                <span>Completed</span>
+                <span className="sales-pill-count">{transfers.filter((t) => t.status === 'COMPLETED').length}</span>
               </button>
             </div>
 
-            <div className="warehouse-bar-actions">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="sales-search-box">
+                <Search size={13} className="sales-search-icon" />
+                <input
+                  type="text"
+                  placeholder="Filter reference, SKU, or route…"
+                  value={transferSearchQuery}
+                  onChange={(e) => setTransferSearchQuery(e.target.value)}
+                  className="sales-search-input"
+                />
+                {transferSearchQuery ? (
+                  <button
+                    type="button"
+                    className="sales-search-clear"
+                    onClick={() => setTransferSearchQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <X size={12} />
+                  </button>
+                ) : (
+                  <span className="sales-search-kbd">/</span>
+                )}
+              </div>
+
               <button
                 type="button"
                 className="button button-secondary"
                 onClick={exportTransfersCsv}
                 disabled={filteredTransfers.length === 0}
-                style={{ height: '32px', fontSize: '12px' }}
+                style={{ height: '30px', fontSize: '12px' }}
+                title="Export transfers as CSV"
               >
                 <Download size={13} />
                 <span>Export CSV</span>
               </button>
-
-              {canManage && (
-                <button
-                  type="button"
-                  className="button button-primary"
-                  onClick={() => setIsTransferModalOpen(true)}
-                  style={{ height: '32px', fontSize: '12.5px' }}
-                >
-                  <Plus size={13} />
-                  <span>Request Transfer</span>
-                </button>
-              )}
             </div>
           </div>
 
           {/* Transfers Ledger Table */}
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>REFERENCE</th>
-                  <th>ITEM & SKU</th>
-                  <th>ROUTE</th>
-                  <th style={{ textAlign: 'right' }}>QUANTITY</th>
-                  <th>REASON</th>
-                  <th>STATUS</th>
-                  <th>ACTION</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTransfers.length > 0 ? (
-                  filteredTransfers.map((transfer) => (
-                    <tr key={transfer.id}>
-                      <td className="ref-cell">{transfer.reference}</td>
-                      <td>
-                        <b>{transfer.sku}</b>
-                        <small className="production-subline">{transfer.itemName}</small>
-                      </td>
-                      <td>
-                        <span className="route-tag">
-                          {transfer.sourceCode} <span className="route-arrow">→</span> {transfer.destinationCode}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                        <b>{transfer.quantity.toLocaleString()}</b>
-                      </td>
-                      <td style={{ color: 'var(--sp-text-secondary)', maxWidth: '240px' }} title={transfer.reason}>
-                        <span className="truncate-text">{transfer.reason}</span>
-                      </td>
-                      <td>
-                        <Status label={formatAuditLabel(transfer.status)} />
-                      </td>
-                      <td>
-                        <div className="action-inline">
-                          {transfer.status === 'DRAFT' && canManage && (
-                            <button
-                              type="button"
-                              className="mini-action"
-                              disabled={saving}
-                              onClick={() => transitionTransfer(transfer.id, 'approve')}
-                            >
-                              Approve
-                            </button>
-                          )}
-                          {transfer.status === 'APPROVED' && canManage && (
-                            <button
-                              type="button"
-                              className="mini-action"
-                              disabled={saving}
-                              onClick={() => transitionTransfer(transfer.id, 'dispatch')}
-                            >
-                              Dispatch
-                            </button>
-                          )}
-                          {transfer.status === 'IN_TRANSIT' && canManage && (
-                            <button
-                              type="button"
-                              className="mini-action"
-                              disabled={saving}
-                              onClick={() => transitionTransfer(transfer.id, 'receive')}
-                            >
-                              Receive
-                            </button>
-                          )}
-                          {['DRAFT', 'APPROVED'].includes(transfer.status) && canManage && (
-                            <button
-                              type="button"
-                              className="mini-action muted"
-                              disabled={saving}
-                              onClick={() => transitionTransfer(transfer.id, 'cancel')}
-                            >
-                              Cancel
-                            </button>
-                          )}
-                          {['COMPLETED', 'CANCELLED'].includes(transfer.status) && (
-                            <span className="meta-text" style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                              {transfer.status === 'COMPLETED' ? 'Settled' : 'Void'}
-                            </span>
-                          )}
-                        </div>
+          <div className="sales-table-card">
+            <div className="sales-table-scroll">
+              <table className="sales-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '14%' }}>REFERENCE</th>
+                    <th style={{ width: '27%' }}>ITEM & SKU</th>
+                    <th style={{ width: '14%' }}>ROUTE</th>
+                    <th style={{ width: '9%', textAlign: 'right' }}>QUANTITY</th>
+                    <th style={{ width: '18%' }}>REASON</th>
+                    <th style={{ width: '8%' }}>STATUS</th>
+                    <th style={{ width: '10%', textAlign: 'right' }}>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTransfers.length > 0 ? (
+                    filteredTransfers.map((transfer) => (
+                      <tr key={transfer.id} className="sales-row">
+                        <td>
+                          <span className="sales-ref-badge">{transfer.reference}</span>
+                        </td>
+                        <td style={{ maxWidth: '240px' }}>
+                          <div><span className="sales-ref-badge">{transfer.sku}</span></div>
+                          <div className="production-subline" style={{ color: 'var(--sp-text-secondary)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px', marginTop: '2px' }}>
+                            {transfer.itemName}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="route-tag">
+                            {transfer.sourceCode} <span className="route-arrow">→</span> {transfer.destinationCode}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                          <b>{transfer.quantity.toLocaleString()}</b>
+                        </td>
+                        <td style={{ color: 'var(--sp-text-secondary)', maxWidth: '200px' }} title={transfer.reason}>
+                          <span className="truncate-text" style={{ maxWidth: '190px', fontSize: '11.5px' }}>{transfer.reason}</span>
+                        </td>
+                        <td>
+                          <Status label={formatAuditLabel(transfer.status)} />
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                            {transfer.status === 'DRAFT' && canManage && (
+                              <button
+                                type="button"
+                                className="mini-action"
+                                disabled={saving}
+                                onClick={() => transitionTransfer(transfer.id, 'approve')}
+                                style={{ height: '24px', padding: '0 7px', fontSize: '11px' }}
+                              >
+                                Approve
+                              </button>
+                            )}
+                            {transfer.status === 'APPROVED' && canManage && (
+                              <button
+                                type="button"
+                                className="mini-action"
+                                disabled={saving}
+                                onClick={() => transitionTransfer(transfer.id, 'dispatch')}
+                                style={{ height: '24px', padding: '0 7px', fontSize: '11px' }}
+                              >
+                                Dispatch
+                              </button>
+                            )}
+                            {transfer.status === 'IN_TRANSIT' && canManage && (
+                              <button
+                                type="button"
+                                className="mini-action"
+                                disabled={saving}
+                                onClick={() => transitionTransfer(transfer.id, 'receive')}
+                                style={{ height: '24px', padding: '0 7px', fontSize: '11px' }}
+                              >
+                                Receive
+                              </button>
+                            )}
+                            {['DRAFT', 'APPROVED'].includes(transfer.status) && canManage && (
+                              <button
+                                type="button"
+                                className="mini-action muted"
+                                disabled={saving}
+                                onClick={() => transitionTransfer(transfer.id, 'cancel')}
+                                style={{ height: '24px', padding: '0 7px', fontSize: '11px' }}
+                              >
+                                Cancel
+                              </button>
+                            )}
+                            {['COMPLETED', 'CANCELLED'].includes(transfer.status) && (
+                              <span className="meta-text" style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+                                {transfer.status === 'COMPLETED' ? 'Settled' : 'Void'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="empty-cell">
+                        No stock transfer requests recorded.
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="empty-cell">
-                      No stock transfer requests recorded.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </section>
+        </div>
       )}
 
       {/* TAB 3: CYCLE COUNTS */}
       {activeTab === 'cycle-counts' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Action and Filter Control Bar */}
-          <div className="warehouse-action-bar">
-            <div className="warehouse-search-wrapper" style={{ minWidth: '260px' }}>
-              <Search size={13} className="warehouse-search-icon" />
-              <input
-                type="text"
-                placeholder="Search session name, facility, or notes…"
-                value={cycleCountSearchQuery}
-                onChange={(e) => setCycleCountSearchQuery(e.target.value)}
-                className="warehouse-search-input"
-              />
-              {cycleCountSearchQuery && (
-                <button
-                  type="button"
-                  className="warehouse-clear-btn"
-                  onClick={() => setCycleCountSearchQuery('')}
-                  aria-label="Clear search"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-
-            <div className="warehouse-filter-pills">
+          <div className="sales-toolbar">
+            <div className="sales-pill-group">
               <button
                 type="button"
-                className={`warehouse-pill ${cycleCountStatusFilter === 'ALL' ? 'active' : ''}`}
+                className={`sales-pill-btn ${cycleCountStatusFilter === 'ALL' ? 'active' : ''}`}
                 onClick={() => setCycleCountStatusFilter('ALL')}
               >
-                All ({cycleCounts.length})
+                <span>All</span>
+                <span className="sales-pill-count">{cycleCounts.length}</span>
               </button>
               <button
                 type="button"
-                className={`warehouse-pill ${cycleCountStatusFilter === 'COUNTING' ? 'active' : ''}`}
+                className={`sales-pill-btn ${cycleCountStatusFilter === 'COUNTING' ? 'active' : ''}`}
                 onClick={() => setCycleCountStatusFilter('COUNTING')}
               >
-                Counting ({cycleCounts.filter((c) => c.status === 'COUNTING').length})
+                <span>Counting</span>
+                <span className="sales-pill-count">{cycleCounts.filter((c) => c.status === 'COUNTING').length}</span>
               </button>
               <button
                 type="button"
-                className={`warehouse-pill ${cycleCountStatusFilter === 'REVIEW' ? 'active' : ''}`}
+                className={`sales-pill-btn ${cycleCountStatusFilter === 'REVIEW' ? 'active' : ''}`}
                 onClick={() => setCycleCountStatusFilter('REVIEW')}
               >
-                Review ({cycleCounts.filter((c) => c.status === 'REVIEW').length})
+                <span>Review</span>
+                <span className="sales-pill-count">{cycleCounts.filter((c) => c.status === 'REVIEW').length}</span>
               </button>
               <button
                 type="button"
-                className={`warehouse-pill ${cycleCountStatusFilter === 'POSTED' ? 'active' : ''}`}
+                className={`sales-pill-btn ${cycleCountStatusFilter === 'POSTED' ? 'active' : ''}`}
                 onClick={() => setCycleCountStatusFilter('POSTED')}
               >
-                Posted ({cycleCounts.filter((c) => c.status === 'POSTED').length})
+                <span>Posted</span>
+                <span className="sales-pill-count">{cycleCounts.filter((c) => c.status === 'POSTED').length}</span>
               </button>
             </div>
 
-            <div className="warehouse-bar-actions">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="sales-search-box">
+                <Search size={13} className="sales-search-icon" />
+                <input
+                  type="text"
+                  placeholder="Filter session, facility, notes…"
+                  value={cycleCountSearchQuery}
+                  onChange={(e) => setCycleCountSearchQuery(e.target.value)}
+                  className="sales-search-input"
+                />
+                {cycleCountSearchQuery ? (
+                  <button
+                    type="button"
+                    className="sales-search-clear"
+                    onClick={() => setCycleCountSearchQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <X size={12} />
+                  </button>
+                ) : (
+                  <span className="sales-search-kbd">/</span>
+                )}
+              </div>
+
               <button
                 type="button"
                 className="button button-secondary"
                 onClick={exportCycleCountsCsv}
                 disabled={filteredCycleCounts.length === 0}
-                style={{ height: '32px', fontSize: '12px' }}
+                style={{ height: '30px', fontSize: '12px' }}
+                title="Export cycle counts as CSV"
               >
                 <Download size={13} />
                 <span>Export CSV</span>
               </button>
-
-              {canManage && (
-                <button
-                  type="button"
-                  className="button button-primary"
-                  onClick={() => setIsCountModalOpen(true)}
-                  disabled={activeCountSessions > 0}
-                  title={activeCountSessions > 0 ? 'Finish current count session before starting another' : ''}
-                  style={{ height: '32px', fontSize: '12.5px' }}
-                >
-                  <Plus size={13} />
-                  <span>Start Cycle Count</span>
-                </button>
-              )}
             </div>
           </div>
 
@@ -1190,112 +1220,118 @@ export function InventoryWarehousePanel({ items, role, notify, onPosted }: Inven
                       )}
 
                       {/* Line Items Table */}
-                      <div className="table-scroll">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>ITEM & SKU</th>
-                              <th style={{ textAlign: 'right' }}>SYSTEM RECORD</th>
-                              <th style={{ textAlign: 'right' }}>PHYSICAL COUNT</th>
-                              <th style={{ textAlign: 'right' }}>VARIANCE</th>
-                              {session.status === 'COUNTING' && <th>ACTIONS</th>}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {session.lines.map((line) => {
-                              const inputVal =
-                                lineInputs[line.id] !== undefined
-                                  ? lineInputs[line.id]
-                                  : line.countedQuantity ?? '';
+                      <div className="sales-table-card" style={{ marginTop: '12px' }}>
+                        <div className="sales-table-scroll">
+                          <table className="sales-table">
+                            <thead>
+                              <tr>
+                                <th style={{ width: '32%' }}>ITEM & SKU</th>
+                                <th style={{ width: '18%', textAlign: 'right' }}>SYSTEM RECORD</th>
+                                <th style={{ width: '24%', textAlign: 'right' }}>PHYSICAL COUNT</th>
+                                <th style={{ width: '16%', textAlign: 'right' }}>VARIANCE</th>
+                                {session.status === 'COUNTING' && <th style={{ width: '10%', textAlign: 'right' }}>ACTIONS</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {session.lines.map((line) => {
+                                const inputVal =
+                                  lineInputs[line.id] !== undefined
+                                    ? lineInputs[line.id]
+                                    : line.countedQuantity ?? '';
 
-                              const currentVariance =
-                                line.countedQuantity != null
-                                  ? line.countedQuantity - line.systemQuantity
-                                  : null;
+                                const currentVariance =
+                                  line.countedQuantity != null
+                                    ? line.countedQuantity - line.systemQuantity
+                                    : null;
 
-                              return (
-                                <tr key={line.id}>
-                                  <td>
-                                    <b>{line.sku}</b>
-                                    <small className="production-subline">{line.itemName}</small>
-                                  </td>
-                                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                                    {line.systemQuantity.toLocaleString()} {line.unit}
-                                  </td>
-                                  <td style={{ textAlign: 'right' }}>
-                                    {session.status === 'COUNTING' ? (
-                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          value={inputVal}
-                                          onChange={(e) =>
-                                            setLineInputs((prev) => ({
-                                              ...prev,
-                                              [line.id]: e.target.value
-                                            }))
-                                          }
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              e.preventDefault();
-                                              const qty = Number(inputVal);
-                                              if (!isNaN(qty) && qty >= 0) {
-                                                saveLineCount(session.id, line.id, qty);
+                                return (
+                                  <tr key={line.id} className="sales-row">
+                                    <td style={{ maxWidth: '240px' }}>
+                                      <div><span className="sales-ref-badge">{line.sku}</span></div>
+                                      <div className="production-subline" style={{ color: 'var(--sp-text-secondary)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px', marginTop: '2px' }}>
+                                        {line.itemName}
+                                      </div>
+                                    </td>
+                                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                                      {line.systemQuantity.toLocaleString()} {line.unit}
+                                    </td>
+                                    <td style={{ textAlign: 'right' }}>
+                                      {session.status === 'COUNTING' ? (
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            value={inputVal}
+                                            onChange={(e) =>
+                                              setLineInputs((prev) => ({
+                                                ...prev,
+                                                [line.id]: e.target.value
+                                              }))
+                                            }
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const qty = Number(inputVal);
+                                                if (!isNaN(qty) && qty >= 0) {
+                                                  saveLineCount(session.id, line.id, qty);
+                                                }
                                               }
+                                            }}
+                                            placeholder="Enter count"
+                                            className="warehouse-count-input"
+                                            style={{ height: '26px', fontSize: '12px' }}
+                                          />
+                                          <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+                                            {line.unit}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, fontSize: '12px' }}>
+                                          {line.countedQuantity != null
+                                            ? `${line.countedQuantity.toLocaleString()} ${line.unit}`
+                                            : '—'}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                                      {currentVariance == null ? (
+                                        <span style={{ color: 'var(--sp-text-muted)' }}>—</span>
+                                      ) : currentVariance === 0 ? (
+                                        <span style={{ color: 'var(--sp-success)', fontWeight: 500 }}>0 (Exact)</span>
+                                      ) : currentVariance > 0 ? (
+                                        <span style={{ color: 'var(--sp-info)', fontWeight: 500 }}>
+                                          +{currentVariance.toLocaleString()}
+                                        </span>
+                                      ) : (
+                                        <span style={{ color: 'var(--sp-danger)', fontWeight: 500 }}>
+                                          {currentVariance.toLocaleString()}
+                                        </span>
+                                      )}
+                                    </td>
+                                    {session.status === 'COUNTING' && (
+                                      <td style={{ textAlign: 'right' }}>
+                                        <button
+                                          type="button"
+                                          className="mini-action"
+                                          disabled={saving || inputVal === '' || isNaN(Number(inputVal))}
+                                          onClick={() => {
+                                            const qty = Number(inputVal);
+                                            if (!isNaN(qty) && qty >= 0) {
+                                              saveLineCount(session.id, line.id, qty);
                                             }
                                           }}
-                                          placeholder="Enter count"
-                                          className="warehouse-count-input"
-                                        />
-                                        <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                                          {line.unit}
-                                        </span>
-                                      </div>
-                                    ) : (
-                                      <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                                        {line.countedQuantity != null
-                                          ? `${line.countedQuantity.toLocaleString()} ${line.unit}`
-                                          : '—'}
-                                      </span>
+                                          style={{ height: '24px', padding: '0 8px', fontSize: '11.5px' }}
+                                        >
+                                          Save
+                                        </button>
+                                      </td>
                                     )}
-                                  </td>
-                                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                                    {currentVariance == null ? (
-                                      <span style={{ color: 'var(--sp-text-muted)' }}>—</span>
-                                    ) : currentVariance === 0 ? (
-                                      <span style={{ color: 'var(--sp-success)', fontWeight: 600 }}>0 (Exact)</span>
-                                    ) : currentVariance > 0 ? (
-                                      <span style={{ color: 'var(--sp-info)', fontWeight: 600 }}>
-                                        +{currentVariance.toLocaleString()}
-                                      </span>
-                                    ) : (
-                                      <span style={{ color: 'var(--sp-danger)', fontWeight: 600 }}>
-                                        {currentVariance.toLocaleString()}
-                                      </span>
-                                    )}
-                                  </td>
-                                  {session.status === 'COUNTING' && (
-                                    <td>
-                                      <button
-                                        type="button"
-                                        className="mini-action"
-                                        disabled={saving || inputVal === '' || isNaN(Number(inputVal))}
-                                        onClick={() => {
-                                          const qty = Number(inputVal);
-                                          if (!isNaN(qty) && qty >= 0) {
-                                            saveLineCount(session.id, line.id, qty);
-                                          }
-                                        }}
-                                      >
-                                        Save
-                                      </button>
-                                    </td>
-                                  )}
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
 
                       {/* Footer Actions */}
@@ -1366,106 +1402,105 @@ export function InventoryWarehousePanel({ items, role, notify, onPosted }: Inven
 
       {/* TAB 4: FACILITY DIRECTORY */}
       {activeTab === 'facilities' && (
-        <section className="panel directory-panel" style={{ margin: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Action and Filter Control Bar */}
-          <div className="warehouse-action-bar">
-            <div className="warehouse-search-wrapper" style={{ minWidth: '260px' }}>
-              <Search size={13} className="warehouse-search-icon" />
-              <input
-                type="text"
-                placeholder="Search facility code, name, or branch…"
-                value={facilitySearchQuery}
-                onChange={(e) => setFacilitySearchQuery(e.target.value)}
-                className="warehouse-search-input"
-              />
-              {facilitySearchQuery && (
-                <button
-                  type="button"
-                  className="warehouse-clear-btn"
-                  onClick={() => setFacilitySearchQuery('')}
-                  aria-label="Clear search"
-                >
-                  <X size={12} />
-                </button>
-              )}
+          <div className="sales-toolbar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--sp-text-secondary)', fontWeight: 500 }}>
+                {warehouses.length} {warehouses.length === 1 ? 'Facility' : 'Facilities'} across {branches.length || 1} enterprise branch
+              </span>
             </div>
 
-            <div className="warehouse-bar-actions">
-              {canManage && (
-                <button
-                  type="button"
-                  className="button button-primary"
-                  onClick={() => setIsAddWarehouseOpen(true)}
-                  style={{ height: '32px', fontSize: '12.5px' }}
-                >
-                  <Plus size={13} />
-                  <span>Add Facility</span>
-                </button>
-              )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="sales-search-box">
+                <Search size={13} className="sales-search-icon" />
+                <input
+                  type="text"
+                  placeholder="Filter code, name, branch…"
+                  value={facilitySearchQuery}
+                  onChange={(e) => setFacilitySearchQuery(e.target.value)}
+                  className="sales-search-input"
+                />
+                {facilitySearchQuery ? (
+                  <button
+                    type="button"
+                    className="sales-search-clear"
+                    onClick={() => setFacilitySearchQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <X size={12} />
+                  </button>
+                ) : (
+                  <span className="sales-search-kbd">/</span>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Facilities Directory Table */}
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>LOCATION CODE</th>
-                  <th>FACILITY NAME</th>
-                  <th>WORKSPACE BRANCH</th>
-                  <th>ROLE & STATUS</th>
-                  <th>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredWarehouses.length > 0 ? (
-                  filteredWarehouses.map((wh) => {
-                    const branch = branches.find((b) => b.id === wh.branchId);
-
-                    return (
-                      <tr key={wh.id}>
-                        <td>
-                          <span className="facility-code-pill">{wh.code}</span>
-                        </td>
-                        <td>
-                          <b>{wh.name}</b>
-                        </td>
-                        <td style={{ color: 'var(--sp-text-secondary)' }}>
-                          {branch ? branch.name : 'Primary Organization Branch'}
-                        </td>
-                        <td>
-                          {wh.isDefault ? (
-                            <span className="default-hub-badge">Primary Storage Hub</span>
-                          ) : (
-                            <span className="secondary-hub-badge">Regional Depot</span>
-                          )}
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="mini-action"
-                            onClick={() => {
-                              setSelectedWarehouseId(wh.id);
-                              setActiveTab('stock');
-                            }}
-                          >
-                            View Location Stock
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
+          <div className="sales-table-card">
+            <div className="sales-table-scroll">
+              <table className="sales-table">
+                <thead>
                   <tr>
-                    <td colSpan={5} className="empty-cell">
-                      No warehouse facilities found matching query.
-                    </td>
+                    <th style={{ width: '14%' }}>LOCATION CODE</th>
+                    <th style={{ width: '28%' }}>FACILITY NAME</th>
+                    <th style={{ width: '26%' }}>WORKSPACE BRANCH</th>
+                    <th style={{ width: '18%' }}>ROLE & STATUS</th>
+                    <th style={{ width: '14%', textAlign: 'right' }}>ACTIONS</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredWarehouses.length > 0 ? (
+                    filteredWarehouses.map((wh) => {
+                      const branch = branches.find((b) => b.id === wh.branchId);
+
+                      return (
+                        <tr key={wh.id} className="sales-row">
+                          <td>
+                            <span className="facility-code-pill">{wh.code}</span>
+                          </td>
+                          <td>
+                            <b style={{ color: 'var(--sp-text)', fontSize: '12.5px' }}>{wh.name}</b>
+                          </td>
+                          <td style={{ color: 'var(--sp-text-secondary)', fontSize: '12px' }}>
+                            {branch ? branch.name : 'Primary Organization Branch'}
+                          </td>
+                          <td>
+                            {wh.isDefault ? (
+                              <span className="default-hub-badge">Primary Hub</span>
+                            ) : (
+                              <span className="secondary-hub-badge">Regional Depot</span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              type="button"
+                              className="mini-action"
+                              onClick={() => {
+                                setSelectedWarehouseId(wh.id);
+                                setActiveTab('stock');
+                              }}
+                              style={{ height: '24px', padding: '0 8px', fontSize: '11.5px' }}
+                            >
+                              View Stock
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="empty-cell">
+                        No warehouse facilities found matching query.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </section>
+        </div>
       )}
 
       {/* 4. MODALS */}

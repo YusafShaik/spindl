@@ -2,7 +2,8 @@ type CurrencyInput = number | string | null | undefined;
 
 /** INR formatting shared by dashboard, sales, purchasing, and POS views. */
 export function formatCurrency(value: CurrencyInput): string {
-  return `₹ ${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  const num = Number(value || 0);
+  return `₹ ${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** Compact dashboard format, retaining the existing lakh conversion. */

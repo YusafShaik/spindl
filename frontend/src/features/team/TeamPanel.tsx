@@ -340,9 +340,11 @@ export function TeamPanel({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">ACTIVE WORKSPACE TEAM</span>
-            <Users size={16} className="sales-metric-icon quotes" />
+            <Users size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val">{activeMembers} Members</div>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {activeMembers} Members
+          </div>
           <div className="sales-metric-sub">
             <span className="sales-sub-highlight">{members.length - activeMembers} Inactive</span> ·{' '}
             {members.length} Total Registered
@@ -352,9 +354,11 @@ export function TeamPanel({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">SEAT ALLOCATION & QUOTA</span>
-            <CheckCircle2 size={16} className="sales-metric-icon orders" />
+            <CheckCircle2 size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val">{activeMembers} / 25 Allocated</div>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {activeMembers} / 25 Allocated
+          </div>
           <div className="sales-metric-sub">
             <span className="sales-sub-highlight">Enterprise Tier</span> · 19 Available Seats
           </div>
@@ -363,9 +367,11 @@ export function TeamPanel({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">PENDING INVITATIONS</span>
-            <Mail size={16} className="sales-metric-icon invoices" />
+            <Mail size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val">{pendingInvites} Pending</div>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {pendingInvites} Pending
+          </div>
           <div className="sales-metric-sub">
             Awaiting 7-day secure one-time activation
           </div>
@@ -374,9 +380,11 @@ export function TeamPanel({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">SECURITY & ACCESS GOVERNANCE</span>
-            <ShieldCheck size={16} className="sales-metric-icon credits" />
+            <ShieldCheck size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val">{roles.length || 5} System Roles</div>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {roles.length || 5} System Roles
+          </div>
           <div className="sales-metric-sub">
             <span className="sales-sub-highlight">SOC 2 / ISO 27001</span> · Least Privilege
           </div>
@@ -536,27 +544,6 @@ export function TeamPanel({
         <div className="sales-table-card">
           {/* High-density Linear toolbar */}
           <div className="sales-toolbar" style={{ padding: '12px 14px', borderBottom: '1px solid var(--sp-border)' }}>
-            <div className="sales-search-box">
-              <Search size={14} className="sales-search-icon" />
-              <input
-                className="sales-search-input"
-                placeholder="Search member by name, email, or role…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery ? (
-                <button
-                  type="button"
-                  className="sales-search-clear"
-                  onClick={() => setSearchQuery('')}
-                >
-                  <X size={12} />
-                </button>
-              ) : (
-                <kbd className="sales-search-kbd">/</kbd>
-              )}
-            </div>
-
             <div className="sales-pill-group">
               <button
                 type="button"
@@ -581,6 +568,28 @@ export function TeamPanel({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="sales-search-box">
+                <Search size={14} className="sales-search-icon" />
+                <input
+                  className="sales-search-input"
+                  placeholder="Search member by name, email, or role…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    className="sales-search-clear"
+                    onClick={() => setSearchQuery('')}
+                    title="Clear search"
+                  >
+                    <X size={12} />
+                  </button>
+                ) : (
+                  <kbd className="sales-search-kbd">/</kbd>
+                )}
+              </div>
+
               <select
                 className="sales-filter-select"
                 value={statusFilter}
@@ -599,13 +608,13 @@ export function TeamPanel({
             <table className="sales-table">
               <thead>
                 <tr>
-                  <th>MEMBER</th>
-                  <th>EMAIL</th>
-                  <th>WORKSPACE ROLE</th>
-                  <th>ASSIGNED BRANCHES</th>
-                  <th>REPORTS TO</th>
-                  <th>STATUS</th>
-                  <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                  <th style={{ width: '26%' }}>MEMBER</th>
+                  <th style={{ width: '20%' }}>EMAIL</th>
+                  <th style={{ width: '15%' }}>WORKSPACE ROLE</th>
+                  <th style={{ width: '14%' }}>ASSIGNED BRANCHES</th>
+                  <th style={{ width: '10%' }}>REPORTS TO</th>
+                  <th style={{ width: '7%' }}>STATUS</th>
+                  <th style={{ width: '8%', textAlign: 'right' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -652,8 +661,8 @@ export function TeamPanel({
                         </td>
 
                         {/* Email */}
-                        <td style={{ fontSize: '12px', color: 'var(--sp-text)' }}>
-                          <span style={{ fontFamily: 'var(--sp-font-mono, monospace)', fontSize: '11.5px' }}>
+                        <td style={{ fontSize: '12px', color: 'var(--sp-text-secondary)' }}>
+                          <span>
                             {member.email}
                           </span>
                         </td>
@@ -777,33 +786,32 @@ export function TeamPanel({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div className="sales-table-card">
             <div className="sales-toolbar" style={{ padding: '12px 14px', borderBottom: '1px solid var(--sp-border)' }}>
-              <div className="sales-search-box">
-                <Search size={14} className="sales-search-icon" />
-                <input
-                  className="sales-search-input"
-                  placeholder="Filter invitations by email or role…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    className="sales-search-clear"
-                    onClick={() => setSearchQuery('')}
-                  >
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text-secondary)' }}>
+                Pending Invitations ({filteredInvitations.length})
+              </span>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  type="button"
-                  className="sales-action-btn primary"
-                  onClick={() => setShowInviteModal(true)}
-                >
-                  <Plus size={13} /> New Invitation
-                </button>
+                <div className="sales-search-box">
+                  <Search size={14} className="sales-search-icon" />
+                  <input
+                    className="sales-search-input"
+                    placeholder="Filter invitations by email or role…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      className="sales-search-clear"
+                      onClick={() => setSearchQuery('')}
+                      title="Clear search"
+                    >
+                      <X size={12} />
+                    </button>
+                  ) : (
+                    <kbd className="sales-search-kbd">/</kbd>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -811,11 +819,11 @@ export function TeamPanel({
               <table className="sales-table">
                 <thead>
                   <tr>
-                    <th>INVITEE EMAIL</th>
-                    <th>ASSIGNED ROLE</th>
-                    <th>EXPIRATION DATE</th>
-                    <th>STATUS</th>
-                    <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                    <th style={{ width: '30%' }}>INVITEE EMAIL</th>
+                    <th style={{ width: '20%' }}>ASSIGNED ROLE</th>
+                    <th style={{ width: '20%' }}>EXPIRATION DATE</th>
+                    <th style={{ width: '15%' }}>STATUS</th>
+                    <th style={{ width: '15%', textAlign: 'right' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -986,7 +994,7 @@ export function TeamPanel({
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '11px',
-                    fontWeight: 700
+                    fontWeight: 600
                   }}
                 >
                   1
@@ -1127,7 +1135,7 @@ export function TeamPanel({
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '11px',
-                    fontWeight: 700
+                    fontWeight: 600
                   }}
                 >
                   2

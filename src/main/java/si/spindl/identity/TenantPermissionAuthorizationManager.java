@@ -49,6 +49,7 @@ public class TenantPermissionAuthorizationManager implements AuthorizationManage
             Map.entry("/api/supplier-bills/**", "finance:supplier-bills"),
             Map.entry("/api/supplier-credit-notes/**", "finance:credits"),
             Map.entry("/api/transactions/**", "finance:transactions"),
+            Map.entry("/api/gl/**", "finance:transactions"),
             Map.entry("/api/reports/**", "finance:transactions"),
             Map.entry("/api/report-builder/**", "finance:transactions"),
             Map.entry("/api/document-templates/**", "finance:invoices"),
@@ -59,8 +60,13 @@ public class TenantPermissionAuthorizationManager implements AuthorizationManage
             Map.entry("/api/notifications/**", "operations:notifications"),
             Map.entry("/api/tenant/**", "tenant:settings"),
             Map.entry("/api/boms/**", "manufacturing:boms"),
+            Map.entry("/api/engineering/**", "manufacturing:boms"),
             Map.entry("/api/work-orders/**", "manufacturing:work-orders"),
             Map.entry("/api/work-centers/**", "manufacturing:work-centers"),
+            Map.entry("/api/maintenance/**", "manufacturing:work-orders"),
+            Map.entry("/api/workforce/**", "manufacturing:work-orders"),
+            Map.entry("/api/mrp/**", "manufacturing:work-orders"),
+            Map.entry("/api/logistics/**", "sales:orders"),
             Map.entry("/api/quality/**", "quality:inspections"));
 
     public TenantPermissionAuthorizationManager(TenantMembershipRepository memberships, TenantRolePermissionRepository permissions,
@@ -250,7 +256,7 @@ public class TenantPermissionAuthorizationManager implements AuthorizationManage
         if (!"POST".equals(method)) return null;
         List<Map.Entry<String, String>> special = List.of(
                 Map.entry("/approve", "approve"), Map.entry("/accept", "approve"), Map.entry("/reject", "approve"), Map.entry("/submit", "edit"),
-                Map.entry("/receive", "receive"), Map.entry("/return", "return"), Map.entry("/dispatch", "fulfill"),
+                Map.entry("/receive", "receive"), Map.entry("/return", "return"), Map.entry("/dispatch", "fulfill"), Map.entry("/pod", "fulfill"),
                 Map.entry("/payments", "pay"), Map.entry("/refunds", "pay"), Map.entry("/credits", "credit"), Map.entry("/adjustments", "adjust"),
                 Map.entry("/low-stock-threshold", "edit"), Map.entry("/send", "edit"), Map.entry("/convert", "create"),
                 Map.entry("/commit", "import"), Map.entry("/preview", "view"),

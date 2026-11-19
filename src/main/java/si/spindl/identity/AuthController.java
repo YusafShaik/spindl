@@ -44,6 +44,12 @@ public class AuthController {
         passwordResetService.complete(request.token(), request.password());
         return java.util.Map.of("status", "password_reset", "message", "Password updated. Sign in with your new password.");
     }
+    @GetMapping("/workspaces") public java.util.List<AuthDtos.WorkspaceView> workspaces(@AuthenticationPrincipal Jwt jwt) {
+        return authService.listWorkspaces(UUID.fromString(jwt.getSubject()));
+    }
+    @PostMapping("/switch-tenant/{tenantId}") public AuthDtos.AuthResponse switchTenant(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID tenantId) {
+        return authService.switchTenant(UUID.fromString(jwt.getSubject()), tenantId);
+    }
     @GetMapping("/me") public java.util.Map<String, Object> me(@AuthenticationPrincipal Jwt jwt) {
         return java.util.Map.of("userId", jwt.getSubject(), "email", jwt.getClaimAsString("email"), "name", jwt.getClaimAsString("name"),
                 "tenantId", jwt.getClaimAsString("tenant_id"), "tenantName", jwt.getClaimAsString("tenant_name"), "role", jwt.getClaimAsStringList("roles").getFirst());

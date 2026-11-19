@@ -1,18 +1,21 @@
 import { useEffect, useState, useMemo, type FormEvent } from 'react';
 import {
   ArrowRight,
+  ArrowUpDown,
   Building2,
   Calendar,
   Check,
   CheckCircle2,
   CheckSquare,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock,
-  Columns3,
-  DollarSign,
+  Copy,
+  Download,
   FileText,
   Filter,
+  Flame,
   Kanban,
   LayoutList,
   Mail,
@@ -22,7 +25,6 @@ import {
   Plus,
   Search,
   Sparkles,
-  Target,
   TrendingUp,
   User,
   UserCheck,
@@ -86,11 +88,20 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // View & Filter states
-  const [view, setView] = useState<'board' | 'list'>('board');
+  // View & Filter states (Default to High-Density List for Scalability)
+  const [view, setView] = useState<'board' | 'list'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBranchFilter, setSelectedBranchFilter] = useState('ALL');
   const [selectedStageFilter, setSelectedStageFilter] = useState('ALL');
+
+  // High-Scale Triage, Multi-Select & Drawer States
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [presetFilter, setPresetFilter] = useState<'ALL' | 'OVERDUE' | 'HIGH_VALUE' | 'TODAY'>('ALL');
+  const [sortField, setSortField] = useState<'name' | 'value' | 'nextAction' | 'stage'>('value');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Form & Modals state
   const [showCreatePanel, setShowCreatePanel] = useState(false);
@@ -226,6 +237,85 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
     if (saved) notify(`Stage updated to ${value}`);
   };
 
+  // Bulk Multi-Select Handlers
+  const toggleSelectLead = (id: string, e: React.MouseEvent | React.ChangeEvent) => {
+    e.stopPropagation();
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (currentPageLeadIds: string[]) => {
+    setSelectedLeadIds((prev) => {
+      const allSelected = currentPageLeadIds.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) {
+        currentPageLeadIds.forEach((id) => next.delete(id));
+      } else {
+        currentPageLeadIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleBulkStageChange = async (targetStage: string): Promise<void> => {
+    if (!targetStage || selectedLeadIds.size === 0) return;
+    setSaving(true);
+    try {
+      const ids = Array.from(selectedLeadIds);
+      for (const id of ids) {
+        await apiFetch(`${API}/leads/${id}/stage`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stage: targetStage })
+        });
+      }
+      notify(`Updated ${ids.length} leads to stage ${targetStage}`);
+      setSelectedLeadIds(new Set());
+      await load();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const exportSelectedLeadsCsv = (): void => {
+    const leadsToExport = leads.filter((l) => selectedLeadIds.has(l.id));
+    if (leadsToExport.length === 0) return;
+    const headers = ['Name', 'Company', 'Email', 'Phone', 'Stage', 'Expected Value', 'Source', 'Next Action', 'Due Date'];
+    const rows = leadsToExport.map((l) => [
+      l.name,
+      l.company || '',
+      l.email || '',
+      l.phone || '',
+      l.stage,
+      l.expectedValue != null ? String(l.expectedValue) : '',
+      l.source || '',
+      l.nextActivityTitle || '',
+      l.nextActivityAt || ''
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `spindl-leads-export-${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    notify(`Exported ${leadsToExport.length} prospects as CSV`);
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    notify(`Copied ${label} to clipboard`);
+  };
+
   // Metrics computation
   const metrics = useMemo(() => {
     const totalCount = leads.length;
@@ -266,12 +356,22 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
     return counts;
   }, [leads]);
 
-  // Filtered leads
-  const filteredLeads = useMemo(() => {
+  // Filtered & Sorted Leads
+  const processedLeads = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return leads.filter((lead) => {
+    const result = leads.filter((lead) => {
       if (selectedBranchFilter !== 'ALL' && lead.branchId !== selectedBranchFilter) return false;
       if (selectedStageFilter !== 'ALL' && lead.stage !== selectedStageFilter) return false;
+
+      // Smart Presets
+      if (presetFilter === 'OVERDUE') {
+        if (!isOverdue(lead.nextActivityAt) || lead.stage === 'WON' || lead.stage === 'LOST') return false;
+      } else if (presetFilter === 'HIGH_VALUE') {
+        if ((Number(lead.expectedValue) || 0) < 500000) return false;
+      } else if (presetFilter === 'TODAY') {
+        if (!lead.nextActivityAt || isOverdue(lead.nextActivityAt) || lead.stage === 'WON' || lead.stage === 'LOST') return false;
+      }
+
       if (!q) return true;
       return (
         lead.name.toLowerCase().includes(q) ||
@@ -282,7 +382,35 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
         (lead.nextActivityTitle && lead.nextActivityTitle.toLowerCase().includes(q))
       );
     });
-  }, [leads, searchQuery, selectedBranchFilter, selectedStageFilter]);
+
+    // Sort
+    result.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'value') {
+        cmp = (Number(a.expectedValue) || 0) - (Number(b.expectedValue) || 0);
+      } else if (sortField === 'name') {
+        cmp = (a.company || a.name).localeCompare(b.company || b.name);
+      } else if (sortField === 'stage') {
+        cmp = a.stage.localeCompare(b.stage);
+      } else if (sortField === 'nextAction') {
+        const timeA = a.nextActivityAt ? new Date(a.nextActivityAt).getTime() : Infinity;
+        const timeB = b.nextActivityAt ? new Date(b.nextActivityAt).getTime() : Infinity;
+        cmp = timeA - timeB;
+      }
+      return sortDir === 'desc' ? -cmp : cmp;
+    });
+
+    return result;
+  }, [leads, searchQuery, selectedBranchFilter, selectedStageFilter, presetFilter, sortField, sortDir]);
+
+  // Paginated Slice for High-Density List
+  const paginatedLeads = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return processedLeads.slice(start, start + pageSize);
+  }, [processedLeads, currentPage, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(processedLeads.length / pageSize));
+  const inspectedLead = useMemo(() => leads.find((l) => l.id === selectedLeadId) || null, [leads, selectedLeadId]);
 
   // Helper for activity type icon
   const renderActivityIcon = (type: string) => {
@@ -425,6 +553,60 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
           </div>
         </div>
 
+        {/* Smart Triage Presets */}
+        <div className="leads-smart-presets">
+          <button
+            type="button"
+            className={`leads-preset-btn ${presetFilter === 'ALL' ? 'active' : ''}`}
+            onClick={() => {
+              setPresetFilter('ALL');
+              setCurrentPage(1);
+            }}
+          >
+            All Prospects
+            <span className="leads-preset-count">{leads.length}</span>
+          </button>
+          <button
+            type="button"
+            className={`leads-preset-btn urgent ${presetFilter === 'OVERDUE' ? 'active' : ''}`}
+            onClick={() => {
+              setPresetFilter('OVERDUE');
+              setCurrentPage(1);
+            }}
+          >
+            <Flame size={12} color={presetFilter === 'OVERDUE' ? 'var(--sp-danger)' : '#f97316'} />
+            Needs Attention (Overdue)
+            <span className="leads-preset-count">{metrics.overdueCount}</span>
+          </button>
+          <button
+            type="button"
+            className={`leads-preset-btn ${presetFilter === 'HIGH_VALUE' ? 'active' : ''}`}
+            onClick={() => {
+              setPresetFilter('HIGH_VALUE');
+              setCurrentPage(1);
+            }}
+          >
+            💎 High Value (≥ ₹5L)
+            <span className="leads-preset-count">
+              {leads.filter((l) => (Number(l.expectedValue) || 0) >= 500000).length}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`leads-preset-btn ${presetFilter === 'TODAY' ? 'active' : ''}`}
+            onClick={() => {
+              setPresetFilter('TODAY');
+              setCurrentPage(1);
+            }}
+          >
+            <Clock size={12} />
+            Next Action Due
+            <span className="leads-preset-count">
+              {leads.filter((l) => l.nextActivityAt && !isOverdue(l.nextActivityAt) && l.stage !== 'WON' && l.stage !== 'LOST').length}
+            </span>
+          </button>
+        </div>
+
         {/* Filter Pills */}
         <div className="leads-filter-pills">
           <button
@@ -539,10 +721,10 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
           <p>Click "New lead" above to capture prospects and start moving deals forward.</p>
         </div>
       ) : view === 'board' ? (
-        /* KANBAN BOARD VIEW */
+        /* COMPACT HIGH-SCALE KANBAN BOARD VIEW */
         <div className="leads-board-container">
           {STAGES.filter((s) => selectedStageFilter === 'ALL' || selectedStageFilter === s.id).map((stageItem) => {
-            const columnLeads = filteredLeads.filter((l) => l.stage === stageItem.id);
+            const columnLeads = processedLeads.filter((l) => l.stage === stageItem.id);
             const colTotalValue = columnLeads.reduce((sum, l) => sum + (Number(l.expectedValue) || 0), 0);
 
             return (
@@ -570,7 +752,7 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
                   </div>
                 </div>
 
-                {/* Column Cards */}
+                {/* Compact Scannable Column Cards */}
                 <div className="leads-col-cards">
                   {columnLeads.length === 0 ? (
                     <div className="leads-col-empty">
@@ -580,211 +762,49 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
                     columnLeads.map((lead) => {
                       const hasNext = !!lead.nextActivityTitle;
                       const nextOverdue = hasNext && isOverdue(lead.nextActivityAt);
-                      const isActivitiesExpanded = expandedActivityLeadId === lead.id;
-                      const isInlineActivityActive = activeInlineActivityLeadId === lead.id;
                       const branchName = branches.find((b) => b.id === lead.branchId)?.name;
 
                       return (
-                        <article key={lead.id} className="lead-kanban-card">
-                          {/* Card Top: Company / Name & Expected Value */}
-                          <div className="lead-card-top">
-                            <div className="lead-card-identity">
-                              <h4 className="lead-card-title">{lead.company || lead.name}</h4>
-                              {lead.company && (
-                                <span className="lead-card-contact-name">
-                                  <User size={11} /> {lead.name}
-                                </span>
-                              )}
-                            </div>
+                        <article
+                          key={lead.id}
+                          className="lead-compact-card"
+                          onClick={() => setSelectedLeadId(lead.id)}
+                        >
+                          <div className="lead-compact-top">
+                            <h4 className="lead-compact-title" title={lead.company || lead.name}>
+                              {lead.company || lead.name}
+                            </h4>
                             {lead.expectedValue != null && (
-                              <div className="lead-card-value-badge">
+                              <span className="lead-compact-value">
                                 {formatCurrency(lead.expectedValue)}
-                              </div>
+                              </span>
                             )}
                           </div>
-
-                          {/* Contact Details */}
-                          <div className="lead-card-comms">
-                            {lead.email && (
-                              <a href={`mailto:${lead.email}`} className="lead-comm-item" title={lead.email}>
-                                <Mail size={11} /> {lead.email}
-                              </a>
-                            )}
-                            {lead.phone && (
-                              <a href={`tel:${lead.phone}`} className="lead-comm-item" title={lead.phone}>
-                                <Phone size={11} /> {lead.phone}
-                              </a>
-                            )}
-                          </div>
-
-                          {/* Badges: Source & Branch */}
-                          <div className="lead-card-chips">
-                            {lead.source && <span className="lead-chip">{lead.source}</span>}
+                          <div className="lead-compact-sub">
+                            <span className="lead-compact-contact">
+                              {lead.company ? lead.name : (lead.email || lead.phone || 'Direct')}
+                            </span>
                             {branchName && <span className="lead-chip lead-chip-branch">{branchName}</span>}
                           </div>
-
-                          {/* Next Action Box */}
-                          {hasNext && (
-                            <div className="lead-card-next-action">
-                              <div className="lead-card-next-action-header">
-                                <Clock size={11} /> Next action
-                              </div>
-                              <div className="lead-card-next-action-title">{lead.nextActivityTitle}</div>
-                              {lead.nextActivityAt && (
-                                <div className={`lead-card-next-action-due ${nextOverdue ? 'overdue' : ''}`}>
-                                  {nextOverdue ? '⚠️ Overdue · ' : 'Due · '}
-                                  {formatDate(lead.nextActivityAt)}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Activities Summary & Toggle */}
-                          <div className="lead-card-activity-summary">
-                            <span>{lead.activities?.length || 0} activities recorded</span>
-                            {lead.activities && lead.activities.length > 0 && (
-                              <button
-                                type="button"
-                                className="lead-card-activity-toggle"
-                                onClick={() =>
-                                  setExpandedActivityLeadId(isActivitiesExpanded ? null : lead.id)
-                                }
+                          <div className="lead-compact-footer">
+                            {lead.convertedCustomerId ? (
+                              <span
+                                className="lead-action-pill"
+                                style={{ background: 'var(--sp-success-soft, #d1fae5)', color: 'var(--sp-success, #10b981)' }}
                               >
-                                {isActivitiesExpanded ? 'Hide' : 'History'}
-                                {isActivitiesExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                              </button>
+                                ✓ Customer
+                              </span>
+                            ) : hasNext ? (
+                              <span className={`lead-action-pill ${nextOverdue ? 'overdue' : 'scheduled'}`}>
+                                <Clock size={10} />
+                                {nextOverdue ? 'Overdue' : 'Scheduled'}
+                              </span>
+                            ) : (
+                              <span className="lead-action-pill none">No next action</span>
                             )}
-                          </div>
-
-                          {/* Expanded Activity Stream */}
-                          {isActivitiesExpanded && lead.activities && lead.activities.length > 0 && (
-                            <div className="lead-activity-stream">
-                              {lead.activities.map((act) => (
-                                <div key={act.id} className="lead-activity-stream-item">
-                                  <div
-                                    className="lead-activity-stream-icon"
-                                    style={{ background: 'var(--sp-surface-subtle)' }}
-                                  >
-                                    {renderActivityIcon(act.activityType)}
-                                  </div>
-                                  <div className="lead-activity-stream-body">
-                                    <p>{act.body}</p>
-                                    <time>{formatDate(act.createdAt)}</time>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Inline Log Activity Box */}
-                          {isInlineActivityActive && (
-                            <form
-                              className="lead-inline-activity-box"
-                              onSubmit={(e) => addActivity(e, lead)}
-                            >
-                              <div className="lead-inline-activity-top">
-                                <select name="activityType" defaultValue="CALL">
-                                  <option value="CALL">Call</option>
-                                  <option value="EMAIL">Email</option>
-                                  <option value="MEETING">Meeting</option>
-                                  <option value="TASK">Task</option>
-                                  <option value="NOTE">Note</option>
-                                </select>
-                                <input
-                                  name="dueAt"
-                                  type="datetime-local"
-                                  title="Due date (optional)"
-                                />
-                              </div>
-                              <textarea
-                                name="body"
-                                required
-                                maxLength={2000}
-                                placeholder="Add notes, conversation recap, or action items…"
-                                autoFocus
-                              />
-                              <div className="lead-inline-activity-bottom">
-                                <button
-                                  type="button"
-                                  className="button button-secondary"
-                                  style={{ height: '26px', padding: '0 8px', fontSize: '11px' }}
-                                  onClick={() => setActiveInlineActivityLeadId(null)}
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  type="submit"
-                                  className="button button-primary"
-                                  style={{ height: '26px', padding: '0 8px', fontSize: '11px' }}
-                                  disabled={saving}
-                                >
-                                  {saving ? 'Saving…' : 'Save note'}
-                                </button>
-                              </div>
-                            </form>
-                          )}
-
-                          {/* Card Controls: Stage Move, Log Activity, Convert */}
-                          <div className="lead-card-controls">
-                            <select
-                              aria-label={`Stage for ${lead.name}`}
-                              className="lead-stage-select"
-                              value={lead.stage}
-                              disabled={saving || !!lead.convertedCustomerId}
-                              onChange={(e) => stage(lead, e.target.value)}
-                            >
-                              {STAGES.map((s) => (
-                                <option
-                                  key={s.id}
-                                  value={s.id}
-                                  disabled={s.id === 'WON' && !lead.convertedCustomerId}
-                                >
-                                  {s.label}
-                                </option>
-                              ))}
-                            </select>
-
-                            <div className="lead-card-actions">
-                              {!lead.convertedCustomerId && (
-                                <button
-                                  type="button"
-                                  className="lead-action-icon-btn"
-                                  title="Log note, call or task"
-                                  onClick={() =>
-                                    setActiveInlineActivityLeadId(
-                                      isInlineActivityActive ? null : lead.id
-                                    )
-                                  }
-                                >
-                                  <MessageSquare size={12} />
-                                  Log
-                                </button>
-                              )}
-
-                              {!lead.convertedCustomerId && lead.stage !== 'WON' && (
-                                <button
-                                  type="button"
-                                  className="lead-action-icon-btn primary"
-                                  title="Convert to Customer & Quote"
-                                  onClick={() => {
-                                    setConvertModalLead(lead);
-                                    setConvertWithQuote(false);
-                                    setConvertItemId(items[0]?.id || '');
-                                    setConvertQuantity(1);
-                                    setConvertUnitPrice(Number(items[0]?.unitPrice) || 0);
-                                  }}
-                                >
-                                  <UserCheck size={12} />
-                                  Convert
-                                </button>
-                              )}
-
-                              {lead.convertedCustomerId && (
-                                <span className="lead-converted-badge" title="Customer converted">
-                                  <Check size={11} /> Won
-                                </span>
-                              )}
-                            </div>
+                            <span style={{ color: 'var(--sp-text-muted)' }}>
+                              {lead.activities?.length || 0} notes
+                            </span>
                           </div>
                         </article>
                       );
@@ -796,143 +816,596 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
           })}
         </div>
       ) : (
-        /* LINEAR LIST REGISTER VIEW */
-        <div className="leads-list-container">
-          <table className="leads-table">
+        /* HIGH-DENSITY LINEAR TRIAGE TABLE */
+        <div className="leads-table-container">
+          <table className="leads-triage-table">
             <thead>
               <tr>
-                <th>Prospect / Enterprise</th>
-                <th>Stage</th>
-                <th>Value</th>
+                <th style={{ width: '38px', textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={
+                      paginatedLeads.length > 0 &&
+                      paginatedLeads.every((l) => selectedLeadIds.has(l.id))
+                    }
+                    onChange={() => toggleSelectAll(paginatedLeads.map((l) => l.id))}
+                    aria-label="Select all on this page"
+                    style={{ cursor: 'pointer', accentColor: 'var(--sp-brand, #8b5cf6)' }}
+                  />
+                </th>
+                <th
+                  className="sortable"
+                  onClick={() => {
+                    if (sortField === 'name') setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+                    else {
+                      setSortField('name');
+                      setSortDir('asc');
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    Prospect / Enterprise
+                    <ArrowUpDown size={11} color={sortField === 'name' ? 'var(--sp-brand)' : 'currentColor'} />
+                  </div>
+                </th>
+                <th
+                  className="sortable"
+                  onClick={() => {
+                    if (sortField === 'stage') setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+                    else {
+                      setSortField('stage');
+                      setSortDir('asc');
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    Stage
+                    <ArrowUpDown size={11} color={sortField === 'stage' ? 'var(--sp-brand)' : 'currentColor'} />
+                  </div>
+                </th>
+                <th
+                  className="sortable"
+                  onClick={() => {
+                    if (sortField === 'value') setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+                    else {
+                      setSortField('value');
+                      setSortDir('desc');
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    Expected Value
+                    <ArrowUpDown size={11} color={sortField === 'value' ? 'var(--sp-brand)' : 'currentColor'} />
+                  </div>
+                </th>
+                <th
+                  className="sortable"
+                  onClick={() => {
+                    if (sortField === 'nextAction') setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+                    else {
+                      setSortField('nextAction');
+                      setSortDir('asc');
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    Next Scheduled Action
+                    <ArrowUpDown size={11} color={sortField === 'nextAction' ? 'var(--sp-brand)' : 'currentColor'} />
+                  </div>
+                </th>
                 <th>Contact</th>
-                <th>Next Action</th>
-                <th>Source</th>
+                <th>Source & Branch</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredLeads.map((lead) => {
-                const branchName = branches.find((b) => b.id === lead.branchId)?.name;
-                const nextOverdue = lead.nextActivityAt && isOverdue(lead.nextActivityAt);
+              {paginatedLeads.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: 'var(--sp-text-muted)' }}>
+                    No prospects match the current filter or search criteria.
+                  </td>
+                </tr>
+              ) : (
+                paginatedLeads.map((lead) => {
+                  const branchName = branches.find((b) => b.id === lead.branchId)?.name;
+                  const hasNext = !!lead.nextActivityTitle;
+                  const nextOverdue = hasNext && isOverdue(lead.nextActivityAt);
+                  const isSelected = selectedLeadIds.has(lead.id);
 
-                return (
-                  <tr key={lead.id}>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--sp-text)' }}>
-                          {lead.company || lead.name}
-                        </span>
-                        {lead.company && (
-                          <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                            {lead.name}
+                  return (
+                    <tr
+                      key={lead.id}
+                      className={`lead-row ${isSelected ? 'selected' : ''}`}
+                      onClick={() => setSelectedLeadId(lead.id)}
+                    >
+                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => toggleSelectLead(lead.id, e)}
+                          aria-label={`Select ${lead.name}`}
+                          style={{ cursor: 'pointer', accentColor: 'var(--sp-brand, #8b5cf6)' }}
+                        />
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span style={{ fontWeight: 600, color: 'var(--sp-text)' }}>
+                            {lead.company || lead.name}
                           </span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <select
-                        aria-label={`Stage for ${lead.name}`}
-                        className="lead-stage-select"
-                        value={lead.stage}
-                        disabled={saving || !!lead.convertedCustomerId}
-                        onChange={(e) => stage(lead, e.target.value)}
-                      >
-                        {STAGES.map((s) => (
-                          <option
-                            key={s.id}
-                            value={s.id}
-                            disabled={s.id === 'WON' && !lead.convertedCustomerId}
-                          >
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <span className="lead-card-value-badge" style={{ display: 'inline-block' }}>
-                        {formatCurrency(lead.expectedValue)}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11.5px' }}>
-                        {lead.email && (
-                          <a href={`mailto:${lead.email}`} style={{ color: 'var(--sp-text-muted)' }}>
-                            {lead.email}
-                          </a>
-                        )}
-                        {lead.phone && (
-                          <a href={`tel:${lead.phone}`} style={{ color: 'var(--sp-text-subtle)' }}>
-                            {lead.phone}
-                          </a>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      {lead.nextActivityTitle ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px' }}>
-                          <span style={{ fontWeight: 500, color: 'var(--sp-text)' }}>
-                            {lead.nextActivityTitle}
-                          </span>
-                          {lead.nextActivityAt && (
-                            <span style={{ color: nextOverdue ? 'var(--sp-error)' : 'var(--sp-text-muted)' }}>
-                              {nextOverdue ? 'Overdue · ' : ''}
-                              {formatDate(lead.nextActivityAt)}
+                          {lead.company && (
+                            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+                              <User size={10} style={{ display: 'inline', verticalAlign: '-1px' }} /> {lead.name}
                             </span>
                           )}
                         </div>
-                      ) : (
-                        <span style={{ color: 'var(--sp-text-subtle)', fontSize: '11px' }}>None set</span>
-                      )}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {lead.source && <span className="lead-chip">{lead.source}</span>}
-                        {branchName && <span className="lead-chip lead-chip-branch">{branchName}</span>}
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                        {!lead.convertedCustomerId && (
+                      </td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <select
+                          aria-label={`Stage for ${lead.name}`}
+                          className="lead-stage-select"
+                          value={lead.stage}
+                          disabled={saving || !!lead.convertedCustomerId}
+                          onChange={(e) => stage(lead, e.target.value)}
+                        >
+                          {STAGES.map((s) => (
+                            <option
+                              key={s.id}
+                              value={s.id}
+                              disabled={s.id === 'WON' && !lead.convertedCustomerId}
+                            >
+                              {s.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <span className="lead-compact-value" style={{ fontSize: '12px' }}>
+                          {formatCurrency(lead.expectedValue)}
+                        </span>
+                      </td>
+                      <td>
+                        {hasNext ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '11.5px' }}>
+                              {lead.nextActivityTitle}
+                            </span>
+                            {lead.nextActivityAt && (
+                              <span
+                                className={`lead-action-pill ${nextOverdue ? 'overdue' : 'scheduled'}`}
+                                style={{ alignSelf: 'flex-start' }}
+                              >
+                                <Clock size={10} />
+                                {nextOverdue ? 'Overdue · ' : 'Due · '}
+                                {formatDate(lead.nextActivityAt)}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="lead-action-pill none">No action scheduled</span>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px' }}>
+                          {lead.email && (
+                            <a
+                              href={`mailto:${lead.email}`}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ color: 'var(--sp-text-muted)' }}
+                            >
+                              {lead.email}
+                            </a>
+                          )}
+                          {lead.phone && (
+                            <a
+                              href={`tel:${lead.phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ color: 'var(--sp-text-subtle)' }}
+                            >
+                              {lead.phone}
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          {lead.source && <span className="lead-chip">{lead.source}</span>}
+                          {branchName && <span className="lead-chip lead-chip-branch">{branchName}</span>}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          {!lead.convertedCustomerId && lead.stage !== 'WON' ? (
+                            <button
+                              type="button"
+                              className="lead-action-icon-btn primary"
+                              title="Convert to Customer & Quote"
+                              onClick={() => {
+                                setConvertModalLead(lead);
+                                setConvertWithQuote(false);
+                                setConvertItemId(items[0]?.id || '');
+                                setConvertQuantity(1);
+                                setConvertUnitPrice(Number(items[0]?.unitPrice) || 0);
+                              }}
+                            >
+                              <UserCheck size={12} />
+                              Convert
+                            </button>
+                          ) : (
+                            <span className="lead-converted-badge">
+                              <Check size={11} /> Won
+                            </span>
+                          )}
                           <button
                             type="button"
                             className="lead-action-icon-btn"
-                            onClick={() => {
-                              setActiveInlineActivityLeadId(lead.id);
-                              setView('board');
-                            }}
+                            title="Inspect details"
+                            onClick={() => setSelectedLeadId(lead.id)}
                           >
-                            <MessageSquare size={12} />
-                            Log
+                            <ChevronRight size={12} />
                           </button>
-                        )}
-                        {!lead.convertedCustomerId && lead.stage !== 'WON' && (
-                          <button
-                            type="button"
-                            className="lead-action-icon-btn primary"
-                            onClick={() => {
-                              setConvertModalLead(lead);
-                              setConvertWithQuote(false);
-                              setConvertItemId(items[0]?.id || '');
-                              setConvertQuantity(1);
-                              setConvertUnitPrice(Number(items[0]?.unitPrice) || 0);
-                            }}
-                          >
-                            <UserCheck size={12} />
-                            Convert
-                          </button>
-                        )}
-                        {lead.convertedCustomerId && (
-                          <span className="lead-converted-badge">
-                            <Check size={11} /> Won
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
+
+          {/* High-Scale Pagination Bar */}
+          <div className="leads-pagination-bar">
+            <div>
+              Showing {processedLeads.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+              {Math.min(currentPage * pageSize, processedLeads.length)} of {processedLeads.length} prospects
+              {selectedLeadIds.size > 0 && ` (${selectedLeadIds.size} selected)`}
+            </div>
+            <div className="leads-pagination-controls">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
+                Rows per page:
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="leads-bulk-select"
+                  style={{ background: 'var(--sp-surface)', color: 'var(--sp-text)', borderColor: 'var(--sp-border)' }}
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </label>
+
+              <button
+                type="button"
+                className="leads-page-btn"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft size={13} />
+                Prev
+              </button>
+              <span style={{ fontWeight: 600, color: 'var(--sp-text)' }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                className="leads-page-btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Bulk Action Bar */}
+      {selectedLeadIds.size > 0 && (
+        <div className="leads-bulk-floating-bar">
+          <span className="leads-bulk-count">{selectedLeadIds.size} prospects selected</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)' }}>Move stage:</span>
+            <select
+              aria-label="Bulk update stage"
+              className="leads-bulk-select"
+              defaultValue=""
+              disabled={saving}
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleBulkStageChange(e.target.value);
+                  e.target.value = '';
+                }
+              }}
+            >
+              <option value="" disabled>Select target stage…</option>
+              {STAGES.map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            className="leads-bulk-btn"
+            onClick={exportSelectedLeadsCsv}
+            title="Export selected leads to CSV"
+          >
+            <Download size={13} />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            className="leads-bulk-clear-btn"
+            onClick={() => setSelectedLeadIds(new Set())}
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
+      {/* Slide-Over Lead Inspector Drawer */}
+      {inspectedLead && (
+        <div className="leads-drawer-backdrop" onClick={() => setSelectedLeadId(null)}>
+          <div className="leads-drawer" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="leads-drawer-header">
+              <div className="leads-drawer-title">
+                <h2 className="leads-drawer-h2">{inspectedLead.company || inspectedLead.name}</h2>
+                {inspectedLead.company && (
+                  <span className="leads-drawer-sub">
+                    <User size={12} style={{ display: 'inline', verticalAlign: '-1px' }} /> {inspectedLead.name}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {inspectedLead.expectedValue != null && (
+                  <span className="lead-card-value-badge" style={{ fontSize: '12px', padding: '3px 8px' }}>
+                    {formatCurrency(inspectedLead.expectedValue)}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="leads-modal-close-btn"
+                  onClick={() => setSelectedLeadId(null)}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Stage Stepper */}
+            <div className="leads-drawer-stepper">
+              {STAGES.map((s) => {
+                const isCurrent = inspectedLead.stage === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`leads-stepper-btn ${isCurrent ? 'active' : ''}`}
+                    disabled={saving || (s.id === 'WON' && !inspectedLead.convertedCustomerId)}
+                    onClick={() => stage(inspectedLead, s.id)}
+                    title={s.desc}
+                  >
+                    <span className="leads-stage-dot" style={{ backgroundColor: s.color }} />
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Drawer Body */}
+            <div className="leads-drawer-body">
+              {/* Quick Action Bar */}
+              <div className="leads-drawer-actions">
+                {!inspectedLead.convertedCustomerId && inspectedLead.stage !== 'WON' ? (
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    style={{ height: '32px', fontSize: '12px' }}
+                    onClick={() => {
+                      setConvertModalLead(inspectedLead);
+                      setConvertWithQuote(false);
+                      setConvertItemId(items[0]?.id || '');
+                      setConvertQuantity(1);
+                      setConvertUnitPrice(Number(items[0]?.unitPrice) || 0);
+                    }}
+                  >
+                    <UserCheck size={14} />
+                    Convert to Customer & Quote
+                  </button>
+                ) : (
+                  <span className="lead-converted-badge" style={{ padding: '6px 12px', fontSize: '12px' }}>
+                    <Check size={13} /> Converted Customer Record
+                  </span>
+                )}
+              </div>
+
+              {/* Prospect Dossier Card */}
+              <div className="leads-dossier-card">
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)' }}>
+                  Prospect Dossier
+                </div>
+                <div className="leads-dossier-grid">
+                  <div className="leads-dossier-field">
+                    <span className="label">Contact Name</span>
+                    <span className="val">{inspectedLead.name}</span>
+                  </div>
+                  <div className="leads-dossier-field">
+                    <span className="label">Company</span>
+                    <span className="val">{inspectedLead.company || '—'}</span>
+                  </div>
+                  <div className="leads-dossier-field">
+                    <span className="label">Work Email</span>
+                    <span className="val">
+                      {inspectedLead.email ? (
+                        <>
+                          <a href={`mailto:${inspectedLead.email}`} style={{ color: 'var(--sp-brand)' }}>
+                            {inspectedLead.email}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(inspectedLead.email!, 'Email')}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            title="Copy email"
+                          >
+                            <Copy size={11} color="var(--sp-text-muted)" />
+                          </button>
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </span>
+                  </div>
+                  <div className="leads-dossier-field">
+                    <span className="label">Phone</span>
+                    <span className="val">
+                      {inspectedLead.phone ? (
+                        <>
+                          <a href={`tel:${inspectedLead.phone}`} style={{ color: 'var(--sp-text)' }}>
+                            {inspectedLead.phone}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(inspectedLead.phone!, 'Phone')}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            title="Copy phone"
+                          >
+                            <Copy size={11} color="var(--sp-text-muted)" />
+                          </button>
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </span>
+                  </div>
+                  <div className="leads-dossier-field">
+                    <span className="label">Source</span>
+                    <span className="val">{inspectedLead.source || 'Direct outreach'}</span>
+                  </div>
+                  <div className="leads-dossier-field">
+                    <span className="label">Branch</span>
+                    <span className="val">
+                      {branches.find((b) => b.id === inspectedLead.branchId)?.name || 'Default Branch'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scheduled Next Action Card */}
+              <div className="leads-drawer-next-action-card">
+                <div className="leads-drawer-next-action-header">
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-brand)', textTransform: 'uppercase' }}>
+                    Scheduled Next Action
+                  </span>
+                  {inspectedLead.nextActivityAt && (
+                    <span className={`lead-action-pill ${isOverdue(inspectedLead.nextActivityAt) ? 'overdue' : 'scheduled'}`}>
+                      <Clock size={11} />
+                      {isOverdue(inspectedLead.nextActivityAt) ? 'Overdue · ' : 'Due · '}
+                      {formatDate(inspectedLead.nextActivityAt)}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>
+                  {inspectedLead.nextActivityTitle || 'No immediate action scheduled'}
+                </div>
+                {inspectedLead.nextActivityTitle && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
+                      onClick={async () => {
+                        await send(`/leads/${inspectedLead.id}/activities`, 'POST', {
+                          activityType: 'TASK',
+                          body: `Completed scheduled action: ${inspectedLead.nextActivityTitle}`
+                        });
+                        await send(`/leads/${inspectedLead.id}`, 'PATCH', {
+                          nextActivityTitle: null,
+                          nextActivityAt: null
+                        });
+                        notify('Scheduled action marked as completed');
+                      }}
+                    >
+                      <Check size={12} />
+                      Mark Completed
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Activity Logger Form */}
+              <div className="lead-inline-activity-box" style={{ background: 'var(--sp-surface-subtle)', padding: '12px', borderRadius: '6px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '8px' }}>
+                  Record Note / Activity
+                </div>
+                <form onSubmit={(e) => addActivity(e, inspectedLead)}>
+                  <div className="lead-inline-activity-top">
+                    <select name="activityType" defaultValue="NOTE">
+                      <option value="NOTE">Note</option>
+                      <option value="CALL">Call</option>
+                      <option value="EMAIL">Email</option>
+                      <option value="MEETING">Meeting</option>
+                      <option value="TASK">Task</option>
+                    </select>
+                    <input name="dueAt" type="datetime-local" title="Due date (optional)" />
+                  </div>
+                  <textarea
+                    name="body"
+                    required
+                    maxLength={2000}
+                    placeholder="Add activity recap, customer feedback, next steps…"
+                    style={{ width: '100%', minHeight: '60px', marginTop: '6px', fontSize: '12px', padding: '8px', border: '1px solid var(--sp-border)', borderRadius: '4px' }}
+                  />
+                  <div className="lead-inline-activity-bottom">
+                    <button
+                      type="submit"
+                      className="button button-primary"
+                      style={{ height: '28px', padding: '0 12px', fontSize: '11.5px' }}
+                      disabled={saving}
+                    >
+                      {saving ? 'Saving…' : 'Save note'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Timeline Feed */}
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '10px' }}>
+                  Activity Timeline ({inspectedLead.activities?.length || 0})
+                </div>
+                {(!inspectedLead.activities || inspectedLead.activities.length === 0) ? (
+                  <div style={{ padding: '16px', textAlign: 'center', fontSize: '12px', color: 'var(--sp-text-muted)' }}>
+                    No timeline events recorded yet.
+                  </div>
+                ) : (
+                  <div className="leads-timeline-feed">
+                    {inspectedLead.activities.map((act) => (
+                      <div key={act.id} className="leads-timeline-item">
+                        <div className="leads-timeline-icon">
+                          {renderActivityIcon(act.activityType)}
+                        </div>
+                        <div className="leads-timeline-content">
+                          <div className="leads-timeline-top">
+                            <span style={{ fontWeight: 600, color: 'var(--sp-text)' }}>
+                              {act.activityType}
+                            </span>
+                            <time style={{ color: 'var(--sp-text-muted)' }}>
+                              {formatDate(act.createdAt)}
+                            </time>
+                          </div>
+                          <p className="leads-timeline-text">{act.body}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

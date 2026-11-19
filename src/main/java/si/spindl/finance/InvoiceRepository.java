@@ -33,6 +33,9 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, UUID> {
     @Query("select coalesce(sum(greatest(i.total-i.amountPaid-i.creditTotal,0)), 0) from InvoiceEntity i where i.tenantId=:tenantId and i.customer.id=:customerId and i.status not in ('paid','credited')")
     BigDecimal outstandingForCustomer(@Param("tenantId") UUID tenantId, @Param("customerId") UUID customerId);
 
+    @Query("select i.customer.id, coalesce(sum(greatest(i.total-i.amountPaid-i.creditTotal,0)), 0) from InvoiceEntity i where i.tenantId=:tenantId and i.status not in ('paid','credited') group by i.customer.id")
+    List<Object[]> outstandingGroupedByCustomer(@Param("tenantId") UUID tenantId);
+
     @Query("select coalesce(sum(greatest(i.total-i.amountPaid-i.creditTotal,0)),0) from InvoiceEntity i where i.tenantId=:tenantId and i.status not in ('paid','credited')")
     BigDecimal outstandingReceivables(@Param("tenantId") UUID tenantId);
 

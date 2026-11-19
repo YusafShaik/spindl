@@ -10,15 +10,17 @@ import {
 } from 'recharts';
 import {
   AlertTriangle,
-  ArrowDownLeft,
   ArrowRight,
-  ArrowUpRight,
   Boxes,
   CheckCircle2,
   Clock,
+  CreditCard,
+  DollarSign,
+  Package,
   Search,
   ShoppingCart,
   SlidersHorizontal,
+  TrendingUp,
   Users,
 } from 'lucide-react';
 import { KpiCard } from './KpiCard';
@@ -141,8 +143,10 @@ export function Dashboard({
   const overduePayable = Number(metrics.overduePayables || 0);
   const openOrdersCount = Number(metrics.openOrders || 0);
 
-  const hasFinanceTriage = overdueReceivable > 0 || overduePayable > 0 || openOrdersCount > 0;
-  const financeCount = (overdueReceivable > 0 ? 1 : 0) + (overduePayable > 0 ? 1 : 0) + (openOrdersCount > 0 ? 1 : 0);
+  const financeCount =
+    (overdueReceivable > 0 ? 1 : 0) +
+    (overduePayable > 0 ? 1 : 0) +
+    (openOrdersCount > 0 ? 1 : 0);
   const totalTriageCount = lowStockCount + financeCount;
 
   // Filtered trend points based on time range
@@ -179,76 +183,66 @@ export function Dashboard({
   }, [transactions]);
 
   return (
-    <>
-      {/* 1. Linear KPI Grid */}
+    <div className="overview-container">
+      {/* 1. Linear 6-Metric Telemetry Strip */}
       <div className="kpi-grid">
         <KpiCard
           title="Sales this month"
           value={formatCurrency(metrics.salesThisMonth)}
-          change="From invoices"
-          positive={Number(metrics.salesThisMonth) > 0}
-          detail="invoices issued this month"
-          icon={ArrowUpRight}
-          accent="purple"
-          spark="sales"
-          onClick={() => onNavigate ? onNavigate('Sales') : onOpenTransactions()}
-        />
-        <KpiCard
-          title="Open orders"
-          value={metrics.openOrders}
-          change="Pending dispatch"
-          detail="orders awaiting full shipment"
-          icon={ShoppingCart}
-          accent="amber"
-          spark="orders"
-          onClick={() => onNavigate ? onNavigate('Sales') : onOpenTransactions()}
-        />
-        <KpiCard
-          title="Inventory value"
-          value={formatCompactRupees(metrics.inventoryValue)}
-          change="Catalog valuation"
-          detail="opening stock × unit price"
-          icon={Boxes}
-          accent="blue"
-          spark="inventory"
-          onClick={onOpenInventory}
-        />
-        <KpiCard
-          title="Active customers"
-          value={metrics.activeCustomers}
-          change="Verified accounts"
-          positive
-          detail="active customer records"
-          icon={Users}
-          accent="green"
-          spark="customers"
-          onClick={() => onNavigate ? onNavigate('Customers') : undefined}
+          badge="Invoiced"
+          badgeTone="purple"
+          detail="this month"
+          icon={TrendingUp}
+          onClick={() => (onNavigate ? onNavigate('Sales') : onOpenTransactions())}
         />
         <KpiCard
           title="Accounts receivable"
           value={formatCurrency(metrics.accountsReceivable)}
-          change={`Overdue ${formatCurrency(metrics.overdueReceivables)}`}
-          positive={overdueReceivable === 0}
-          detail="unpaid customer invoices"
-          icon={ArrowUpRight}
-          accent="blue"
-          spark="sales"
-          onClick={() => onNavigate ? onNavigate('Sales') : onOpenTransactions()}
+          badge={overdueReceivable > 0 ? `Overdue ${formatCurrency(overdueReceivable)}` : 'Current'}
+          badgeTone={overdueReceivable > 0 ? 'warning' : 'neutral'}
+          detail="unpaid"
+          icon={DollarSign}
+          onClick={() => (onNavigate ? onNavigate('Sales') : onOpenTransactions())}
         />
         <KpiCard
           title="Accounts payable"
           value={formatCurrency(metrics.accountsPayable)}
-          change={`Overdue ${formatCurrency(metrics.overduePayables)}`}
-          positive={overduePayable === 0}
-          detail="unpaid supplier bills"
-          icon={ArrowDownLeft}
-          accent="amber"
-          spark="orders"
-          onClick={() => onNavigate ? onNavigate('Purchases') : onOpenTransactions()}
+          badge={overduePayable > 0 ? `Overdue ${formatCurrency(overduePayable)}` : 'Current'}
+          badgeTone={overduePayable > 0 ? 'warning' : 'neutral'}
+          detail="due bills"
+          icon={CreditCard}
+          onClick={() => (onNavigate ? onNavigate('Purchases') : onOpenTransactions())}
+        />
+        <KpiCard
+          title="Inventory value"
+          value={formatCompactRupees(metrics.inventoryValue)}
+          badge={`${items.length} SKUs`}
+          badgeTone="neutral"
+          detail="catalog value"
+          icon={Boxes}
+          onClick={onOpenInventory}
+        />
+        <KpiCard
+          title="Open orders"
+          value={metrics.openOrders}
+          badge={openOrdersCount > 0 ? 'Pending' : 'Fulfilled'}
+          badgeTone={openOrdersCount > 0 ? 'warning' : 'positive'}
+          detail="in queue"
+          icon={ShoppingCart}
+          onClick={() => (onNavigate ? onNavigate('Sales') : onOpenTransactions())}
+        />
+        <KpiCard
+          title="Active customers"
+          value={metrics.activeCustomers}
+          badge="Verified"
+          badgeTone="positive"
+          detail="clients"
+          icon={Users}
+          onClick={() => (onNavigate ? onNavigate('Customers') : undefined)}
         />
       </div>
 
-      {/* 2. Business Overview & Triage Queue */}
+      {/* 2. Business Overview Chart & Operational Triage Queue */}
       <div className="dashboard-grid">
         {/* Performance Chart Panel */}
         <section className="panel chart-panel">
@@ -292,11 +286,11 @@ export function Dashboard({
           </div>
 
           <div className="chart-legend chart-legend-interactive">
-            <span>
+            <span className="legend-item">
               <i className="legend-dot sales-dot" />
               Sales <b>{formatCurrency(totalPeriodSales)}</b>
             </span>
-            <span>
+            <span className="legend-item">
               <i className="legend-dot purchase-dot" />
               Purchases <b>{formatCurrency(totalPeriodPurchases)}</b>
             </span>
@@ -313,15 +307,15 @@ export function Dashboard({
               <AreaChart data={filteredTrend} margin={{ top: 12, right: 6, left: -16, bottom: 0 }}>
                 <defs>
                   <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#5E46C1" stopOpacity={0.16} />
+                    <stop offset="0%" stopColor="#5E46C1" stopOpacity={0.12} />
                     <stop offset="100%" stopColor="#5E46C1" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="purchaseFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#A9A1C7" stopOpacity={0.12} />
-                    <stop offset="100%" stopColor="#A9A1C7" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#94A3B8" stopOpacity={0.08} />
+                    <stop offset="100%" stopColor="#94A3B8" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid vertical={false} stroke="#F0F1F4" strokeDasharray="3 4" />
+                <CartesianGrid vertical={false} stroke="#F0F1F4" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="label"
                   tickLine={false}
@@ -334,8 +328,8 @@ export function Dashboard({
                   type="monotone"
                   dataKey="purchases"
                   name="purchases"
-                  stroke="#A9A1C7"
-                  strokeWidth={1.75}
+                  stroke="#94A3B8"
+                  strokeWidth={1.5}
                   fill="url(#purchaseFill)"
                 />
                 <Area
@@ -351,25 +345,27 @@ export function Dashboard({
           </div>
         </section>
 
-        {/* Needs Attention / Operational Triage */}
+        {/* Operational Triage / Needs Attention */}
         <section className="panel attention-panel">
           <div className="panel-header attention-panel-header">
             <div>
               <h2>
                 Needs attention{' '}
-                <span className={`attention-count ${totalTriageCount > 0 ? 'urgent' : ''}`}>
-                  {totalTriageCount}
-                </span>
+                {totalTriageCount > 0 && (
+                  <span className="attention-badge-pill">
+                    {totalTriageCount}
+                  </span>
+                )}
               </h2>
               <p>Operational alerts requiring review or action</p>
             </div>
             <button
-              className="more-button"
+              className="icon-action-btn"
               onClick={onOpenInventory}
               aria-label="View all inventory"
               title="Open inventory"
             >
-              <ArrowRight size={15} />
+              <ArrowRight size={14} />
             </button>
           </div>
 
@@ -403,17 +399,17 @@ export function Dashboard({
             {(triageFilter === 'all' || triageFilter === 'stock') &&
               lowStockItems.slice(0, 4).map((item) => (
                 <div className="attention-row" key={item.id}>
-                  <span className="attention-icon orange">
-                    <Boxes size={14} aria-hidden="true" />
+                  <span className="attention-icon-box">
+                    <Package size={14} aria-hidden="true" />
                   </span>
                   <div className="attention-copy">
-                    <b>{item.name}</b>
-                    <small>
+                    <span className="attention-name">{item.name}</span>
+                    <span className="attention-meta">
                       {item.available} {item.unit} available · threshold {item.lowStockThreshold}
-                    </small>
+                    </span>
                   </div>
                   <button
-                    className="mini-action"
+                    className="linear-btn-compact"
                     onClick={() => onSearchInventory(item.sku)}
                     title={`Inspect ${item.sku} in inventory`}
                   >
@@ -425,16 +421,16 @@ export function Dashboard({
             {/* 2. Overdue receivables */}
             {(triageFilter === 'all' || triageFilter === 'financial') && overdueReceivable > 0 && (
               <div className="attention-row">
-                <span className="attention-icon red">
+                <span className="attention-icon-box warning">
                   <Clock size={14} aria-hidden="true" />
                 </span>
                 <div className="attention-copy">
-                  <b>Overdue customer receivables</b>
-                  <small>{formatCurrency(overdueReceivable)} past payment due date</small>
+                  <span className="attention-name">Overdue customer receivables</span>
+                  <span className="attention-meta">{formatCurrency(overdueReceivable)} past payment due date</span>
                 </div>
                 <button
-                  className="mini-action"
-                  onClick={() => onNavigate ? onNavigate('Sales') : onOpenTransactions()}
+                  className="linear-btn-compact"
+                  onClick={() => (onNavigate ? onNavigate('Sales') : onOpenTransactions())}
                 >
                   Inspect
                 </button>
@@ -444,16 +440,16 @@ export function Dashboard({
             {/* 3. Overdue payables */}
             {(triageFilter === 'all' || triageFilter === 'financial') && overduePayable > 0 && (
               <div className="attention-row">
-                <span className="attention-icon orange">
+                <span className="attention-icon-box warning">
                   <AlertTriangle size={14} aria-hidden="true" />
                 </span>
                 <div className="attention-copy">
-                  <b>Overdue supplier payables</b>
-                  <small>{formatCurrency(overduePayable)} awaiting supplier disbursement</small>
+                  <span className="attention-name">Overdue supplier payables</span>
+                  <span className="attention-meta">{formatCurrency(overduePayable)} awaiting supplier disbursement</span>
                 </div>
                 <button
-                  className="mini-action"
-                  onClick={() => onNavigate ? onNavigate('Purchases') : onOpenTransactions()}
+                  className="linear-btn-compact"
+                  onClick={() => (onNavigate ? onNavigate('Purchases') : onOpenTransactions())}
                 >
                   Pay bills
                 </button>
@@ -463,16 +459,16 @@ export function Dashboard({
             {/* 4. Open orders */}
             {(triageFilter === 'all' || triageFilter === 'financial') && openOrdersCount > 0 && (
               <div className="attention-row">
-                <span className="attention-icon purple">
+                <span className="attention-icon-box">
                   <ShoppingCart size={14} aria-hidden="true" />
                 </span>
                 <div className="attention-copy">
-                  <b>Orders awaiting fulfillment</b>
-                  <small>{openOrdersCount} customer orders pending shipment</small>
+                  <span className="attention-name">Orders awaiting fulfillment</span>
+                  <span className="attention-meta">{openOrdersCount} customer orders pending shipment</span>
                 </div>
                 <button
-                  className="mini-action"
-                  onClick={() => onNavigate ? onNavigate('Sales') : onOpenTransactions()}
+                  className="linear-btn-compact"
+                  onClick={() => (onNavigate ? onNavigate('Sales') : onOpenTransactions())}
                 >
                   Dispatch
                 </button>
@@ -482,7 +478,7 @@ export function Dashboard({
             {/* Clean state */}
             {totalTriageCount === 0 && (
               <div className="attention-empty-state">
-                <CheckCircle2 size={28} className="empty-check-icon" aria-hidden="true" />
+                <CheckCircle2 size={24} className="empty-check-icon" aria-hidden="true" />
                 <b>All operations running smoothly</b>
                 <small>All inventory thresholds and financial obligations are up to date.</small>
               </div>
@@ -491,7 +487,7 @@ export function Dashboard({
         </section>
       </div>
 
-      {/* 3. Recent Transactions / Activity Stream */}
+      {/* 3. Recent Transactions / Activity Ledger */}
       <section className="panel table-panel">
         <div className="panel-header table-heading">
           <div>
@@ -499,7 +495,7 @@ export function Dashboard({
             <p>Latest customer invoices, supplier bills, and payment records</p>
           </div>
           <button className="text-button" onClick={onOpenTransactions}>
-            View full register <ArrowRight size={14} />
+            View full register <ArrowRight size={13} />
           </button>
         </div>
 
@@ -557,6 +553,6 @@ export function Dashboard({
 
         <TransactionTable query={query} transactions={transactions} typeFilter={txTab} />
       </section>
-    </>
+    </div>
   );
 }

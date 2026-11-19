@@ -40,6 +40,7 @@ spindl:
   platform-support-emails: ${SPINDL_PLATFORM_SUPPORT_EMAILS:}
   security:
     jwt-secret: ${SPINDL_JWT_SECRET:local-development-secret-change-before-deploying-2026}
+    encryption-key: ${SPINDL_ENCRYPTION_KEY:${spindl.security.jwt-secret}}
   frontend-url: ${SPINDL_FRONTEND_URL:http://localhost:5173}
   mail:
     enabled: ${SPINDL_MAIL_ENABLED:false}
@@ -47,6 +48,7 @@ spindl:
   attachments:
     storage-path: ${SPINDL_STORAGE_PATH:./var/spindl-attachments}
     max-file-size-bytes: ${SPINDL_ATTACHMENT_MAX_BYTES:10485760}
+    clamav-enabled: ${SPINDL_CLAMAV_ENABLED:false}
     clamav-host: ${SPINDL_CLAMAV_HOST:}
     clamav-port: ${SPINDL_CLAMAV_PORT:3310}
     clamav-timeout-millis: ${SPINDL_CLAMAV_TIMEOUT_MS:5000}

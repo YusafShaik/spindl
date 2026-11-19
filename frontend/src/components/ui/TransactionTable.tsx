@@ -9,13 +9,6 @@ interface TransactionTableProps {
   typeFilter?: string;
 }
 
-function getCounterpartyTone(name: string): string {
-  const tones = ['lavender', 'peach', 'blue', 'green'];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return tones[Math.abs(hash) % tones.length];
-}
-
 function getInitials(name: string): string {
   if (!name) return 'TX';
   const parts = name.trim().split(/\s+/);
@@ -35,7 +28,7 @@ function formatDateTime(iso: string): string {
     return `${d.toLocaleDateString('en-IN', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     })}, ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
   } catch {
     return iso;
@@ -44,28 +37,53 @@ function formatDateTime(iso: string): string {
 
 function formatType(type: string): string {
   switch (type) {
-    case 'SALES_INVOICE': return 'Sales Invoice';
-    case 'CUSTOMER_PAYMENT': return 'Customer Payment';
-    case 'CUSTOMER_CREDIT': return 'Customer Credit';
-    case 'CUSTOMER_REFUND': return 'Customer Refund';
-    case 'SUPPLIER_BILL': return 'Supplier Bill';
-    case 'SUPPLIER_PAYMENT': return 'Supplier Payment';
-    case 'SUPPLIER_CREDIT': return 'Supplier Credit';
-    default: return type.replaceAll('_', ' ');
+    case 'SALES_INVOICE':
+      return 'Sales Invoice';
+    case 'CUSTOMER_PAYMENT':
+      return 'Customer Payment';
+    case 'CUSTOMER_CREDIT':
+      return 'Customer Credit';
+    case 'CUSTOMER_REFUND':
+      return 'Customer Refund';
+    case 'SUPPLIER_BILL':
+      return 'Supplier Bill';
+    case 'SUPPLIER_PAYMENT':
+      return 'Supplier Payment';
+    case 'SUPPLIER_CREDIT':
+      return 'Supplier Credit';
+    default:
+      return type.replaceAll('_', ' ');
   }
 }
 
-export function TransactionTable({ query = '', transactions = [], typeFilter = 'ALL' }: TransactionTableProps) {
+export function TransactionTable({
+  query = '',
+  transactions = [],
+  typeFilter = 'ALL',
+}: TransactionTableProps) {
   const filtered = transactions.filter((row) => {
     const matchesQuery = `${row.reference} ${row.counterparty} ${row.type} ${row.method || ''} ${row.direction}`
       .toLowerCase()
       .includes(query.toLowerCase());
     if (!matchesQuery) return false;
     if (typeFilter === 'ALL') return true;
-    if (typeFilter === 'INVOICE') return row.type.toLowerCase().includes('invoice') || row.direction === 'RECEIVABLE' || row.direction === 'IN';
-    if (typeFilter === 'BILL') return row.type.toLowerCase().includes('bill') || row.type.toLowerCase().includes('purchase') || row.direction === 'PAYABLE' || row.direction === 'OUT';
-    if (typeFilter === 'PAYMENT') return row.type.toLowerCase().includes('payment') || Boolean(row.method);
-    if (typeFilter === 'CREDIT') return row.type.toLowerCase().includes('credit') || row.direction === 'CREDIT';
+    if (typeFilter === 'INVOICE')
+      return (
+        row.type.toLowerCase().includes('invoice') ||
+        row.direction === 'RECEIVABLE' ||
+        row.direction === 'IN'
+      );
+    if (typeFilter === 'BILL')
+      return (
+        row.type.toLowerCase().includes('bill') ||
+        row.type.toLowerCase().includes('purchase') ||
+        row.direction === 'PAYABLE' ||
+        row.direction === 'OUT'
+      );
+    if (typeFilter === 'PAYMENT')
+      return row.type.toLowerCase().includes('payment') || Boolean(row.method);
+    if (typeFilter === 'CREDIT')
+      return row.type.toLowerCase().includes('credit') || row.direction === 'CREDIT';
     return true;
   });
 
@@ -74,23 +92,40 @@ export function TransactionTable({ query = '', transactions = [], typeFilter = '
       <table className="sales-table">
         <thead>
           <tr>
-            <th style={{ width: '170px' }}>REFERENCE</th>
-            <th>CUSTOMER / SUPPLIER</th>
-            <th style={{ width: '160px' }}>TYPE</th>
-            <th style={{ width: '170px' }}>DATE & TIME</th>
-            <th style={{ textAlign: 'right', width: '140px' }}>AMOUNT</th>
-            <th style={{ width: '130px' }}>STATUS</th>
-            <th style={{ textAlign: 'right', width: '120px' }}>FLOW</th>
+            <th style={{ width: '15%' }}>REFERENCE</th>
+            <th style={{ width: '27%' }}>CUSTOMER / SUPPLIER</th>
+            <th style={{ width: '14%' }}>TYPE</th>
+            <th style={{ width: '16%' }}>DATE & TIME</th>
+            <th style={{ textAlign: 'right', width: '12%' }}>AMOUNT</th>
+            <th style={{ width: '9%' }}>STATUS</th>
+            <th style={{ textAlign: 'right', width: '7%' }}>FLOW</th>
           </tr>
         </thead>
         <tbody>
           {filtered.length ? (
             filtered.map((row) => {
               const dir = (row.direction || '').toUpperCase();
-              const isInflow = dir === 'IN' || dir === 'INFLOW' || dir === 'RECEIVABLE' || dir === 'CASH_IN';
-              const isCredit = dir === 'CREDIT';
-              const isOutflow = !isInflow && !isCredit;
-              const tone = getCounterpartyTone(row.counterparty || 'Company');
+              const type = (row.type || '').toUpperCase();
+
+              // Refund / credit return: customer credit, supplier credit, refund
+              const isRefund =
+                type.includes('REFUND') ||
+                type.includes('CREDIT') ||
+                dir === 'REFUND' ||
+                dir === 'CREDIT';
+
+              // Incoming: customer payments, invoices, cash in
+              const isIncoming =
+                !isRefund &&
+                (dir === 'IN' ||
+                  dir === 'INFLOW' ||
+                  dir === 'RECEIVABLE' ||
+                  dir === 'CASH_IN' ||
+                  type === 'CUSTOMER_PAYMENT' ||
+                  type === 'SALES_INVOICE');
+
+              // Deduction: supplier bills, payments, payables, cash out
+              const isDeduction = !isIncoming && !isRefund;
               const initials = getInitials(row.counterparty || 'TX');
 
               return (
@@ -103,9 +138,9 @@ export function TransactionTable({ query = '', transactions = [], typeFilter = '
 
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className={`party-avatar ${tone}`}>{initials}</span>
+                      <span className="party-avatar">{initials}</span>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--sp-text)', fontSize: '12.5px' }}>
+                        <span style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>
                           {row.counterparty}
                         </span>
                         <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
@@ -116,13 +151,19 @@ export function TransactionTable({ query = '', transactions = [], typeFilter = '
                   </td>
 
                   <td>
-                    <span className={`tx-type-badge ${row.type}`}>
+                    <span className="tx-type-badge">
                       {formatType(row.type)}
                     </span>
                   </td>
 
                   <td>
-                    <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                    <span
+                      style={{
+                        fontSize: '11.5px',
+                        color: 'var(--sp-text-muted)',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
                       {formatDateTime(row.occurredAt)}
                     </span>
                   </td>
@@ -130,13 +171,13 @@ export function TransactionTable({ query = '', transactions = [], typeFilter = '
                   <td style={{ textAlign: 'right' }}>
                     <span
                       style={{
-                        fontWeight: 600,
+                        fontWeight: 500,
                         fontVariantNumeric: 'tabular-nums',
                         fontSize: '12.5px',
-                        color: isInflow ? '#059669' : isCredit ? '#7c3aed' : '#dc2626'
+                        color: (isIncoming || isRefund) ? 'var(--sp-success)' : 'var(--sp-text)',
                       }}
                     >
-                      {isInflow ? '+' : isCredit ? '⟲ ' : '-'}{formatCurrency(row.amount)}
+                      {isIncoming ? '+' : isRefund ? '⟲ +' : '-'}{formatCurrency(row.amount)}
                     </span>
                   </td>
 
@@ -145,15 +186,15 @@ export function TransactionTable({ query = '', transactions = [], typeFilter = '
                   </td>
 
                   <td style={{ textAlign: 'right' }}>
-                    {isInflow ? (
+                    {isIncoming ? (
                       <span className="tx-flow-pill inflow">
                         <ArrowUpRight size={11} aria-hidden="true" />
                         <span>Inflow</span>
                       </span>
-                    ) : isCredit ? (
-                      <span className="tx-flow-pill credit">
+                    ) : isRefund ? (
+                      <span className="tx-flow-pill refund">
                         <RotateCcw size={11} aria-hidden="true" />
-                        <span>Credit</span>
+                        <span>Refund</span>
                       </span>
                     ) : (
                       <span className="tx-flow-pill outflow">
@@ -171,7 +212,9 @@ export function TransactionTable({ query = '', transactions = [], typeFilter = '
                 <div className="sales-empty-state">
                   <div className="sales-empty-title">No transactions found</div>
                   <div className="sales-empty-desc">
-                    {query ? `No transactions match "${query}".` : 'No financial transaction events recorded yet.'}
+                    {query
+                      ? `No transactions match "${query}".`
+                      : 'No financial transaction events recorded yet.'}
                   </div>
                 </div>
               </td>

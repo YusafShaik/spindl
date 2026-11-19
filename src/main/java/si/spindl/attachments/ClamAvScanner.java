@@ -13,12 +13,13 @@ import java.nio.charset.StandardCharsets;
 
 @Component
 public class ClamAvScanner {
+    @Value("${spindl.attachments.clamav-enabled:false}") private boolean enabled;
     @Value("${spindl.attachments.clamav-host:}") private String host;
     @Value("${spindl.attachments.clamav-port:3310}") private int port;
     @Value("${spindl.attachments.clamav-timeout-millis:5000}") private int timeoutMillis;
 
     public void scan(InputStream input) {
-        if (host == null || host.isBlank()) throw unavailable();
+        if (!enabled || host == null || host.isBlank()) return;
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), timeoutMillis);
             socket.setSoTimeout(timeoutMillis);

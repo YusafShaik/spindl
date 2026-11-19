@@ -10,6 +10,10 @@ import si.spindl.catalog.InventoryMovementEntity;
 import si.spindl.catalog.InventoryMovementRepository;
 import si.spindl.catalog.ItemEntity;
 import si.spindl.catalog.ItemRepository;
+import si.spindl.catalog.WarehouseEntity;
+import si.spindl.catalog.WarehouseRepository;
+import si.spindl.catalog.WarehouseStockEntity;
+import si.spindl.catalog.WarehouseStockRepository;
 import si.spindl.party.CustomerEntity;
 import si.spindl.party.CustomerRepository;
 import si.spindl.tenant.DevelopmentTenant;
@@ -55,7 +59,9 @@ public class CsvImportService {
     private final SalesQuoteRepository quotes;
     private final SalesOrderRepository salesOrders;
     private final InvoiceRepository invoices;
-    public CsvImportService(CustomerRepository customers,ItemRepository items,InventoryMovementRepository movements,ImportBatchRepository batches,DevelopmentTenant tenant,TenantCustomFieldService customFields,TenantCustomFieldRepository customFieldDefinitions,TenantCustomFieldValueRepository customFieldValues,TenantAuditEventRepository audit,SupplierRepository suppliers,WorkOrderRepository workOrders,PurchaseOrderRepository purchaseOrders,SalesQuoteRepository quotes,SalesOrderRepository salesOrders,InvoiceRepository invoices){this.customers=customers;this.items=items;this.movements=movements;this.batches=batches;this.tenant=tenant;this.customFields=customFields;this.customFieldDefinitions=customFieldDefinitions;this.customFieldValues=customFieldValues;this.audit=audit;this.suppliers=suppliers;this.workOrders=workOrders;this.purchaseOrders=purchaseOrders;this.quotes=quotes;this.salesOrders=salesOrders;this.invoices=invoices;}
+    private final WarehouseRepository warehouses;
+    private final WarehouseStockRepository warehouseStock;
+    public CsvImportService(CustomerRepository customers,ItemRepository items,InventoryMovementRepository movements,ImportBatchRepository batches,DevelopmentTenant tenant,TenantCustomFieldService customFields,TenantCustomFieldRepository customFieldDefinitions,TenantCustomFieldValueRepository customFieldValues,TenantAuditEventRepository audit,SupplierRepository suppliers,WorkOrderRepository workOrders,PurchaseOrderRepository purchaseOrders,SalesQuoteRepository quotes,SalesOrderRepository salesOrders,InvoiceRepository invoices,WarehouseRepository warehouses,WarehouseStockRepository warehouseStock){this.customers=customers;this.items=items;this.movements=movements;this.batches=batches;this.tenant=tenant;this.customFields=customFields;this.customFieldDefinitions=customFieldDefinitions;this.customFieldValues=customFieldValues;this.audit=audit;this.suppliers=suppliers;this.workOrders=workOrders;this.purchaseOrders=purchaseOrders;this.quotes=quotes;this.salesOrders=salesOrders;this.invoices=invoices;this.warehouses=warehouses;this.warehouseStock=warehouseStock;}
 
     @Transactional(readOnly=true)
     public PreviewResult preview(String resource,byte[] file){return validate(normalizeResource(resource),file).preview();}
@@ -133,7 +139,15 @@ public class CsvImportService {
                 List<ItemEntity> saved=items.saveAllAndFlush(rows);
                 Map<String,ItemRow> customValues=validation.rows().stream().map(ItemRow.class::cast).collect(java.util.stream.Collectors.toMap(ItemRow::sku,row->row));
                 for(ItemEntity item:saved)customFields.saveImportedValues(tenantId,actorId,"items",item.getId(),customValues.get(item.getSku()).customValues());
-                for(ItemEntity item:saved)if(item.getOnHand()>0)movements.save(new InventoryMovementEntity(tenantId,item,item.getOnHand(),"Opening balance","IMPORT-OPENING-"+item.getSku()));
+                WarehouseEntity defaultWarehouse=warehouses.findByTenantIdAndIsDefaultTrueAndActiveTrue(tenantId).orElse(null);
+                for(ItemEntity item:saved){
+                    if(item.getOnHand()>0){
+                        if(defaultWarehouse!=null){
+                            warehouseStock.findForUpdate(tenantId,defaultWarehouse.getId(),item.getId()).ifPresent(ws->ws.receiveStock(item.getOnHand()));
+                        }
+                        movements.save(new InventoryMovementEntity(tenantId,item,item.getOnHand(),"Opening balance","IMPORT-OPENING-"+item.getSku()));
+                    }
+                }
                 movements.flush();
             }else{
                 List<SupplierEntity> rows=validation.rows().stream().map(row->{SupplierRow r=(SupplierRow)row;SupplierEntity e=new SupplierEntity(tenantId,r.code(),r.name(),r.email());e.updateProfile(r.contactName(),r.phone(),r.addressLine1(),r.addressLine2(),r.city(),r.region(),r.postalCode(),r.countryCode(),r.taxId(),r.paymentTermsDays(),r.leadTimeDays(),r.rating(),r.notes());return e;}).toList();

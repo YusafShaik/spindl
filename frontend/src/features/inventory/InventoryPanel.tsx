@@ -3,11 +3,14 @@ import {
   AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
+  Barcode,
   Boxes,
   ClipboardCheck,
   Download,
   Filter,
   History,
+  IndianRupee,
+  Package,
   Search,
   SlidersHorizontal,
   Warehouse,
@@ -204,32 +207,55 @@ export function InventoryPanel({
       {/* 1. Top Inventory Metric Strip */}
       <div className="inventory-metric-strip">
         <div className="inventory-metric-card">
-          <span className="metric-label">Total catalog SKUs</span>
-          <b className="metric-val">
-            {allItems.length} <small>items</small>
-          </b>
-          <span className="metric-sub">Across all categories</span>
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">TOTAL CATALOG SKUS</span>
+            <Boxes size={14} className="sales-metric-icon" aria-hidden="true" />
+          </div>
+          <div className="sales-metric-val">{allItems.length} SKUs</div>
+          <div className="sales-metric-sub">
+            <span className="kpi-badge kpi-badge-neutral">All categories</span>
+            <span>Active registered items</span>
+          </div>
         </div>
+
         <div className="inventory-metric-card">
-          <span className="metric-label">On-hand inventory</span>
-          <b className="metric-val">
-            {totalUnitsOnHand.toLocaleString()} <small>units</small>
-          </b>
-          <span className="metric-sub">Total physical balance</span>
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">ON-HAND INVENTORY</span>
+            <Package size={14} className="sales-metric-icon" aria-hidden="true" />
+          </div>
+          <div className="sales-metric-val">{totalUnitsOnHand.toLocaleString()} Units</div>
+          <div className="sales-metric-sub">
+            <span className="kpi-badge kpi-badge-purple">Counted</span>
+            <span>Total physical stock balance</span>
+          </div>
         </div>
+
         <div className="inventory-metric-card">
-          <span className="metric-label">Low-stock alerts</span>
-          <b className={`metric-val ${lowStockCount > 0 ? 'text-warning' : 'text-positive'}`}>
-            {lowStockCount} <small>{lowStockCount === 1 ? 'alert' : 'alerts'}</small>
-          </b>
-          <span className="metric-sub">
-            {lowStockCount > 0 ? 'Items below reorder point' : 'All items well stocked'}
-          </span>
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">LOW-STOCK ALERTS</span>
+            <AlertTriangle size={14} className="sales-metric-icon" aria-hidden="true" />
+          </div>
+          <div className="sales-metric-val">
+            {lowStockCount > 0 ? `${lowStockCount} Low Stock` : 'Healthy'}
+          </div>
+          <div className="sales-metric-sub">
+            <span className={`kpi-badge ${lowStockCount > 0 ? 'kpi-badge-warning' : 'kpi-badge-positive'}`}>
+              {lowStockCount > 0 ? `${lowStockCount} below reorder` : 'Safe levels'}
+            </span>
+            <span>reorder threshold alerts</span>
+          </div>
         </div>
+
         <div className="inventory-metric-card">
-          <span className="metric-label">Catalog asset value</span>
-          <b className="metric-val">{formatCompactRupees(totalValuation)}</b>
-          <span className="metric-sub">Stock × unit cost</span>
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">CATALOG ASSET VALUE</span>
+            <IndianRupee size={14} className="sales-metric-icon" aria-hidden="true" />
+          </div>
+          <div className="sales-metric-val">{formatCompactRupees(totalValuation)}</div>
+          <div className="sales-metric-sub">
+            <span className="kpi-badge kpi-badge-neutral">Valuation</span>
+            <span>Stock × unit purchase price</span>
+          </div>
         </div>
       </div>
 
@@ -279,63 +305,49 @@ export function InventoryPanel({
 
       {/* TAB A: Stock Overview */}
       {activeTab === 'stock' && (
-        <section className="panel directory-panel product-directory-panel">
-          <div className="panel-header directory-top">
-            <div>
-              <h2>
-                Stock overview <span className="record-count">{filteredStockItems.length}</span>
-              </h2>
-              <p>On-hand, reserved, and available quantities with threshold alerts.</p>
-            </div>
-            {query && (
-              <button className="button button-secondary" onClick={() => setQuery('')}>
-                Clear filter
-              </button>
-            )}
-          </div>
-
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {/* Category & Alert Filter Pills + Search */}
-          <div className="table-controls table-controls-enhanced">
-            <div className="tx-tabs" role="tablist">
+          <div className="sales-toolbar">
+            <div className="sales-pill-filters" role="tablist">
               <button
                 type="button"
-                className={`tx-tab-btn ${categoryFilter === 'ALL' ? 'active' : ''}`}
+                className={`sales-pill-btn ${categoryFilter === 'ALL' ? 'active' : ''}`}
                 onClick={() => setCategoryFilter('ALL')}
               >
-                All items <span className="tab-count">{categoryCounts.all}</span>
+                All items <span className="sales-pill-count">{categoryCounts.all}</span>
               </button>
               <button
                 type="button"
-                className={`tx-tab-btn ${categoryFilter === 'RAW' ? 'active' : ''}`}
+                className={`sales-pill-btn ${categoryFilter === 'RAW' ? 'active' : ''}`}
                 onClick={() => setCategoryFilter('RAW')}
               >
-                Raw materials <span className="tab-count">{categoryCounts.raw}</span>
+                Raw materials <span className="sales-pill-count">{categoryCounts.raw}</span>
               </button>
               <button
                 type="button"
-                className={`tx-tab-btn ${categoryFilter === 'WIP' ? 'active' : ''}`}
+                className={`sales-pill-btn ${categoryFilter === 'WIP' ? 'active' : ''}`}
                 onClick={() => setCategoryFilter('WIP')}
               >
-                Work in progress <span className="tab-count">{categoryCounts.wip}</span>
+                Work in progress <span className="sales-pill-count">{categoryCounts.wip}</span>
               </button>
               <button
                 type="button"
-                className={`tx-tab-btn ${categoryFilter === 'FINISHED' ? 'active' : ''}`}
+                className={`sales-pill-btn ${categoryFilter === 'FINISHED' ? 'active' : ''}`}
                 onClick={() => setCategoryFilter('FINISHED')}
               >
-                Finished goods <span className="tab-count">{categoryCounts.finished}</span>
+                Finished goods <span className="sales-pill-count">{categoryCounts.finished}</span>
               </button>
               <button
                 type="button"
-                className={`tx-tab-btn ${categoryFilter === 'LOW_STOCK' ? 'active' : ''}`}
+                className={`sales-pill-btn ${categoryFilter === 'LOW_STOCK' ? 'active' : ''}`}
                 onClick={() => setCategoryFilter('LOW_STOCK')}
               >
                 Low stock alerts{' '}
                 <span
-                  className="tab-count"
+                  className="sales-pill-count"
                   style={
                     categoryCounts.lowStock > 0
-                      ? { background: 'var(--sp-warning-soft)', color: 'var(--sp-warning)' }
+                      ? { background: 'rgba(245, 158, 11, 0.15)', color: '#b45309' }
                       : undefined
                   }
                 >
@@ -344,146 +356,155 @@ export function InventoryPanel({
               </button>
             </div>
 
-            <div className="table-search-actions">
-              <div className="search-box">
-                <Search size={14} aria-hidden="true" />
-                <input
-                  className="search-input"
-                  placeholder="Search products or SKU..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <kbd>/</kbd>
-              </div>
-              {query && (
-                <button className="filter-button" onClick={() => setQuery('')}>
-                  <SlidersHorizontal size={14} aria-hidden="true" /> Clear
-                </button>
-              )}
+            <div className="sales-search-box">
+              <Search size={14} className="sales-search-icon" aria-hidden="true" />
+              <input
+                className="sales-search-input"
+                placeholder="Search products or SKU..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <kbd className="sales-search-kbd">/</kbd>
             </div>
           </div>
 
           {/* Stock Overview Table */}
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>PRODUCT</th>
-                  <th>SKU</th>
-                  <th>CATEGORY</th>
-                  <th>TYPE</th>
-                  <th style={{ textAlign: 'right' }}>ON HAND</th>
-                  <th style={{ textAlign: 'right' }}>RESERVED</th>
-                  <th style={{ textAlign: 'right' }}>AVAILABLE</th>
-                  <th>THRESHOLD</th>
-                  <th style={{ textAlign: 'right' }}>UNIT PRICE</th>
-                  <th>STATUS</th>
-                  <th>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStockItems.map((item) => {
-                  const isLowStock = Number(item.available) <= Number(item.lowStockThreshold);
-                  const typeLabel =
-                    ({
-                      RAW: 'Raw material',
-                      WIP: 'Work in progress',
-                      FINISHED: 'Finished good',
-                      SERVICE: 'Service',
-                    }[item.itemType] || 'Finished good');
+          <div className="sales-table-card">
+            <div className="sales-table-scroll">
+              <table className="sales-table">
+                <thead>
+                  <tr>
+                    <th style={{ minWidth: '220px' }}>PRODUCT & CATEGORY</th>
+                    <th style={{ width: '110px' }}>SKU</th>
+                    <th style={{ width: '115px' }}>TYPE</th>
+                    <th style={{ width: '90px', textAlign: 'right' }}>ON HAND</th>
+                    <th style={{ width: '115px', textAlign: 'right' }}>RESERVED / AVAIL</th>
+                    <th style={{ width: '100px', textAlign: 'right' }}>UNIT PRICE</th>
+                    <th style={{ width: '110px' }}>STATUS & ALERT</th>
+                    <th style={{ width: '190px', textAlign: 'right' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStockItems.map((item) => {
+                    const isLowStock = Number(item.available) <= Number(item.lowStockThreshold);
+                    const typeLabel =
+                      ({
+                        RAW: 'Raw material',
+                        WIP: 'Work in progress',
+                        FINISHED: 'Finished good',
+                        SERVICE: 'Service',
+                      }[item.itemType] || 'Finished good');
 
-                  return (
-                    <tr key={item.sku}>
-                      <td>
-                        <div className="party-cell">
-                          <span className={`party-avatar ${item.tone || 'lavender'}`}>
-                            {item.mark || item.name.slice(0, 2).toUpperCase()}
+                    return (
+                      <tr key={item.sku} className="sales-row">
+                        <td>
+                          <div className="sales-customer-cell">
+                            <span className={`sales-customer-avatar ${item.tone || 'lavender'}`}>
+                              {item.mark || item.name.slice(0, 2).toUpperCase()}
+                            </span>
+                            <div className="customer-info-cell" style={{ minWidth: 0, overflow: 'hidden' }}>
+                              <strong style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', display: 'block', maxWidth: '175px' }}>
+                                {item.name}
+                              </strong>
+                              <small>Category: {item.category}</small>
+                              {item.barcode && (
+                                <div style={{ marginTop: '2px' }}>
+                                  <span className="product-barcode-chip">
+                                    <Barcode size={10} /> {item.barcode}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="sales-ref-badge">{item.sku}</span>
+                        </td>
+                        <td>
+                          <span className={`product-type-badge ${(item.itemType || 'finished').toLowerCase()}`}>
+                            {typeLabel}
                           </span>
-                          <div className="party-name">
-                            <b>{item.name}</b>
-                            {item.barcode && <small>Barcode · {item.barcode}</small>}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                            {item.stock.toLocaleString()}
+                          </span>{' '}
+                          <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>{item.unit}</span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '11.5px', color: isLowStock ? 'var(--sp-warning)' : 'var(--sp-text)' }}>
+                            <strong>{Number(item.available ?? item.stock).toLocaleString()}</strong> avail
+                          </div>
+                          <small style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)' }}>
+                            {Number(item.reserved || 0).toLocaleString()} reserved
+                          </small>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                            {formatCurrency(item.unitPrice || item.price)}
+                          </span>
+                        </td>
+                        <td>
+                          <Status label={item.state} />
+                          <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
+                            Min: <strong>{item.lowStockThreshold}</strong> {item.unit}
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div className="sales-actions-cell" style={{ justifyContent: 'flex-end', gap: '4px' }}>
+                            <CustomFieldEditor resource="items" recordId={item.id} label="Fields" />
+                            <button
+                              type="button"
+                              className="sales-action-btn secondary"
+                              onClick={() => onAdjust(item)}
+                              title="Adjust physical stock quantity"
+                            >
+                              Adjust
+                            </button>
+                            <button
+                              type="button"
+                              className="sales-action-btn secondary"
+                              onClick={() => onThreshold(item)}
+                              title="Configure low-stock alert threshold"
+                            >
+                              Threshold
+                            </button>
+                            <button
+                              type="button"
+                              className="sales-action-btn secondary"
+                              onClick={() => {
+                                setMovementItemId(item.id);
+                                setMovementPage((p) => ({ ...p, page: 0 }));
+                                setActiveTab('movements');
+                              }}
+                              title="Inspect item in movement ledger"
+                              style={{ padding: '0 6px' }}
+                            >
+                              <History size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!filteredStockItems.length && (
+                    <tr>
+                      <td colSpan={8} className="sales-empty-cell">
+                        <div className="sales-empty-state">
+                          <Boxes size={32} className="sales-empty-icon" />
+                          <div className="sales-empty-title">No inventory items found</div>
+                          <div className="sales-empty-desc">
+                            {query ? `No items match “${query}”.` : 'No items found in this category.'}
                           </div>
                         </div>
                       </td>
-                      <td className="ref-cell">{item.sku}</td>
-                      <td>{item.category}</td>
-                      <td>
-                        <span className="type-cell">{typeLabel}</span>
-                      </td>
-                      <td className="amount-cell" style={{ textAlign: 'right' }}>
-                        {item.stock.toLocaleString()} <span className="unit">{item.unit}</span>
-                      </td>
-                      <td className="amount-cell" style={{ textAlign: 'right', color: 'var(--sp-text-muted)' }}>
-                        {Number(item.reserved || 0).toLocaleString()}
-                      </td>
-                      <td
-                        className="amount-cell"
-                        style={{
-                          textAlign: 'right',
-                          fontWeight: 600,
-                          color: isLowStock ? 'var(--sp-warning)' : 'var(--sp-text)',
-                        }}
-                      >
-                        {Number(item.available ?? item.stock).toLocaleString()}
-                      </td>
-                      <td>
-                        <span
-                          className={`status ${isLowStock ? 'status-amber' : 'status-purple'}`}
-                          title={`Alert threshold: ${item.lowStockThreshold} ${item.unit}`}
-                        >
-                          {item.lowStockThreshold} {item.unit}
-                        </span>
-                      </td>
-                      <td className="amount-cell" style={{ textAlign: 'right' }}>
-                        {item.price}
-                      </td>
-                      <td>
-                        <Status label={item.state} />
-                      </td>
-                      <td>
-                        <div className="action-inline">
-                          <CustomFieldEditor resource="items" recordId={item.id} />
-                          <button
-                            className="mini-action"
-                            onClick={() => onAdjust(item)}
-                            title="Adjust physical stock quantity"
-                          >
-                            Adjust
-                          </button>
-                          <button
-                            className="mini-action muted"
-                            onClick={() => {
-                              setMovementItemId(item.id);
-                              setMovementPage((p) => ({ ...p, page: 0 }));
-                              setActiveTab('movements');
-                            }}
-                            title="Inspect item in movement ledger"
-                          >
-                            Ledger
-                          </button>
-                          <button
-                            className="mini-action muted"
-                            onClick={() => onThreshold(item)}
-                            title="Configure low-stock alert threshold"
-                          >
-                            Threshold
-                          </button>
-                        </div>
-                      </td>
                     </tr>
-                  );
-                })}
-                {!filteredStockItems.length && (
-                  <tr>
-                    <td className="empty-cell" colSpan={11}>
-                      {query ? `No items match “${query}”.` : 'No items found in this category.'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </section>
+        </div>
       )}
 
       {/* TAB B: Movement Ledger */}
@@ -610,7 +631,9 @@ export function InventoryPanel({
                         <td>
                           <span className="type-cell">{movement.reason}</span>
                         </td>
-                        <td className="ref-cell">{movement.sourceReference}</td>
+                        <td>
+                          <span className="sales-ref-badge">{movement.sourceReference}</span>
+                        </td>
                         <td className="amount-cell" style={{ textAlign: 'right' }}>
                           <span className={`status ${isPositive ? 'status-green' : 'status-red'}`}>
                             {isPositive ? (

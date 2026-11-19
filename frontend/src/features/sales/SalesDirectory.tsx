@@ -9,6 +9,7 @@ import {
   FileText,
   Filter,
   Package,
+  Plus,
   Receipt,
   RotateCcw,
   Search,
@@ -44,6 +45,8 @@ interface SalesDirectoryProps {
   onPayment: (invoice: SalesInvoice) => void;
   onCredit: (invoice: SalesInvoice) => void;
   onRefund: (credit: CustomerCreditNote) => void;
+  onNewQuote?: () => void;
+  onNewOrder?: () => void;
 }
 
 function getInitials(name: string): string {
@@ -80,7 +83,9 @@ export function SalesDirectory({
   onInvoice,
   onPayment,
   onCredit,
-  onRefund
+  onRefund,
+  onNewQuote,
+  onNewOrder
 }: SalesDirectoryProps) {
   const [activeTab, setActiveTab] = useState<SalesTab>('quotes');
   const [quoteFilter, setQuoteFilter] = useState<QuoteFilter>('ALL');
@@ -213,51 +218,55 @@ export function SalesDirectory({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">QUOTED PIPELINE</span>
-            <TrendingUp size={14} className="sales-metric-icon trend" />
+            <TrendingUp size={13} className="sales-metric-icon" />
           </div>
           <div className="sales-metric-val">{money(quotedPipelineValue)}</div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">{activeQuotesCount} active</span> across {quotes.length} total quotes
+            <span className="sales-sub-highlight">{activeQuotesCount} Active</span>
+            <span style={{ color: 'var(--sp-text-muted)' }}>across {quotes.length} total quotes</span>
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">ACTIVE ORDERS</span>
-            <ShoppingBag size={14} className="sales-metric-icon orders" />
+            <ShoppingBag size={13} className="sales-metric-icon" />
           </div>
           <div className="sales-metric-val">{money(openOrdersValue)}</div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">{openOrders.length} pending dispatch</span> · {orders.length - openOrders.length} shipped
+            <span className="sales-sub-highlight">{openOrders.length} Pending</span>
+            <span style={{ color: 'var(--sp-text-muted)' }}>· {orders.length - openOrders.length} shipped</span>
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">INVOICED RECEIVABLES</span>
-            <Receipt size={14} className="sales-metric-icon invoices" />
+            <Receipt size={13} className="sales-metric-icon" />
           </div>
           <div className="sales-metric-val">{money(invoicedRevenueTotal)}</div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-warning">{money(outstandingReceivables)} unpaid</span> across {unpaidInvoicesCount} invoices
+            <span className="sales-sub-warning">{money(outstandingReceivables)} Unpaid</span>
+            <span style={{ color: 'var(--sp-text-muted)' }}>across {unpaidInvoicesCount} invoices</span>
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">CUSTOMER CREDITS</span>
-            <RotateCcw size={14} className="sales-metric-icon credits" />
+            <RotateCcw size={13} className="sales-metric-icon" />
           </div>
           <div className="sales-metric-val">{money(totalRefundDue)}</div>
           <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">{customerCredits.length} credit notes</span> · pending customer refund
+            <span className="sales-sub-highlight">{customerCredits.length} Credits</span>
+            <span style={{ color: 'var(--sp-text-muted)' }}>pending refund</span>
           </div>
         </div>
       </div>
 
       {/* 2. Linear Sub-Navigation Tabs */}
       <div className="sales-subnav-container">
-        <div className="sales-subnav-tabs">
+        <div className="sales-subnav-tabs" role="tablist" aria-label="Sales modules">
           <button
             type="button"
             className={`sales-subnav-tab ${activeTab === 'quotes' ? 'active' : ''}`}
@@ -298,34 +307,35 @@ export function SalesDirectory({
             <span className="sales-subnav-badge">{customerCredits.length}</span>
           </button>
         </div>
-      </div>
 
-      {/* 3. Toolbar: Search + Contextual Status Filter Pills */}
-      <div className="sales-toolbar">
-        <div className="sales-search-box">
-          <Search size={14} className="sales-search-icon" />
-          <input
-            className="sales-search-input"
-            placeholder={
-              activeTab === 'quotes' ? 'Search quotations by ref #, customer, items, notes...'
-              : activeTab === 'orders' ? 'Search sales orders by order #, customer, warehouse, sku...'
-              : activeTab === 'invoices' ? 'Search invoices by invoice #, customer, order #...'
-              : 'Search credit notes by credit #, customer, invoice #, reason...'
-            }
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-          />
-          {query ? (
-            <button type="button" className="sales-search-clear" onClick={() => setQuery('')}>
-              <X size={12} />
+        <div className="sales-subnav-actions">
+          {activeTab === 'quotes' && onNewQuote && (
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={onNewQuote}
+            >
+              <Plus size={13} />
+              <span>New quotation</span>
             </button>
-          ) : (
-            <kbd className="sales-search-kbd">/</kbd>
+          )}
+          {activeTab === 'orders' && onNewOrder && (
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={onNewOrder}
+            >
+              <Plus size={13} />
+              <span>New sales order</span>
+            </button>
           )}
         </div>
+      </div>
 
+      {/* 3. Toolbar: Status Filter Pills (Left) + Search (Right) */}
+      <div className="sales-toolbar">
         {/* Tab-Specific Filter Pills */}
-        <div className="sales-pill-group">
+        <div className="sales-pill-group" role="tablist" aria-label="Status filters">
           {activeTab === 'quotes' && (
             <>
               <button
@@ -458,6 +468,28 @@ export function SalesDirectory({
             </>
           )}
         </div>
+
+        <div className="sales-search-box">
+          <Search size={14} className="sales-search-icon" />
+          <input
+            className="sales-search-input"
+            placeholder={
+              activeTab === 'quotes' ? 'Search quotations by ref #, customer, items, notes...'
+              : activeTab === 'orders' ? 'Search sales orders by order #, customer, warehouse, sku...'
+              : activeTab === 'invoices' ? 'Search invoices by invoice #, customer, order #...'
+              : 'Search credit notes by credit #, customer, invoice #, reason...'
+            }
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+          {query ? (
+            <button type="button" className="sales-search-clear" onClick={() => setQuery('')}>
+              <X size={12} />
+            </button>
+          ) : (
+            <kbd className="sales-search-kbd">/</kbd>
+          )}
+        </div>
       </div>
 
       {/* 4. Active Sub-Tab Table Panel */}
@@ -520,7 +552,7 @@ export function SalesDirectory({
                         </td>
                         <td>
                           <div className="sales-actions-cell">
-                            <CustomFieldEditor resource="quotes" recordId={quote.id} />
+                            <CustomFieldEditor resource="quotes" recordId={quote.id} label="Fields" />
                             {converted ? (
                               <span className="sales-status-chip converted">
                                 <CheckCircle2 size={12} /> Converted
@@ -592,13 +624,13 @@ export function SalesDirectory({
             <table className="sales-table">
               <thead>
                 <tr>
-                  <th style={{ width: '130px' }}>ORDER #</th>
-                  <th style={{ width: '170px' }}>CUSTOMER</th>
-                  <th style={{ width: '110px' }}>QUOTE REF</th>
+                  <th style={{ width: '115px' }}>ORDER #</th>
+                  <th style={{ width: '160px' }}>CUSTOMER</th>
+                  <th style={{ width: '100px' }}>QUOTE REF</th>
                   <th>ITEMS · WAREHOUSE · FULFILLMENT</th>
-                  <th style={{ width: '110px', textAlign: 'right' }}>TOTAL</th>
+                  <th style={{ width: '100px', textAlign: 'right' }}>TOTAL</th>
                   <th style={{ width: '90px' }}>STATUS</th>
-                  <th style={{ width: '180px', textAlign: 'right' }}>ACTIONS</th>
+                  <th style={{ width: '200px', textAlign: 'right' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -611,7 +643,7 @@ export function SalesDirectory({
                       <td>
                         <div className="sales-customer-cell">
                           <span className="sales-customer-avatar">{getInitials(order.customerName)}</span>
-                          <span className="sales-customer-name" title={order.customerName}>
+                          <span className="sales-customer-name" title={order.customerName} style={{ maxWidth: '135px' }}>
                             {order.customerName}
                           </span>
                         </div>
@@ -644,7 +676,7 @@ export function SalesDirectory({
                       </td>
                       <td>
                         <div className="sales-actions-cell">
-                          <CustomFieldEditor resource="sales_orders" recordId={order.id} />
+                          <CustomFieldEditor resource="sales_orders" recordId={order.id} label="Fields" />
                           {order.status !== 'shipped' && order.lines.some(line => line.reservedQuantity > 0) && (
                             <button
                               type="button"
@@ -698,15 +730,15 @@ export function SalesDirectory({
             <table className="sales-table">
               <thead>
                 <tr>
-                  <th style={{ width: '110px' }}>INVOICE #</th>
-                  <th style={{ width: '130px' }}>CUSTOMER</th>
+                  <th style={{ width: '115px' }}>INVOICE #</th>
+                  <th style={{ width: '150px' }}>CUSTOMER</th>
                   <th style={{ width: '100px' }}>ORDER REF</th>
                   <th style={{ width: '90px' }}>DUE DATE</th>
                   <th style={{ width: '90px', textAlign: 'right' }}>TOTAL</th>
                   <th style={{ width: '85px', textAlign: 'right' }}>PAID</th>
                   <th style={{ width: '90px', textAlign: 'right' }}>BALANCE</th>
                   <th style={{ width: '85px' }}>STATUS</th>
-                  <th style={{ width: '240px', textAlign: 'right' }}>ACTIONS</th>
+                  <th style={{ width: '160px', textAlign: 'right' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -749,14 +781,14 @@ export function SalesDirectory({
                         </td>
                         <td>
                           <div className="sales-actions-cell">
-                            <CustomFieldEditor resource="invoices" recordId={invoice.id} />
+                            <CustomFieldEditor resource="invoices" recordId={invoice.id} label="Fields" />
                             {balanceNum > 0 && (
                               <button
                                 type="button"
                                 className="sales-action-btn primary"
                                 onClick={() => onPayment(invoice)}
                               >
-                                <CreditCard size={12} /> Record payment
+                                <CreditCard size={12} /> Pay
                               </button>
                             )}
                             {invoice.lines?.some(line => line.creditEligibleQuantity > 0) && (
@@ -765,7 +797,7 @@ export function SalesDirectory({
                                 className="sales-action-btn ghost"
                                 onClick={() => onCredit(invoice)}
                               >
-                                <RotateCcw size={12} /> Return / credit
+                                <RotateCcw size={12} /> Credit
                               </button>
                             )}
                             {balanceNum <= 0 && !invoice.lines?.some(line => line.creditEligibleQuantity > 0) && (

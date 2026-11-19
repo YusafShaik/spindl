@@ -23,6 +23,7 @@ import {
   MapPin,
   Phone,
   Plus,
+  RefreshCw,
   Search,
   ShieldAlert,
   ShieldCheck,
@@ -151,7 +152,7 @@ function CustomerMergeModal({
 
         {/* Source Customer Preview */}
         <div style={{ padding: '12px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
-          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--sp-text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
             Source Account (Will be deactivated & merged)
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -175,7 +176,7 @@ function CustomerMergeModal({
 
         {/* Target Customer Selection */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)' }}>
+          <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)' }}>
             Select Surviving Target Account
           </label>
           <select
@@ -358,7 +359,7 @@ function QuickTimelineDrawer({ customer, onClose, onViewAllTimeline }: QuickTime
                           <span className="sales-ref-badge">{ev.reference}</span>
                         </div>
                         {ev.amount != null && (
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
                             {formatCurrency(ev.amount)}
                           </span>
                         )}
@@ -478,7 +479,7 @@ function EditCustomerTermsModal({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
               Payment Terms (Days)
             </label>
             <input
@@ -495,7 +496,7 @@ function EditCustomerTermsModal({
           </div>
 
           <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
               Approved Credit Limit (₹)
             </label>
             <input
@@ -561,6 +562,17 @@ export function CustomerDirectory({
   const [mergingCustomer, setMergingCustomer] = useState<CustomerRecord | null>(null);
   const [drawerCustomer, setDrawerCustomer] = useState<CustomerRecord | null>(null);
   const [editingTermsCustomer, setEditingTermsCustomer] = useState<CustomerRecord | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (!onRefresh || refreshing) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Dedicated Timeline tab customer selection
   const [selectedTimelineCustomerId, setSelectedTimelineCustomerId] = useState<string>(
@@ -744,9 +756,11 @@ export function CustomerDirectory({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">TOTAL ACCOUNTS</span>
-            <Users size={16} className="sales-metric-icon trend" />
+            <Users size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val">{customers.length} Accounts</div>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {customers.length} Accounts
+          </div>
           <div className="sales-metric-sub">
             <span className="sales-sub-highlight">{activeCount} Active</span> · {inactiveCount} Inactive
           </div>
@@ -755,9 +769,11 @@ export function CustomerDirectory({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">OPEN RECEIVABLES</span>
-            <IndianRupee size={16} className="sales-metric-icon orders" />
+            <IndianRupee size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val">{formatCurrency(totalOutstanding)}</div>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {formatCurrency(totalOutstanding)}
+          </div>
           <div className="sales-metric-sub">
             Across commercial customer accounts
           </div>
@@ -766,9 +782,11 @@ export function CustomerDirectory({
         <div className="sales-metric-card">
           <div className="sales-metric-header">
             <span className="sales-metric-label">LIFETIME SALES ORDERS</span>
-            <ShoppingBag size={16} className="sales-metric-icon invoices" />
+            <ShoppingBag size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
-          <div className="sales-metric-val">{totalOrders} Orders</div>
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {totalOrders} Orders
+          </div>
           <div className="sales-metric-sub">
             Fulfillments & quotes converted
           </div>
@@ -778,12 +796,12 @@ export function CustomerDirectory({
           <div className="sales-metric-header">
             <span className="sales-metric-label">CREDIT HEALTH & RISK</span>
             {holdCount > 0 ? (
-              <ShieldAlert size={16} className="sales-metric-icon credits" style={{ color: '#ef4444' }} />
+              <ShieldAlert size={13} style={{ color: 'var(--sp-text-muted)' }} />
             ) : (
-              <ShieldCheck size={16} className="sales-metric-icon credits" style={{ color: '#10b981' }} />
+              <ShieldCheck size={13} style={{ color: 'var(--sp-text-muted)' }} />
             )}
           </div>
-          <div className="sales-metric-val">
+          <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
             {holdCount} on Hold
           </div>
           <div className="sales-metric-sub">
@@ -829,15 +847,18 @@ export function CustomerDirectory({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            type="button"
-            className="sales-action-btn secondary"
-            onClick={exportDirectoryCSV}
-            title="Export filtered customer directory to CSV"
-          >
-            <Download size={13} />
-            <span>Export Directory CSV</span>
-          </button>
+          {onRefresh && (
+            <button
+              type="button"
+              className="sales-action-btn secondary"
+              onClick={() => void handleRefresh()}
+              disabled={refreshing}
+              title="Refresh customer data"
+            >
+              <RefreshCw size={12} className={refreshing ? 'spin' : ''} />
+              <span>Refresh</span>
+            </button>
+          )}
 
           {onNewCustomer && (
             <button
@@ -856,17 +877,6 @@ export function CustomerDirectory({
       {activeTab === 'accounts' && (
         <>
           <div className="sales-toolbar">
-            <div className="sales-search-box">
-              <Search size={14} className="sales-search-icon" />
-              <input
-                className="sales-search-input"
-                placeholder="Search customers, contacts, GSTIN or tags..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <kbd className="sales-search-kbd">/</kbd>
-            </div>
-
             <div className="sales-pill-group">
               <button
                 type="button"
@@ -897,6 +907,40 @@ export function CustomerDirectory({
                 Credit Hold {holdCount > 0 && <span className="sales-pill-count" style={{ color: '#dc2626' }}>{holdCount}</span>}
               </button>
             </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="sales-search-box">
+                <Search size={14} className="sales-search-icon" />
+                <input
+                  className="sales-search-input"
+                  placeholder="Search customers, contacts, GSTIN or tags…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                {query ? (
+                  <button
+                    type="button"
+                    className="sales-search-clear"
+                    onClick={() => setQuery('')}
+                    title="Clear search"
+                  >
+                    <X size={12} />
+                  </button>
+                ) : (
+                  <kbd className="sales-search-kbd">/</kbd>
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="sales-action-btn secondary"
+                onClick={exportDirectoryCSV}
+                title="Export filtered customer directory to CSV"
+              >
+                <Download size={13} />
+                <span>Export CSV</span>
+              </button>
+            </div>
           </div>
 
           <div className="sales-table-card">
@@ -904,13 +948,13 @@ export function CustomerDirectory({
               <table className="sales-table">
                 <thead>
                   <tr>
-                    <th style={{ minWidth: '220px' }}>CUSTOMER & CONTACT</th>
-                    <th style={{ width: '110px' }}>CODE</th>
-                    <th style={{ minWidth: '130px' }}>TERMS & LIMIT</th>
-                    <th style={{ width: '90px' }}>ORDERS</th>
-                    <th style={{ minWidth: '120px' }}>OUTSTANDING</th>
-                    <th style={{ width: '120px' }}>STATUS</th>
-                    <th style={{ minWidth: '200px', textAlign: 'right' }}>ACTIONS</th>
+                    <th style={{ width: '30%' }}>CUSTOMER & CONTACT</th>
+                    <th style={{ width: '10%' }}>CODE</th>
+                    <th style={{ width: '14%' }}>TERMS & LIMIT</th>
+                    <th style={{ width: '8%' }}>ORDERS</th>
+                    <th style={{ width: '12%' }}>OUTSTANDING</th>
+                    <th style={{ width: '11%' }}>STATUS</th>
+                    <th style={{ width: '15%', textAlign: 'right' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -975,7 +1019,7 @@ export function CustomerDirectory({
 
                           {/* Orders */}
                           <td>
-                            <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                            <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
                               {customer.orders || 0}
                             </span>
                           </td>
@@ -1043,7 +1087,7 @@ export function CustomerDirectory({
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: '16px' }}>
           {/* Customer Selector Sidebar */}
           <div className="sales-table-card" style={{ padding: '14px', height: 'fit-content' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--sp-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
               Select Customer Account
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '480px', overflowY: 'auto' }}>
@@ -1156,7 +1200,7 @@ export function CustomerDirectory({
                             </span>
                           </div>
                           {ev.amount != null && (
-                            <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                            <span style={{ fontSize: '13.5px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
                               {formatCurrency(ev.amount)}
                             </span>
                           )}
@@ -1179,42 +1223,48 @@ export function CustomerDirectory({
       {activeTab === 'governance' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* Credit Overview Banner */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
-            <div style={{ background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px', padding: '14px 16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="sales-metric-strip" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            <div className="sales-metric-card">
+              <div className="sales-metric-header">
                 <span className="sales-metric-label">TOTAL COMMERCIAL EXPOSURE</span>
-                <IndianRupee size={15} color="#8b5cf6" />
+                <IndianRupee size={13} style={{ color: 'var(--sp-text-muted)' }} />
               </div>
-              <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--sp-text)', margin: '4px 0 2px' }}>
+              <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {formatCurrency(totalOutstanding)}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+              <div className="sales-metric-sub">
                 Across {customers.length} business accounts
               </div>
             </div>
 
-            <div style={{ background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px', padding: '14px 16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="sales-metric-card">
+              <div className="sales-metric-header">
                 <span className="sales-metric-label">CREDIT RISK STANDING</span>
-                {holdCount > 0 ? <AlertTriangle size={15} color="#ef4444" /> : <ShieldCheck size={15} color="#10b981" />}
+                {holdCount > 0 ? (
+                  <ShieldAlert size={13} style={{ color: 'var(--sp-text-muted)' }} />
+                ) : (
+                  <ShieldCheck size={13} style={{ color: 'var(--sp-text-muted)' }} />
+                )}
               </div>
-              <div style={{ fontSize: '20px', fontWeight: 600, color: holdCount > 0 ? '#dc2626' : 'var(--sp-text)', margin: '4px 0 2px' }}>
+              <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {holdCount} Accounts on Hold
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                {goodStandingPct}% of ledger in good compliance
+              <div className="sales-metric-sub">
+                <span className={holdCount > 0 ? 'sales-sub-warning' : 'sales-sub-highlight'}>
+                  {goodStandingPct}%
+                </span> in good compliance
               </div>
             </div>
 
-            <div style={{ background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px', padding: '14px 16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="sales-metric-card">
+              <div className="sales-metric-header">
                 <span className="sales-metric-label">STANDARD SETTLEMENT TERMS</span>
-                <Calendar size={15} color="#0284c7" />
+                <Calendar size={13} style={{ color: 'var(--sp-text-muted)' }} />
               </div>
-              <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--sp-text)', margin: '4px 0 2px' }}>
+              <div className="sales-metric-val">
                 Net 15d – Net 45d
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+              <div className="sales-metric-sub">
                 ERP invoice payment schedule
               </div>
             </div>
@@ -1226,15 +1276,15 @@ export function CustomerDirectory({
               <table className="sales-table">
                 <thead>
                   <tr>
-                    <th style={{ minWidth: '200px' }}>CUSTOMER</th>
-                    <th style={{ width: '100px' }}>CODE</th>
-                    <th style={{ minWidth: '120px' }}>TAX ID / GSTIN</th>
-                    <th style={{ width: '100px' }}>TERMS</th>
-                    <th style={{ minWidth: '120px' }}>CREDIT LIMIT</th>
-                    <th style={{ minWidth: '120px' }}>OUTSTANDING</th>
-                    <th style={{ minWidth: '140px' }}>UTILIZATION</th>
-                    <th style={{ width: '120px' }}>CREDIT STATUS</th>
-                    <th style={{ minWidth: '160px', textAlign: 'right' }}>GOVERNANCE ACTION</th>
+                    <th style={{ width: '22%' }}>CUSTOMER</th>
+                    <th style={{ width: '8%' }}>CODE</th>
+                    <th style={{ width: '12%' }}>TAX ID / GSTIN</th>
+                    <th style={{ width: '9%' }}>TERMS</th>
+                    <th style={{ width: '12%' }}>CREDIT LIMIT</th>
+                    <th style={{ width: '11%' }}>OUTSTANDING</th>
+                    <th style={{ width: '11%' }}>UTILIZATION</th>
+                    <th style={{ width: '7%' }}>CREDIT STATUS</th>
+                    <th style={{ width: '8%', textAlign: 'right' }}>GOVERNANCE ACTION</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1258,7 +1308,7 @@ export function CustomerDirectory({
                         </td>
 
                         <td>
-                          <span style={{ fontSize: '11px', fontFamily: 'var(--sp-font-mono, monospace)', color: 'var(--sp-text)' }}>
+                          <span style={{ fontSize: '11.5px', color: 'var(--sp-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
                             {c.taxId || '—'}
                           </span>
                         </td>
@@ -1270,7 +1320,7 @@ export function CustomerDirectory({
                         </td>
 
                         <td>
-                          <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
                             {limit > 0 ? formatCurrency(limit) : 'No limit'}
                           </span>
                         </td>
@@ -1286,7 +1336,7 @@ export function CustomerDirectory({
                           <div style={{ width: '110px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10.5px', color: 'var(--sp-text-muted)', marginBottom: '2px' }}>
                               <span>{utilization}%</span>
-                              {isOverLimit && <span style={{ color: '#dc2626', fontWeight: 600 }}>Breached</span>}
+                              {isOverLimit && <span style={{ color: '#dc2626', fontWeight: 500 }}>Breached</span>}
                             </div>
                             <div className="customer-progress-track">
                               <div
