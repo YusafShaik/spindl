@@ -1,9 +1,10 @@
 package si.spindl.identity;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
+import si.spindl.common.exception.PaymentRequiredException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -54,25 +55,23 @@ public class TenantModuleEntitlementService {
     public List<ModuleView> setEnabled(UUID tenantId, UUID actorId, String requestedCode, boolean enabled) {
         String code = requestedCode == null ? "" : requestedCode.trim().toLowerCase(java.util.Locale.ROOT);
         Definition definition = CATALOG.get(code);
-        if (definition == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Module not found");
-        if (definition.required() && !enabled) throw new ResponseStatusException(HttpStatus.CONFLICT, "This foundation module must remain enabled");
+        if (definition == null) throw new NotFoundException("Module not found");
+        if (definition.required() && !enabled) throw new ConflictException("This foundation module must remain enabled");
         var tenantModules = entitlements.findAllForUpdate(tenantId);
         var row = tenantModules.stream().filter(candidate -> candidate.getModuleCode().equals(code)).findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Module entitlement has not been provisioned"));
-        if (enabled && !row.isEntitled()) throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, "This module is not included in the workspace plan");
+                .orElseThrow(() -> new ConflictException("Module entitlement has not been provisioned"));
+        if (enabled && !row.isEntitled()) throw new PaymentRequiredException("This module is not included in the workspace plan");
         if (enabled) {
             var missingDependencies = definition.dependencies().stream()
                     .filter(dependency -> tenantModules.stream().filter(candidate -> candidate.getModuleCode().equals(dependency))
                             .noneMatch(TenantModuleEntitlementEntity::isEnabled)).toList();
-            if (!missingDependencies.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Enable required modules first: " + String.join(", ", missingDependencies.stream().map(dependency -> CATALOG.get(dependency).name()).toList()));
+            if (!missingDependencies.isEmpty()) throw new ConflictException("Enable required modules first: " + String.join(", ", missingDependencies.stream().map(dependency -> CATALOG.get(dependency).name()).toList()));
         }
         if (!enabled) {
             var enabledDependents = tenantModules.stream()
                     .filter(TenantModuleEntitlementEntity::isEnabled)
                     .filter(candidate -> CATALOG.get(candidate.getModuleCode()).dependencies().contains(code)).toList();
-            if (!enabledDependents.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Disable dependent modules first: " + String.join(", ", enabledDependents.stream().map(candidate -> CATALOG.get(candidate.getModuleCode()).name()).toList()));
+            if (!enabledDependents.isEmpty()) throw new ConflictException("Disable dependent modules first: " + String.join(", ", enabledDependents.stream().map(candidate -> CATALOG.get(candidate.getModuleCode()).name()).toList()));
         }
         if (row.isEnabled() != enabled) {
             row.setEnabled(enabled);
@@ -89,7 +88,7 @@ public class TenantModuleEntitlementService {
     @Transactional
     public void applyPlan(UUID tenantId,String planCode,int version){
         var rows=entitlements.findAllForUpdate(tenantId);
-        if(rows.isEmpty())throw new ResponseStatusException(HttpStatus.CONFLICT,"Workspace module entitlements are not initialized");
+        if(rows.isEmpty())throw new ConflictException("Workspace module entitlements are not initialized");
         var included=SubscriptionQuotaService.modulesFor(planCode);
         for(var row:rows)row.applyPlan(planCode,version,included.contains(row.getModuleCode()));
     }

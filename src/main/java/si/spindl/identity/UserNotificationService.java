@@ -1,11 +1,10 @@
 package si.spindl.identity;
 
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import java.time.Instant;
 import java.util.List;
@@ -15,9 +14,9 @@ import java.util.UUID;
 @Service
 public class UserNotificationService {
     private final UserNotificationRepository notifications;
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
 
-    public UserNotificationService(UserNotificationRepository notifications, DevelopmentTenant tenant) {
+    public UserNotificationService(UserNotificationRepository notifications, CurrentTenant tenant) {
         this.notifications = notifications;
         this.tenant = tenant;
     }
@@ -34,7 +33,7 @@ public class UserNotificationService {
     @Transactional
     public UserNotificationView markRead(UUID userId, UUID id) {
         var notification = notifications.findByTenantIdAndUserIdAndId(tenant.currentTenantId(), userId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
+                .orElseThrow(() -> new NotFoundException("Notification not found"));
         notification.markRead();
         return UserNotificationView.from(notification);
     }

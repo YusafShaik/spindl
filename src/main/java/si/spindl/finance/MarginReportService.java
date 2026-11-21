@@ -1,13 +1,12 @@
 package si.spindl.finance;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import si.spindl.purchasing.PurchaseOrderLineEntity;
 import si.spindl.purchasing.PurchaseOrderRepository;
 import si.spindl.catalog.ItemRepository;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -18,12 +17,12 @@ import java.util.*;
 @Service
 public class MarginReportService {
     private static final BigDecimal HUNDRED = new BigDecimal("100");
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
     private final InvoiceRepository invoices;
     private final PurchaseOrderRepository purchaseOrders;
     private final ItemRepository items;
 
-    public MarginReportService(DevelopmentTenant tenant, InvoiceRepository invoices, PurchaseOrderRepository purchaseOrders, ItemRepository items) {
+    public MarginReportService(CurrentTenant tenant, InvoiceRepository invoices, PurchaseOrderRepository purchaseOrders, ItemRepository items) {
         this.tenant = tenant;
         this.invoices = invoices;
         this.purchaseOrders = purchaseOrders;
@@ -126,9 +125,9 @@ public class MarginReportService {
 
     private void validate(LocalDate from, LocalDate to) {
         if (from != null && to != null && from.isAfter(to))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "From date must not be after the to date");
+            throw new BadRequestException("From date must not be after the to date");
         if (from != null && from.isAfter(LocalDate.now(ZoneOffset.UTC)) || to != null && to.isAfter(LocalDate.now(ZoneOffset.UTC)))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Margin report dates cannot be in the future");
+            throw new BadRequestException("Margin report dates cannot be in the future");
     }
 
     private String cell(String value) {

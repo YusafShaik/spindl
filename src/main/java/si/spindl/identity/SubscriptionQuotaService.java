@@ -1,9 +1,9 @@
 package si.spindl.identity;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -39,29 +39,28 @@ public class SubscriptionQuotaService {
     @Transactional
     public void reserveSeatForInvite(UUID tenantId) {
         var subscription=subscriptions.findByTenantIdForUpdate(tenantId)
-                .orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Workspace plan has not been provisioned"));
+                .orElseThrow(()->new ConflictException("Workspace plan has not been provisioned"));
         var plan=plans.findByPlanCodeAndVersionAndActiveTrue(subscription.getPlanCode(),subscription.getPlanVersion())
-                .orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Workspace plan version is unavailable"));
+                .orElseThrow(()->new ConflictException("Workspace plan version is unavailable"));
         long occupied=memberships.countByTenantIdAndActiveTrue(tenantId)+invitations.countByTenantIdAndAcceptedAtIsNullAndExpiresAtAfter(tenantId,Instant.now());
-        if(occupied>=plan.getSeatLimit()) throw new ResponseStatusException(HttpStatus.CONFLICT,
-                "The "+plan.getDisplayName()+" plan allows "+plan.getSeatLimit()+" seats. Remove a pending invite or update the plan to add another teammate.");
+        if(occupied>=plan.getSeatLimit()) throw new ConflictException("The "+plan.getDisplayName()+" plan allows "+plan.getSeatLimit()+" seats. Remove a pending invite or update the plan to add another teammate.");
     }
 
     @Transactional
     public void assertSeatAvailableForAcceptance(UUID tenantId) {
         var subscription=subscriptions.findByTenantIdForUpdate(tenantId)
-                .orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Workspace plan has not been provisioned"));
+                .orElseThrow(()->new ConflictException("Workspace plan has not been provisioned"));
         var plan=plans.findByPlanCodeAndVersionAndActiveTrue(subscription.getPlanCode(),subscription.getPlanVersion())
-                .orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Workspace plan version is unavailable"));
+                .orElseThrow(()->new ConflictException("Workspace plan version is unavailable"));
         if(memberships.countByTenantIdAndActiveTrue(tenantId)>=plan.getSeatLimit())
-            throw new ResponseStatusException(HttpStatus.CONFLICT,"The workspace has reached its "+plan.getSeatLimit()+" seat limit.");
+            throw new ConflictException("The workspace has reached its "+plan.getSeatLimit()+" seat limit.");
     }
 
     @Transactional(readOnly = true)
     public PlanSummary current(UUID tenantId) {
-        var subscription=subscriptions.findByTenantId(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Workspace plan not found"));
+        var subscription=subscriptions.findByTenantId(tenantId).orElseThrow(()->new NotFoundException("Workspace plan not found"));
         var plan=plans.findByPlanCodeAndVersionAndActiveTrue(subscription.getPlanCode(),subscription.getPlanVersion())
-                .orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Workspace plan version is unavailable"));
+                .orElseThrow(()->new ConflictException("Workspace plan version is unavailable"));
         long active=memberships.countByTenantIdAndActiveTrue(tenantId);
         long pending=invitations.countByTenantIdAndAcceptedAtIsNullAndExpiresAtAfter(tenantId,Instant.now());
         long storageBytes=storageUsage.findById(tenantId).map(si.spindl.attachments.TenantStorageUsageEntity::getUsedBytes).orElse(0L);
@@ -75,7 +74,7 @@ public class SubscriptionQuotaService {
         var choices=plans.findAll().stream().filter(SubscriptionPlanEntity::isActive)
                 .filter(p->p.getPlanCode().equalsIgnoreCase(requestedCode==null?"":requestedCode.trim()))
                 .sorted(java.util.Comparator.comparingInt(SubscriptionPlanEntity::getVersion).reversed()).toList();
-        if(choices.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan not found");
+        if(choices.isEmpty()) throw new NotFoundException("Plan not found");
         var target=choices.getFirst();
         long seats=current.activeSeats()+current.pendingInvitations();
         var targetModules=modulesFor(target.getPlanCode());

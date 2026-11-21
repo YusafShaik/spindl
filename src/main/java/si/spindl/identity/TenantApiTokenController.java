@@ -1,5 +1,6 @@
 package si.spindl.identity;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -21,6 +22,6 @@ public class TenantApiTokenController {
     @GetMapping("/scopes") public List<String> scopes(@AuthenticationPrincipal Jwt jwt){return service.supportedScopes(actor(jwt));}
     @PostMapping @ResponseStatus(HttpStatus.CREATED) public TenantApiTokenService.CreatedToken create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateTokenRequest request){return service.create(actor(jwt),new TenantApiTokenService.CreateTokenRequest(request.name(),request.scopes(),request.expiresInDays()));}
     @DeleteMapping("/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void revoke(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){service.revoke(actor(jwt),id);}
-    private UUID actor(Jwt jwt){return UUID.fromString(jwt.getSubject());}
+    private UUID actor(Jwt jwt){return AuthenticatedActor.userId(jwt);}
     public record CreateTokenRequest(@NotBlank @Size(max=120) String name,@NotEmpty List<@NotBlank String> scopes,@Min(1) @Max(365) Integer expiresInDays){}
 }

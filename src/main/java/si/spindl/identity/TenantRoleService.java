@@ -1,9 +1,10 @@
 package si.spindl.identity;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,14 +46,14 @@ public class TenantRoleService {
     @Transactional
     public RoleView create(UUID tenantId,UUID actorId,SaveRoleRequest request){
         String code=normalizeCode(request.roleCode());
-        if(BUILT_INS.containsKey(code))throw new ResponseStatusException(HttpStatus.CONFLICT,"Built-in role codes cannot be reused");
-        if(roles.existsByTenantIdAndRoleCode(tenantId,code))throw new ResponseStatusException(HttpStatus.CONFLICT,"A role with this code already exists");
+        if(BUILT_INS.containsKey(code))throw new ConflictException("Built-in role codes cannot be reused");
+        if(roles.existsByTenantIdAndRoleCode(tenantId,code))throw new ConflictException("A role with this code already exists");
         String name=normalizeName(request.displayName());String description=normalizeDescription(request.description());
         var role=roles.save(new TenantRoleEntity(UUID.randomUUID(),tenantId,code,name,description,false,actorId));
         List<TenantRolePermissionEntity> grants;
         if(request.cloneFrom()!=null&&!request.cloneFrom().isBlank()){
             String source=normalizeExistingCode(request.cloneFrom());
-            var sourceRole=roles.findByTenantIdAndRoleCode(tenantId,source).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Role to clone not found"));
+            var sourceRole=roles.findByTenantIdAndRoleCode(tenantId,source).orElseThrow(()->new NotFoundException("Role to clone not found"));
             grants=permissions.findAllByTenantIdAndRoleOrderByModuleAscResourceAscActionAsc(tenantId,sourceRole.getRoleCode()).stream()
                     .map(grant->new TenantRolePermissionEntity(tenantId,code,grant.getModule(),grant.getResource(),grant.getAction(),grant.getPermissionScope())).toList();
         }else grants=List.of();
@@ -64,10 +65,10 @@ public class TenantRoleService {
     @Transactional
     public RoleView update(UUID tenantId,UUID actorId,String requestedCode,SaveRoleRequest request){
         String code=normalizeExistingCode(requestedCode);
-        var role=roles.findByTenantIdAndRoleCode(tenantId,code).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Role not found"));
-        if(role.isSystemRole())throw new ResponseStatusException(HttpStatus.CONFLICT,"Built-in roles are managed by the platform; clone one to customize it");
+        var role=roles.findByTenantIdAndRoleCode(tenantId,code).orElseThrow(()->new NotFoundException("Role not found"));
+        if(role.isSystemRole())throw new ConflictException("Built-in roles are managed by the platform; clone one to customize it");
         if(request.roleCode()!=null&&!request.roleCode().isBlank()&&!code.equals(normalizeCode(request.roleCode())))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Custom role codes cannot be changed after creation");
+            throw new BadRequestException("Custom role codes cannot be changed after creation");
         String name=normalizeName(request.displayName());String description=normalizeDescription(request.description());
         List<GrantRequest> requested=request.permissions()==null?List.of():request.permissions();
         var grants=requested.stream().map(grant->normalizeGrant(grant)).distinct().map(grant->
@@ -82,9 +83,9 @@ public class TenantRoleService {
     @Transactional
     public void delete(UUID tenantId,UUID actorId,String requestedCode){
         String code=normalizeExistingCode(requestedCode);
-        var role=roles.findByTenantIdAndRoleCode(tenantId,code).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Role not found"));
-        if(role.isSystemRole())throw new ResponseStatusException(HttpStatus.CONFLICT,"Built-in roles cannot be deleted");
-        if(memberships.existsByTenantIdAndRole(tenantId,code))throw new ResponseStatusException(HttpStatus.CONFLICT,"Reassign all members, including inactive members, before deleting this role");
+        var role=roles.findByTenantIdAndRoleCode(tenantId,code).orElseThrow(()->new NotFoundException("Role not found"));
+        if(role.isSystemRole())throw new ConflictException("Built-in roles cannot be deleted");
+        if(memberships.existsByTenantIdAndRole(tenantId,code))throw new ConflictException("Reassign all members, including inactive members, before deleting this role");
         invitations.deleteAllByTenantIdAndRoleAndAcceptedAtIsNull(tenantId,code);
         permissions.deleteAllByTenantIdAndRole(tenantId,code);
         roles.delete(role);
@@ -101,17 +102,17 @@ public class TenantRoleService {
         boolean specificScopeSupported=(leadScopeSupported||cycleCountScopeSupported)&&Set.of("OWN","TEAM","BRANCH").contains(scope);
         if(!MODULES.contains(module)||!ACTIONS.contains(action)||!SCOPE.contains(scope)||!resource.matches("[a-z0-9_*.-]{1,64}")
                 ||(!"ALL".equals(scope)&&!specificScopeSupported))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Own, direct-team, and assigned-branch scopes are supported for CRM leads and inventory cycle counts. Other grants must use All scope.");
+            throw new BadRequestException("Own, direct-team, and assigned-branch scopes are supported for CRM leads and inventory cycle counts. Other grants must use All scope.");
         return new GrantRequest(module,resource,action,scope);
     }
     private String normalizeCode(String code){
         String normalized=code==null?"":code.trim().toUpperCase(Locale.ROOT);
-        if(!normalized.matches("[A-Z][A-Z0-9_]{1,23}"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Role code must use 2–24 letters, digits, or underscores and start with a letter");
+        if(!normalized.matches("[A-Z][A-Z0-9_]{1,23}"))throw new BadRequestException("Role code must use 2–24 letters, digits, or underscores and start with a letter");
         return normalized;
     }
-    private String normalizeExistingCode(String code){String value=code==null?"":code.trim().toUpperCase(Locale.ROOT);if(!value.matches("[A-Z][A-Z0-9_]{0,23}"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Role code is invalid");return value;}
-    private String normalizeName(String name){String value=name==null?"":name.trim();if(value.isBlank()||value.length()>80)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Role name must be between 1 and 80 characters");return value;}
-    private String normalizeDescription(String description){String value=description==null?"":description.trim();if(value.length()>240)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Role description cannot exceed 240 characters");return value;}
+    private String normalizeExistingCode(String code){String value=code==null?"":code.trim().toUpperCase(Locale.ROOT);if(!value.matches("[A-Z][A-Z0-9_]{0,23}"))throw new BadRequestException("Role code is invalid");return value;}
+    private String normalizeName(String name){String value=name==null?"":name.trim();if(value.isBlank()||value.length()>80)throw new BadRequestException("Role name must be between 1 and 80 characters");return value;}
+    private String normalizeDescription(String description){String value=description==null?"":description.trim();if(value.length()>240)throw new BadRequestException("Role description cannot exceed 240 characters");return value;}
     private RoleView view(TenantRoleEntity role,List<TenantRolePermissionEntity> grants){
         return new RoleView(role.getId(),role.getRoleCode(),role.getDisplayName(),role.getDescription(),role.isSystemRole(),grants.stream()
                 .map(grant->new GrantRequest(grant.getModule(),grant.getResource(),grant.getAction(),grant.getPermissionScope())).toList());

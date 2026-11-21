@@ -30,11 +30,11 @@ public class DashboardService {
     private final SupplierBillRepository supplierBills;
     private final TenantRepository tenants;
 
-    public DashboardController.Summary getSummary(UUID tenantId) {
+    public DashboardDtos.Summary getSummary(UUID tenantId) {
         ZoneId zone = tenants.findById(tenantId).map(t -> ZoneId.of(t.getTimezone())).orElse(ZoneId.of("UTC"));
         var today = java.time.LocalDate.now(zone);
         var start = today.withDayOfMonth(1).atStartOfDay(zone).toInstant();
-        return new DashboardController.Summary(
+        return new DashboardDtos.Summary(
                 invoices.invoicedSince(tenantId, start),
                 Math.toIntExact(orders.countByTenantIdAndStatusIn(tenantId, List.of("confirmed", "partially_shipped"))),
                 items.calculateInventoryValue(tenantId).orElse(BigDecimal.ZERO),
@@ -47,7 +47,7 @@ public class DashboardService {
         );
     }
 
-    public List<DashboardController.TrendPoint> getTrend(UUID tenantId, int months) {
+    public List<DashboardDtos.TrendPoint> getTrend(UUID tenantId, int months) {
         int count = Math.max(1, Math.min(months, 24));
         ZoneId zone = tenants.findById(tenantId).map(t -> ZoneId.of(t.getTimezone())).orElse(ZoneId.of("UTC"));
         YearMonth current = YearMonth.now(zone);
@@ -61,7 +61,7 @@ public class DashboardService {
         return LongStream.range(0, count).mapToObj(offset -> {
             YearMonth period = first.plusMonths(offset);
             String key = period.toString();
-            return new DashboardController.TrendPoint(
+            return new DashboardDtos.TrendPoint(
                     key,
                     period.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ROOT),
                     sales.getOrDefault(key, BigDecimal.ZERO),
@@ -70,10 +70,10 @@ public class DashboardService {
         }).toList();
     }
 
-    public DashboardController.Alerts getAlerts(UUID tenantId) {
-        return new DashboardController.Alerts(
+    public DashboardDtos.Alerts getAlerts(UUID tenantId) {
+        return new DashboardDtos.Alerts(
                 items.findLowStock(tenantId).stream()
-                        .map(item -> new DashboardController.LowStockItem(
+                        .map(item -> new DashboardDtos.LowStockItem(
                                 item.getId(),
                                 item.getSku(),
                                 item.getName(),

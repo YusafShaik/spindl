@@ -1,10 +1,9 @@
 package si.spindl.finance;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -17,14 +16,14 @@ import java.util.UUID;
 public class FinanceActivityService {
     private static final Set<String> TYPES=Set.of("SALES_INVOICE","CUSTOMER_PAYMENT","CUSTOMER_CREDIT","CUSTOMER_REFUND","SUPPLIER_BILL","SUPPLIER_PAYMENT","SUPPLIER_CREDIT");
     private final FinanceActivityRepository activities;
-    private final DevelopmentTenant tenant;
-    public FinanceActivityService(FinanceActivityRepository activities,DevelopmentTenant tenant){this.activities=activities;this.tenant=tenant;}
+    private final CurrentTenant tenant;
+    public FinanceActivityService(FinanceActivityRepository activities,CurrentTenant tenant){this.activities=activities;this.tenant=tenant;}
 
     @Transactional(readOnly=true)
     public List<ActivityView> list(String requestedType,LocalDate from,LocalDate to){
-        if(from!=null&&to!=null&&from.isAfter(to))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"From date must be on or before the to date");
+        if(from!=null&&to!=null&&from.isAfter(to))throw new BadRequestException("From date must be on or before the to date");
         String type=requestedType==null||requestedType.isBlank()?"ALL":requestedType.trim().toUpperCase(Locale.ROOT);
-        if(!type.equals("ALL")&&!TYPES.contains(type))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unsupported transaction type");
+        if(!type.equals("ALL")&&!TYPES.contains(type))throw new BadRequestException("Unsupported transaction type");
         ZoneId zone=ZoneId.systemDefault();
         java.time.Instant start=from==null?null:from.atStartOfDay(zone).toInstant();
         java.time.Instant endExclusive=to==null?null:to.plusDays(1).atStartOfDay(zone).toInstant();

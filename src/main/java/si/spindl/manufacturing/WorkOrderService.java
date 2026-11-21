@@ -1,6 +1,8 @@
 package si.spindl.manufacturing;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -245,5 +247,5 @@ public class WorkOrderService {
     private ItemEntity lockItem(UUID tenantId,UUID id){ItemEntity item=items.findForUpdate(tenantId,id).orElseThrow(()->notFound("Item not found in this workspace"));if(!item.isActive())throw conflict("Item is inactive");return item;}
     private ItemEntity item(UUID tenantId,UUID id){return items.findByTenantIdAndId(tenantId,id).orElseThrow(()->notFound("Item not found in this workspace"));}
     private String normalizePriority(String value){String priority=value==null||value.isBlank()?"NORMAL":value.trim().toUpperCase(Locale.ROOT);if(!Set.of("LOW","NORMAL","HIGH","URGENT").contains(priority))throw badRequest("Priority must be LOW, NORMAL, HIGH, or URGENT");return priority;}
-    private ResponseStatusException notFound(String msg){return new ResponseStatusException(HttpStatus.NOT_FOUND,msg);}private ResponseStatusException conflict(String msg){return new ResponseStatusException(HttpStatus.CONFLICT,msg);}private ResponseStatusException badRequest(String msg){return new ResponseStatusException(HttpStatus.BAD_REQUEST,msg);}
+    private ResponseStatusException notFound(String msg){return new NotFoundException(msg);}private ResponseStatusException conflict(String msg){return new ConflictException(msg);}private ResponseStatusException badRequest(String msg){return new BadRequestException(msg);}
 }

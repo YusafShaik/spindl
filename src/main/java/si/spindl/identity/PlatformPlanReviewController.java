@@ -1,5 +1,6 @@
 package si.spindl.identity;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,12 +26,12 @@ public class PlatformPlanReviewController {
 
     @PostMapping("/{id}/approve")
     public TenantPlanChangeRequestService.PlatformRequestView approve(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody(required=false) ReviewRequest request){
-        return service.approve(id,UUID.fromString(jwt.getSubject()),jwt.getClaimAsString("email"),request==null?null:request.note());
+        return service.approve(id,AuthenticatedActor.userId(jwt),jwt.getClaimAsString("email"),request==null?null:request.note());
     }
 
     @PostMapping("/{id}/reject")
     public TenantPlanChangeRequestService.PlatformRequestView reject(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody ReviewRequest request){
-        return service.reject(id,UUID.fromString(jwt.getSubject()),jwt.getClaimAsString("email"),request.note());
+        return service.reject(id,AuthenticatedActor.userId(jwt),jwt.getClaimAsString("email"),request.note());
     }
 
     public record ReviewRequest(@Size(max=500) String note){}

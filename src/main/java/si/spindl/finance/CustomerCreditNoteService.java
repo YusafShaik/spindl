@@ -1,7 +1,9 @@
 package si.spindl.finance;
 
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -12,7 +14,7 @@ import si.spindl.identity.TenantAuditEventRepository;
 import si.spindl.identity.TenantWebhookService;
 import si.spindl.quality.QualityLotEntity;
 import si.spindl.quality.QualityLotRepository;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -26,7 +28,7 @@ import static si.spindl.finance.CustomerCreditNoteDtos.*;
 public class CustomerCreditNoteService {
     private static final Set<String> DISPOSITIONS=Set.of("RESTOCK","QUARANTINE","SCRAP");
     private static final Set<String> METHODS=Set.of("CASH","UPI","BANK_TRANSFER","CARD","CHEQUE");
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
     private final InvoiceRepository invoices;
     private final CustomerCreditNoteRepository notes;
     private final CustomerCreditRefundRepository refunds;
@@ -37,7 +39,7 @@ public class CustomerCreditNoteService {
     private final TenantAuditEventRepository audit;
     private final TenantWebhookService webhooks;
 
-    public CustomerCreditNoteService(DevelopmentTenant tenant,InvoiceRepository invoices,CustomerCreditNoteRepository notes,CustomerCreditRefundRepository refunds,ItemRepository items,WarehouseStockRepository stock,InventoryMovementRepository movements,QualityLotRepository qualityLots,TenantAuditEventRepository audit,TenantWebhookService webhooks){this.tenant=tenant;this.invoices=invoices;this.notes=notes;this.refunds=refunds;this.items=items;this.stock=stock;this.movements=movements;this.qualityLots=qualityLots;this.audit=audit;this.webhooks=webhooks;}
+    public CustomerCreditNoteService(CurrentTenant tenant,InvoiceRepository invoices,CustomerCreditNoteRepository notes,CustomerCreditRefundRepository refunds,ItemRepository items,WarehouseStockRepository stock,InventoryMovementRepository movements,QualityLotRepository qualityLots,TenantAuditEventRepository audit,TenantWebhookService webhooks){this.tenant=tenant;this.invoices=invoices;this.notes=notes;this.refunds=refunds;this.items=items;this.stock=stock;this.movements=movements;this.qualityLots=qualityLots;this.audit=audit;this.webhooks=webhooks;}
 
     @Transactional(readOnly=true)
     public List<CreditNoteView> list(){return notes.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(CreditNoteView::from).toList();}
@@ -106,9 +108,9 @@ public class CustomerCreditNoteService {
 
     private List<NormalizedLine> normalize(List<CreditLineRequest> inputs){if(inputs==null||inputs.isEmpty())throw badRequest("At least one invoice line is required");Set<UUID> seen=new HashSet<>();List<NormalizedLine> result=new ArrayList<>();for(CreditLineRequest input:inputs){String disposition=input.disposition().trim().toUpperCase(Locale.ROOT);if(!DISPOSITIONS.contains(disposition))throw badRequest("Disposition must be RESTOCK, QUARANTINE, or SCRAP");if(!seen.add(input.invoiceLineId()))throw badRequest("Each invoice line can appear only once per credit note");result.add(new NormalizedLine(input.invoiceLineId(),input.quantity(),disposition));}result.sort(Comparator.comparing(line->line.invoiceLineId.toString()));return result;}
     private String hash(String input){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8)));}catch(Exception exception){throw new IllegalStateException(exception);}}
-    private ResponseStatusException notFound(String message){return new ResponseStatusException(HttpStatus.NOT_FOUND,message);}
-    private ResponseStatusException badRequest(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}
-    private ResponseStatusException conflict(String message){return new ResponseStatusException(HttpStatus.CONFLICT,message);}
+    private ResponseStatusException notFound(String message){return new NotFoundException(message);}
+    private ResponseStatusException badRequest(String message){return new BadRequestException(message);}
+    private ResponseStatusException conflict(String message){return new ConflictException(message);}
     private record NormalizedLine(UUID invoiceLineId,int quantity,String disposition){}
     private record PreparedLine(InvoiceLineEntity invoiceLine,NormalizedLine input,BigDecimal subtotal,BigDecimal tax,BigDecimal total){}
 }

@@ -1,5 +1,6 @@
 package si.spindl.identity;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -21,6 +22,6 @@ public class TenantWebhookController {
     @PostMapping("/deliveries/{id}/replay") public TenantWebhookService.DeliveryView replay(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.replay(actor(jwt),id);}
     @PostMapping @ResponseStatus(HttpStatus.CREATED) public TenantWebhookService.CreatedEndpoint create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateWebhookRequest request){return service.create(actor(jwt),new TenantWebhookService.CreateEndpointRequest(request.name(),request.targetUrl(),request.eventTypes()));}
     @DeleteMapping("/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void deactivate(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){service.deactivate(actor(jwt),id);}
-    private UUID actor(Jwt jwt){return UUID.fromString(jwt.getSubject());}
+    private UUID actor(Jwt jwt){return AuthenticatedActor.userId(jwt);}
     public record CreateWebhookRequest(@NotBlank @Size(max=120) String name,@NotBlank @Size(max=2048) String targetUrl,@NotEmpty List<@NotBlank String> eventTypes){}
 }

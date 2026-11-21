@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
-import org.springframework.beans.factory.annotation.Value;
+import si.spindl.config.SpindlProperties;
 import si.spindl.crm.LeadRepository;
 import si.spindl.inventory.InventoryCycleCountRepository;
 import si.spindl.party.CustomerRepository;
@@ -29,8 +29,8 @@ public class TenantPermissionAuthorizationManager implements AuthorizationManage
     private final InventoryCycleCountRepository cycleCounts;
     private final CustomerRepository customers;
     private final TenantMembershipBranchRepository memberBranches;
-    @Value("${spindl.platform-billing-emails:}") private String platformBillingEmails;
-    @Value("${spindl.platform-support-emails:}") private String platformSupportEmails;
+    private final String platformBillingEmails;
+    private final String platformSupportEmails;
     private final AntPathMatcher paths = new AntPathMatcher();
     private final Map<String, String> moduleAndResource = Map.ofEntries(
             Map.entry("/api/dashboard/**", "dashboard:overview"),
@@ -70,9 +70,12 @@ public class TenantPermissionAuthorizationManager implements AuthorizationManage
             Map.entry("/api/quality/**", "quality:inspections"));
 
     public TenantPermissionAuthorizationManager(TenantMembershipRepository memberships, TenantRolePermissionRepository permissions,
-                                                TenantRepository tenants, TenantModuleEntitlementService moduleEntitlements,LeadRepository leads,InventoryCycleCountRepository cycleCounts,CustomerRepository customers,TenantMembershipBranchRepository memberBranches) {
+                                                TenantRepository tenants, TenantModuleEntitlementService moduleEntitlements,LeadRepository leads,InventoryCycleCountRepository cycleCounts,CustomerRepository customers,TenantMembershipBranchRepository memberBranches,
+                                                SpindlProperties properties) {
         this.memberships = memberships; this.permissions = permissions; this.tenants = tenants;
         this.moduleEntitlements = moduleEntitlements;this.leads=leads;this.cycleCounts=cycleCounts;this.customers=customers;this.memberBranches=memberBranches;
+        this.platformBillingEmails = properties.getPlatformBillingEmails();
+        this.platformSupportEmails = properties.getPlatformSupportEmails();
     }
 
     @Override

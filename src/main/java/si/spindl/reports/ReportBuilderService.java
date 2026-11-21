@@ -1,20 +1,22 @@
 package si.spindl.reports;
 
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import jakarta.persistence.EntityManager;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import si.spindl.identity.TenantAuditEventEntity;
 import si.spindl.identity.TenantAuditEventRepository;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 import java.util.*;
 
 @Service
 public class ReportBuilderService {
     private record Source(String table,Map<String,String> columns,String orderColumn){private Source(String table,Map<String,String> columns){this(table,columns,"created_at");}}
-    private final DevelopmentTenant tenant;private final SavedReportRepository reports;private final EntityManager entityManager;private final TenantAuditEventRepository audit;
-    public ReportBuilderService(DevelopmentTenant tenant,SavedReportRepository reports,EntityManager entityManager,TenantAuditEventRepository audit){this.tenant=tenant;this.reports=reports;this.entityManager=entityManager;this.audit=audit;}
+    private final CurrentTenant tenant;private final SavedReportRepository reports;private final EntityManager entityManager;private final TenantAuditEventRepository audit;
+    public ReportBuilderService(CurrentTenant tenant,SavedReportRepository reports,EntityManager entityManager,TenantAuditEventRepository audit){this.tenant=tenant;this.reports=reports;this.entityManager=entityManager;this.audit=audit;}
 
     @Transactional(readOnly=true) public List<SourceView> sources(){return sourceCatalog().entrySet().stream().map(entry->new SourceView(entry.getKey(),label(entry.getKey()),entry.getValue().columns().keySet().stream().map(key->new ColumnView(key,label(key),typeOf(key))).toList())).toList();}
     @Transactional(readOnly=true) public List<ReportView> list(){return reports.findAllByTenantIdOrderByUpdatedAtDesc(tenant.currentTenantId()).stream().map(ReportView::from).toList();}
@@ -34,7 +36,7 @@ public class ReportBuilderService {
     private Map<String,Source> sourceCatalog(){var catalog=new LinkedHashMap<String,Source>();catalog.put("customers",new Source("customers",columns("id","id","code","code","name","name","email","email","status","status","active","active","createdAt","created_at")));catalog.put("suppliers",new Source("suppliers",columns("id","id","code","code","name","name","email","email","status","status","active","active","createdAt","created_at")));catalog.put("items",new Source("items",columns("id","id","sku","sku","name","name","category","category","itemType","item_type","onHand","on_hand","reservedQuantity","reserved_quantity","unit","unit","unitPrice","unit_price","active","active","createdAt","created_at")));catalog.put("inventoryMovements",new Source("inventory_movements",columns("id","id","itemId","item_id","warehouseId","warehouse_id","quantityChange","quantity_delta","reason","reason","sourceReference","source_reference","createdAt","created_at")));catalog.put("salesOrders",new Source("sales_orders",columns("id","id","orderNumber","order_number","customerId","customer_id","status","status","createdAt","created_at")));catalog.put("purchaseOrders",new Source("purchase_orders",columns("id","id","orderNumber","order_number","supplierId","supplier_id","status","status","notes","notes","createdAt","created_at")));catalog.put("invoices",new Source("invoices",columns("id","id","invoiceNumber","invoice_number","salesOrderId","sales_order_id","customerId","customer_id","status","status","dueDate","due_date","total","total","amountPaid","amount_paid","creditTotal","credit_total","issuedAt","issued_at"),"issued_at"));return catalog;}
     private Map<String,String> columns(String...pairs){var columns=new LinkedHashMap<String,String>();for(int i=0;i<pairs.length;i+=2)columns.put(pairs[i],pairs[i+1]);return Collections.unmodifiableMap(columns);}
     private String label(String value){String spaced=value.replaceAll("([a-z0-9])([A-Z])","$1 $2").replace('_',' ');return Arrays.stream(spaced.split(" ")).filter(part->!part.isBlank()).map(part->part.substring(0,1).toUpperCase(Locale.ROOT)+part.substring(1)).collect(java.util.stream.Collectors.joining(" "));}
-    private ResponseStatusException badRequest(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}private ResponseStatusException conflict(String message){return new ResponseStatusException(HttpStatus.CONFLICT,message);}private ResponseStatusException notFound(String message){return new ResponseStatusException(HttpStatus.NOT_FOUND,message);}
+    private ResponseStatusException badRequest(String message){return new BadRequestException(message);}private ResponseStatusException conflict(String message){return new ConflictException(message);}private ResponseStatusException notFound(String message){return new NotFoundException(message);}
 
     public record CreateRequest(String name,String dataSource,List<String> columns,List<ReportFilter> filters,String groupBy,List<ReportMetricInput> metrics){}
     public record ReportMetricInput(String function,String field){}

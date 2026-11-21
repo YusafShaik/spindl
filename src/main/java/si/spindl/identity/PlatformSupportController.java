@@ -1,5 +1,6 @@
 package si.spindl.identity;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -25,13 +26,13 @@ public class PlatformSupportController {
     public PlatformSupportController(PlatformSupportAccessService service){this.service=service;}
 
     @PostMapping
-    public PlatformSupportAccessService.SupportRequestView request(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateRequest request){return service.request(request.tenantId(),UUID.fromString(jwt.getSubject()),jwt.getClaimAsString("email"),request.reason(),request.durationMinutes());}
+    public PlatformSupportAccessService.SupportRequestView request(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateRequest request){return service.request(request.tenantId(),AuthenticatedActor.userId(jwt),jwt.getClaimAsString("email"),request.reason(),request.durationMinutes());}
 
     @GetMapping
-    public List<PlatformSupportAccessService.SupportRequestView> queue(@AuthenticationPrincipal Jwt jwt){return service.platformQueue(UUID.fromString(jwt.getSubject()));}
+    public List<PlatformSupportAccessService.SupportRequestView> queue(@AuthenticationPrincipal Jwt jwt){return service.platformQueue(AuthenticatedActor.userId(jwt));}
 
     @GetMapping("/{id}/diagnostics")
-    public PlatformSupportAccessService.Diagnostics diagnostics(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.diagnostics(id,UUID.fromString(jwt.getSubject()),jwt.getClaimAsString("email"));}
+    public PlatformSupportAccessService.Diagnostics diagnostics(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.diagnostics(id,AuthenticatedActor.userId(jwt),jwt.getClaimAsString("email"));}
 
     public record CreateRequest(@NotNull UUID tenantId,@NotBlank @Size(max=500) String reason,@Min(5) @Max(60) int durationMinutes){}
 }

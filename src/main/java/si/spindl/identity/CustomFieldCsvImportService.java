@@ -1,14 +1,15 @@
 package si.spindl.identity;
 
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
 import jakarta.persistence.EntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import si.spindl.imports.ImportBatchEntity;
 import si.spindl.imports.ImportBatchRepository;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 import tools.jackson.databind.JsonNode;
 
 import java.nio.ByteBuffer;
@@ -37,10 +38,10 @@ public class CustomFieldCsvImportService {
     private final ImportBatchRepository batches;
     private final TenantAuditEventRepository audit;
     private final EntityManager entityManager;
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
 
     public CustomFieldCsvImportService(TenantCustomFieldService fields,TenantCustomFieldRepository definitions,TenantCustomFieldValueRepository values,
-                                      ImportBatchRepository batches,TenantAuditEventRepository audit,EntityManager entityManager,DevelopmentTenant tenant){
+                                      ImportBatchRepository batches,TenantAuditEventRepository audit,EntityManager entityManager,CurrentTenant tenant){
         this.fields=fields;this.definitions=definitions;this.values=values;this.batches=batches;this.audit=audit;this.entityManager=entityManager;this.tenant=tenant;
     }
 
@@ -50,11 +51,11 @@ public class CustomFieldCsvImportService {
     @Transactional
     public CommitResult commit(String resource,String key,byte[] file,UUID actorId){
         String code=resource(resource);UUID tenantId=tenant.currentTenantId();
-        if(key==null||key.isBlank()||key.length()>120)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A valid Idempotency-Key header is required");
+        if(key==null||key.isBlank()||key.length()>120)throw new BadRequestException("A valid Idempotency-Key header is required");
         if(file==null||file.length==0||file.length>MAX_BYTES)return CommitResult.rejected(validate(code,file));
         String hash=sha256(file),batchType="CUSTOM_FIELD_"+code.toUpperCase(Locale.ROOT);
         var prior=batches.findByTenantIdAndResourceTypeAndIdempotencyKey(tenantId,batchType,key).orElse(null);
-        if(prior!=null){if(!prior.getContentSha256().equals(hash))throw new ResponseStatusException(HttpStatus.CONFLICT,"Idempotency key was reused with a different file");return new CommitResult(true,true,prior.getRowsImported(),List.of());}
+        if(prior!=null){if(!prior.getContentSha256().equals(hash))throw new ConflictException("Idempotency key was reused with a different file");return new CommitResult(true,true,prior.getRowsImported(),List.of());}
         Validation result=validate(code,file);
         if(!result.errors().isEmpty())return CommitResult.rejected(result);
         if(result.rows().isEmpty())return CommitResult.rejected(result.withError(new RowError(1,"File has no data rows")));
@@ -63,7 +64,7 @@ public class CustomFieldCsvImportService {
             var batch=batches.saveAndFlush(new ImportBatchEntity(tenantId,batchType,key,hash,result.rows().size()));
             audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOM_FIELD_CSV_IMPORTED","custom_field_import",batch.getId(),Map.of("resource",code,"rows",result.rows().size(),"fields",result.fieldCount())));
             return new CommitResult(true,false,result.rows().size(),List.of());
-        }catch(DataIntegrityViolationException duplicate){throw new ResponseStatusException(HttpStatus.CONFLICT,"This custom-field import was submitted concurrently; retry with the same key");}
+        }catch(DataIntegrityViolationException duplicate){throw new ConflictException("This custom-field import was submitted concurrently; retry with the same key");}
     }
 
     private Validation validate(String requested,byte[] file){
@@ -106,7 +107,7 @@ public class CustomFieldCsvImportService {
     }
 
     private boolean recordExists(UUID tenantId,String resource,UUID recordId){String table=TABLES.get(resource);Boolean exists=(Boolean)entityManager.createNativeQuery("select exists(select 1 from public."+table+" where tenant_id=:tenant and id=:id)").setParameter("tenant",tenantId).setParameter("id",recordId).getSingleResult();return exists;}
-    private String resource(String value){String code=value==null?"":value.trim().toLowerCase(Locale.ROOT);if(!TABLES.containsKey(code))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unsupported custom-field import resource");return code;}
+    private String resource(String value){String code=value==null?"":value.trim().toLowerCase(Locale.ROOT);if(!TABLES.containsKey(code))throw new BadRequestException("Unsupported custom-field import resource");return code;}
     private static List<Map<String,String>> previewRows(List<String> headers,List<List<String>> rows){return rows.stream().map(row->{Map<String,String> values=new LinkedHashMap<>();for(int i=0;i<Math.min(headers.size(),row.size());i++)values.put(headers.get(i),row.get(i));return values;}).toList();}
     private static String sha256(byte[] bytes){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));}catch(Exception e){throw new IllegalStateException(e);}}
     private static Parsed parse(String text){List<List<String>> records=new ArrayList<>();List<String> row=new ArrayList<>();StringBuilder field=new StringBuilder();boolean quoted=false,afterQuote=false;

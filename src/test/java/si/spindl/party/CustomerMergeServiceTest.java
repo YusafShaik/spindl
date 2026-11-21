@@ -15,7 +15,7 @@ import si.spindl.finance.InvoiceService;
 import si.spindl.identity.TenantCustomFieldService;
 import si.spindl.identity.TenantMembershipRepository;
 import si.spindl.sales.SalesService;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -35,7 +35,7 @@ class CustomerMergeServiceTest {
     @Mock private TenantCustomFieldService customFieldService;
     @Mock private TenantAttachmentService attachmentService;
     @Mock private ApplicationEventPublisher eventPublisher;
-    @Mock private DevelopmentTenant tenant;
+    @Mock private CurrentTenant tenant;
 
     private CustomerMergeService mergeService;
     private final UUID tenantId = UUID.randomUUID();

@@ -1,5 +1,6 @@
 package si.spindl.pos;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -27,5 +28,5 @@ public class PosController {
     @PostMapping("/sales/{id}/void") public PosService.SaleView voidSale(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody PosService.VoidSaleRequest request){return service.voidSale(userId(jwt),id,request);}
     @GetMapping("/sales/{id}/refunds") public List<PosRefundService.RefundView> refunds(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return refunds.list(userId(jwt),id);}
     @PostMapping("/sales/{id}/refunds") public PosRefundService.RefundView refund(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody PosRefundService.RefundRequest request){return refunds.refund(userId(jwt),id,request);}
-    private UUID userId(Jwt jwt){return UUID.fromString(jwt.getSubject());}
+    private UUID userId(Jwt jwt){return AuthenticatedActor.userId(jwt);}
 }

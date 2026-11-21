@@ -2,11 +2,13 @@ package si.spindl.party;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import si.spindl.common.event.DomainAuditEvent;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.ForbiddenException;
+import si.spindl.common.exception.NotFoundException;
+import si.spindl.common.text.TextValues;
 import si.spindl.finance.InvoiceRepository;
 import si.spindl.identity.TenantMembershipRepository;
 import si.spindl.identity.TenantRolePermissionRepository;
@@ -30,7 +32,7 @@ public class CustomerService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
-    public List<CustomerController.CustomerView> list(UUID tenantId, UUID actor, String email, String phone) {
+    public List<CustomerDtos.CustomerView> list(UUID tenantId, UUID actor, String email, String phone) {
         String role = memberships.findActiveRole(tenantId, actor).orElseThrow();
         boolean all = permissions.allows(tenantId, role, "crm", "customers", "view", "ALL");
         List<CustomerEntity> rows;
@@ -50,71 +52,67 @@ public class CustomerService {
         Map<UUID, BigDecimal> balances = new HashMap<>();
         invoices.outstandingGroupedByCustomer(tenantId).forEach(r -> balances.put((UUID) r[0], (BigDecimal) r[1]));
         return rows.stream()
-                .map(c -> CustomerController.CustomerView.from(c, orderCounts.getOrDefault(c.getId(), 0L), balances.getOrDefault(c.getId(), BigDecimal.ZERO)))
+                .map(c -> CustomerMapper.toView(c, orderCounts.getOrDefault(c.getId(), 0L), balances.getOrDefault(c.getId(), BigDecimal.ZERO)))
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerController.CustomerTimelineView> timeline(UUID tenantId, UUID actor, UUID id) {
+    public List<CustomerDtos.CustomerTimelineView> timeline(UUID tenantId, UUID actor, UUID id) {
         CustomerEntity customer = customers.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+                .orElseThrow(NotFoundException::new);
         String role = memberships.findActiveRole(tenantId, actor)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN));
+                .orElseThrow(ForbiddenException::new);
         boolean all = permissions.allows(tenantId, role, "crm", "customers", "view", "ALL");
         boolean own = permissions.allows(tenantId, role, "crm", "customers", "view", "OWN") && actor.equals(customer.getCreatedBy());
         if (!all && !own) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to view this customer timeline");
+            throw new ForbiddenException("You do not have permission to view this customer timeline");
         }
         return customers.findTimeline(tenantId, id).stream()
-                .map(row -> new CustomerController.CustomerTimelineView(row.getOccurredAt(), row.getEventType(), row.getReference(), row.getStatus(), row.getAmount()))
+                .map(row -> new CustomerDtos.CustomerTimelineView(row.getOccurredAt(), row.getEventType(), row.getReference(), row.getStatus(), row.getAmount()))
                 .toList();
     }
 
     @Transactional
-    public CustomerController.CustomerView create(UUID tenantId, UUID actor, CustomerController.CustomerRequest request) {
+    public CustomerDtos.CustomerView create(UUID tenantId, UUID actor, CustomerDtos.CustomerRequest request) {
         if (customers.existsByTenantIdAndCodeIgnoreCase(tenantId, request.code())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Customer code already exists");
+            throw new ConflictException("Customer code already exists");
         }
         String status = request.status() == null || request.status().isBlank() ? "Active" : request.status().trim();
         CustomerEntity customer = new CustomerEntity(tenantId, request.code().trim(), request.name().trim(), request.email().trim(), status, actor);
         applyProfile(customer, request, actor);
         customer = customers.save(customer);
         eventPublisher.publishEvent(new DomainAuditEvent(tenantId, actor, "CUSTOMER_CREATED", "customer", customer.getId(), Map.of("code", customer.getCode())));
-        return CustomerController.CustomerView.from(customer, 0, BigDecimal.ZERO);
+        return CustomerMapper.toView(customer, 0, BigDecimal.ZERO);
     }
 
     @Transactional
-    public CustomerController.CustomerView update(UUID tenantId, UUID actor, UUID id, CustomerController.CustomerUpdate request) {
+    public CustomerDtos.CustomerView update(UUID tenantId, UUID actor, UUID id, CustomerDtos.CustomerUpdate request) {
         CustomerEntity customer = customers.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+                .orElseThrow(NotFoundException::new);
         customer.update(request.name().trim(), request.email().trim(), request.status(), request.active());
         applyProfile(customer, request, customer.getOwnerUserId());
         customer = customers.save(customer);
         eventPublisher.publishEvent(new DomainAuditEvent(tenantId, actor, "CUSTOMER_UPDATED", "customer", id, Map.of("active", request.active())));
-        return CustomerController.CustomerView.from(customer, orders.countByTenantIdAndCustomerId(tenantId, id), invoices.outstandingForCustomer(tenantId, id));
+        return CustomerMapper.toView(customer, orders.countByTenantIdAndCustomerId(tenantId, id), invoices.outstandingForCustomer(tenantId, id));
     }
 
-    private void applyProfile(CustomerEntity customer, CustomerController.CustomerProfile request, UUID owner) {
+    private void applyProfile(CustomerEntity customer, CustomerDtos.CustomerProfile request, UUID owner) {
         customer.applyProfile(
-                value(request.customerType(), customer.getCustomerType()).toUpperCase(Locale.ROOT),
-                value(request.contactName(), customer.getContactName()),
-                value(request.phone(), customer.getPhone()),
-                value(request.addressLine1(), customer.getAddressLine1()),
-                value(request.addressLine2(), customer.getAddressLine2()),
-                value(request.city(), customer.getCity()),
-                value(request.region(), customer.getRegion()),
-                value(request.postalCode(), customer.getPostalCode()),
+                TextValues.keepOrTrim(request.customerType(), customer.getCustomerType()).toUpperCase(Locale.ROOT),
+                TextValues.keepOrTrim(request.contactName(), customer.getContactName()),
+                TextValues.keepOrTrim(request.phone(), customer.getPhone()),
+                TextValues.keepOrTrim(request.addressLine1(), customer.getAddressLine1()),
+                TextValues.keepOrTrim(request.addressLine2(), customer.getAddressLine2()),
+                TextValues.keepOrTrim(request.city(), customer.getCity()),
+                TextValues.keepOrTrim(request.region(), customer.getRegion()),
+                TextValues.keepOrTrim(request.postalCode(), customer.getPostalCode()),
                 request.countryCode() == null ? customer.getCountryCode() : request.countryCode().trim().toUpperCase(Locale.ROOT),
-                value(request.taxId(), customer.getTaxId()),
+                TextValues.keepOrTrim(request.taxId(), customer.getTaxId()),
                 request.paymentTermsDays() == null ? customer.getPaymentTermsDays() : request.paymentTermsDays(),
                 request.creditLimit() == null ? customer.getCreditLimit() : request.creditLimit(),
-                value(request.tags(), customer.getTags()),
+                TextValues.keepOrTrim(request.tags(), customer.getTags()),
                 request.creditHold() == null ? customer.isCreditHold() : request.creditHold(),
                 owner
         );
-    }
-
-    private String value(String value, String previous) {
-        return value == null ? previous : value.isBlank() ? null : value.trim();
     }
 }

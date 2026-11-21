@@ -1,9 +1,9 @@
 package si.spindl.logistics;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import si.spindl.catalog.ItemEntity;
 import si.spindl.catalog.ItemRepository;
 import si.spindl.inventory.WarehouseEntity;
@@ -125,7 +125,7 @@ public class LogisticsService {
     @Transactional(readOnly = true)
     public LogisticsDtos.ChallanDetailView getChallan(UUID tenantId, UUID id) {
         DeliveryChallanEntity challan = challanRepo.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery Challan not found"));
+                .orElseThrow(() -> new NotFoundException("Delivery Challan not found"));
 
         Map<UUID, CustomerEntity> customers = customerRepo.findAllByTenantIdAndActiveTrueOrderByName(tenantId).stream()
                 .collect(Collectors.toMap(CustomerEntity::getId, c -> c, (a, b) -> a));
@@ -189,11 +189,11 @@ public class LogisticsService {
 
     public LogisticsDtos.ChallanDetailView createChallan(UUID tenantId, UUID actorId, LogisticsDtos.CreateChallanRequest req) {
         if (req.customerId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer is required");
+            throw new BadRequestException("Customer is required");
         }
 
         CustomerEntity customer = customerRepo.findByTenantIdAndId(tenantId, req.customerId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+                .orElseThrow(() -> new NotFoundException("Customer not found"));
 
         String challanNumber = generateChallanNumber(tenantId);
         int totalPkgs = (req.packages() != null && !req.packages().isEmpty()) ? req.packages().size() : 1;
@@ -281,7 +281,7 @@ public class LogisticsService {
 
     public LogisticsDtos.ChallanSummaryView updateTracking(UUID tenantId, UUID id, LogisticsDtos.UpdateTrackingRequest req) {
         DeliveryChallanEntity challan = challanRepo.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery Challan not found"));
+                .orElseThrow(() -> new NotFoundException("Delivery Challan not found"));
 
         challan.updateTracking(
                 req.carrierName(),
@@ -300,10 +300,10 @@ public class LogisticsService {
 
     public LogisticsDtos.ChallanSummaryView dispatchChallan(UUID tenantId, UUID id) {
         DeliveryChallanEntity challan = challanRepo.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery Challan not found"));
+                .orElseThrow(() -> new NotFoundException("Delivery Challan not found"));
 
         if ("CANCELLED".equals(challan.getStatus()) || "DELIVERED".equals(challan.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot dispatch a " + challan.getStatus() + " challan");
+            throw new BadRequestException("Cannot dispatch a " + challan.getStatus() + " challan");
         }
 
         challan.dispatch();
@@ -313,7 +313,7 @@ public class LogisticsService {
 
     public LogisticsDtos.ChallanSummaryView recordPod(UUID tenantId, UUID id, LogisticsDtos.RecordPodRequest req) {
         DeliveryChallanEntity challan = challanRepo.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery Challan not found"));
+                .orElseThrow(() -> new NotFoundException("Delivery Challan not found"));
 
         challan.recordPod(req.recipientName(), req.podNotes(), req.deliveryTime());
         challan = challanRepo.save(challan);
@@ -322,10 +322,10 @@ public class LogisticsService {
 
     public LogisticsDtos.ChallanSummaryView cancelChallan(UUID tenantId, UUID id) {
         DeliveryChallanEntity challan = challanRepo.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery Challan not found"));
+                .orElseThrow(() -> new NotFoundException("Delivery Challan not found"));
 
         if ("DELIVERED".equals(challan.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot cancel an already delivered consignment");
+            throw new BadRequestException("Cannot cancel an already delivered consignment");
         }
 
         challan.cancel();

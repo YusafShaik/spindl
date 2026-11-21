@@ -1,6 +1,8 @@
 package si.spindl.reports;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,7 +32,7 @@ public class InvoiceTemplateService {
     private Map<String,Object> toMap(TemplateConfig c){return Map.of("documentType",c.documentType(),"title",c.title().trim(),"footer",c.footer().trim(),"locale",c.locale(),"accentColor",c.accentColor().toUpperCase(Locale.ROOT),"fields",List.copyOf(c.fields()));}
     @SuppressWarnings("unchecked") private TemplateConfig fromMap(Map<String,Object> m){return new TemplateConfig(String.valueOf(m.get("documentType")),String.valueOf(m.get("title")),String.valueOf(m.get("footer")),String.valueOf(m.get("locale")),String.valueOf(m.get("accentColor")),((List<?>)m.get("fields")).stream().map(String::valueOf).toList());}
     private String label(String key){return Arrays.stream(key.replaceAll("([a-z])([A-Z])","$1 $2").split(" ")).map(s->s.substring(0,1).toUpperCase(Locale.ROOT)+s.substring(1)).collect(java.util.stream.Collectors.joining(" "));}
-    private ResponseStatusException badRequest(String s){return new ResponseStatusException(HttpStatus.BAD_REQUEST,s);}private ResponseStatusException conflict(String s){return new ResponseStatusException(HttpStatus.CONFLICT,s);}private ResponseStatusException notFound(){return new ResponseStatusException(HttpStatus.NOT_FOUND,"Invoice template version not found");}
+    private ResponseStatusException badRequest(String s){return new BadRequestException(s);}private ResponseStatusException conflict(String s){return new ConflictException(s);}private ResponseStatusException notFound(){return new NotFoundException("Invoice template version not found");}
     public record TemplateConfig(String documentType,String title,String footer,String locale,String accentColor,List<String> fields){}
     public record TemplateVersion(UUID id,int version,String status,TemplateConfig configuration,UUID createdBy,java.time.Instant createdAt,java.time.Instant publishedAt){static TemplateVersion from(TenantWorkflowVersionEntity e){Map<String,Object> m=e.getConfiguration();TemplateConfig c=new TemplateConfig(String.valueOf(m.get("documentType")),String.valueOf(m.get("title")),String.valueOf(m.get("footer")),String.valueOf(m.get("locale")),String.valueOf(m.get("accentColor")),((List<?>)m.get("fields")).stream().map(String::valueOf).toList());return new TemplateVersion(e.getId(),e.getVersion(),e.getStatus(),c,e.getCreatedBy(),e.getCreatedAt(),e.getPublishedAt());}}
     public record TemplateView(String key,TemplateVersion published,TemplateVersion draft,List<TemplateVersion> history){}

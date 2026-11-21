@@ -1,12 +1,13 @@
 package si.spindl.workforce;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -17,9 +18,9 @@ import java.util.UUID;
 public class WorkforceController {
 
     private final WorkforceService service;
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
 
-    public WorkforceController(WorkforceService service, DevelopmentTenant tenant) {
+    public WorkforceController(WorkforceService service, CurrentTenant tenant) {
         this.service = service;
         this.tenant = tenant;
     }
@@ -39,11 +40,7 @@ public class WorkforceController {
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody WorkforceDtos.CreateEmployeeRequest req
     ) {
-        UUID actorId = null;
-        if (jwt != null && jwt.getSubject() != null) {
-            try { actorId = UUID.fromString(jwt.getSubject()); } catch (Exception ignored) {}
-        }
-        return service.createEmployee(tenant.currentTenantId(), actorId, req);
+        return service.createEmployee(tenant.currentTenantId(), AuthenticatedActor.optionalUserId(jwt), req);
     }
 
     // ==========================================
@@ -92,11 +89,7 @@ public class WorkforceController {
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody WorkforceDtos.UpsertQualificationRequest req
     ) {
-        UUID certifyingUserId = null;
-        if (jwt != null && jwt.getSubject() != null) {
-            try { certifyingUserId = UUID.fromString(jwt.getSubject()); } catch (Exception ignored) {}
-        }
-        return service.upsertQualification(tenant.currentTenantId(), certifyingUserId, req);
+        return service.upsertQualification(tenant.currentTenantId(), AuthenticatedActor.optionalUserId(jwt), req);
     }
 
     @DeleteMapping("/qualifications/{id}")

@@ -170,4 +170,13 @@ public class MaintenanceDtos {
         BigDecimal totalPartsConsumedValue,
         BigDecimal totalMaintenanceExpenditure
     ) {}
+
+    /** JSON shape matches the previous single-field request bodies. */
+    public record AssetStatusRequest(String status) {}
+
+    public record MeterHoursRequest(BigDecimal meterHours) {}
+
+    public record AssignTechnicianRequest(String assignedTechnicianUserId) {}
+
+    public record CancelWorkOrderRequest(String notes) {}
 }

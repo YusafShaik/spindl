@@ -1,5 +1,8 @@
 package si.spindl.inventory;
 
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import si.spindl.catalog.ItemEntity;
 import si.spindl.catalog.ItemRepository;
 
@@ -8,11 +11,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 import si.spindl.identity.TenantAuditEventEntity;
 import si.spindl.identity.TenantAuditEventRepository;
 import si.spindl.identity.TenantBranchRepository;
@@ -27,11 +29,11 @@ public class InventoryWarehouseService {
     private final ItemRepository items;
     private final InventoryMovementRepository movements;
     private final InventoryTransferRepository transfers;
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
     private final TenantAuditEventRepository audit;
     private final TenantBranchRepository branches;
 
-    public InventoryWarehouseService(WarehouseRepository warehouses,WarehouseStockRepository stock,ItemRepository items,InventoryMovementRepository movements,InventoryTransferRepository transfers,DevelopmentTenant tenant,TenantAuditEventRepository audit,TenantBranchRepository branches){this.warehouses=warehouses;this.stock=stock;this.items=items;this.movements=movements;this.transfers=transfers;this.tenant=tenant;this.audit=audit;this.branches=branches;}
+    public InventoryWarehouseService(WarehouseRepository warehouses,WarehouseStockRepository stock,ItemRepository items,InventoryMovementRepository movements,InventoryTransferRepository transfers,CurrentTenant tenant,TenantAuditEventRepository audit,TenantBranchRepository branches){this.warehouses=warehouses;this.stock=stock;this.items=items;this.movements=movements;this.transfers=transfers;this.tenant=tenant;this.audit=audit;this.branches=branches;}
 
     @Transactional(readOnly=true)
     public List<WarehouseView> list(){return warehouses.findAllByTenantIdAndActiveTrueOrderByIsDefaultDescNameAsc(tenant.currentTenantId()).stream().map(WarehouseView::from).toList();}
@@ -39,10 +41,10 @@ public class InventoryWarehouseService {
     @Transactional
     public WarehouseView create(CreateWarehouseRequest request){
         UUID tenantId=tenant.currentTenantId();String code=request.code().trim().toUpperCase(Locale.ROOT);String name=request.name().trim();
-        if(warehouses.existsByTenantIdAndCodeIgnoreCase(tenantId,code))throw new ResponseStatusException(HttpStatus.CONFLICT,"Warehouse code already exists");
-        UUID branchId=request.branchId()==null?branches.findFirstByTenantIdAndDefaultBranchTrue(tenantId).map(si.spindl.identity.TenantBranchEntity::getId).orElseThrow():branches.findByTenantIdAndId(tenantId,request.branchId()).filter(si.spindl.identity.TenantBranchEntity::isActive).map(si.spindl.identity.TenantBranchEntity::getId).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Choose an active workspace branch"));
+        if(warehouses.existsByTenantIdAndCodeIgnoreCase(tenantId,code))throw new ConflictException("Warehouse code already exists");
+        UUID branchId=request.branchId()==null?branches.findFirstByTenantIdAndDefaultBranchTrue(tenantId).map(si.spindl.identity.TenantBranchEntity::getId).orElseThrow():branches.findByTenantIdAndId(tenantId,request.branchId()).filter(si.spindl.identity.TenantBranchEntity::isActive).map(si.spindl.identity.TenantBranchEntity::getId).orElseThrow(()->new BadRequestException("Choose an active workspace branch"));
         try{WarehouseEntity warehouse=warehouses.saveAndFlush(new WarehouseEntity(tenantId,code,name,branchId));stock.saveAll(items.findAllByTenantIdAndActiveTrueOrderByName(tenantId).stream().map(item->new WarehouseStockEntity(tenantId,warehouse,item)).toList());return WarehouseView.from(warehouse);}
-        catch(DataIntegrityViolationException exception){throw new ResponseStatusException(HttpStatus.CONFLICT,"Warehouse code already exists");}
+        catch(DataIntegrityViolationException exception){throw new ConflictException("Warehouse code already exists");}
     }
 
     @Transactional(readOnly=true)
@@ -61,7 +63,7 @@ public class InventoryWarehouseService {
         if(existing!=null){if(!existing.matches(request.itemId(),request.sourceWarehouseId(),request.destinationWarehouseId(),request.quantity(),reason))throw conflict("Idempotency key was reused with different transfer details");return TransferView.from(existing);}
         if(request.sourceWarehouseId().equals(request.destinationWarehouseId()))throw badRequest("Choose two different warehouses");
         WarehouseEntity source=warehouse(request.sourceWarehouseId());WarehouseEntity destination=warehouse(request.destinationWarehouseId());
-        ItemEntity item=items.findActiveForUpdate(tenantId,request.itemId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Active item not found"));
+        ItemEntity item=items.findActiveForUpdate(tenantId,request.itemId()).orElseThrow(()->new NotFoundException("Active item not found"));
         existing=transfers.findByTenantIdAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
         if(existing!=null){if(!existing.matches(request.itemId(),source.getId(),destination.getId(),request.quantity(),reason))throw conflict("Idempotency key was reused with different transfer details");return TransferView.from(existing);}
         WarehouseStockEntity sourceBalance=stock.findForUpdate(tenantId,source.getId(),item.getId()).orElseThrow(()->conflict("No stock balance exists at the source warehouse"));
@@ -84,13 +86,13 @@ public class InventoryWarehouseService {
     @Transactional
     public TransferView cancel(UUID id,UUID actorId){UUID tenantId=tenant.currentTenantId();var transfer=lockTransfer(tenantId,id);if(transfer.getStatus().equals("CANCELLED"))return TransferView.from(transfer);if(!List.of("DRAFT","APPROVED").contains(transfer.getStatus()))throw conflict("A dispatched transfer cannot be cancelled");var balance=stock.findForUpdate(tenantId,transfer.getSourceWarehouse().getId(),transfer.getItem().getId()).orElseThrow(()->conflict("Source stock balance is missing"));balance.releaseReservation(transfer.getQuantity());transfer.cancel();audit.save(new TenantAuditEventEntity(tenantId,actorId,"INVENTORY_TRANSFER_CANCELLED","inventory_transfer",id,java.util.Map.of()));return TransferView.from(transfer);}
 
-    private InventoryTransferEntity lockTransfer(UUID tenantId,UUID id){return transfers.findForUpdate(tenantId,id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Transfer not found"));}
+    private InventoryTransferEntity lockTransfer(UUID tenantId,UUID id){return transfers.findForUpdate(tenantId,id).orElseThrow(()->new NotFoundException("Transfer not found"));}
     private String transferReference(InventoryTransferEntity transfer){return "TRF-"+UUID.nameUUIDFromBytes(transfer.getIdempotencyKey().getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString().substring(0,12).toUpperCase(Locale.ROOT);}
     private String movementKey(InventoryTransferEntity transfer,String leg){return "TR-"+UUID.nameUUIDFromBytes((transfer.getIdempotencyKey()+":"+leg).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
 
-    private WarehouseEntity warehouse(UUID id){return warehouses.findByTenantIdAndIdAndActiveTrue(tenant.currentTenantId(),id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Active warehouse not found"));}
-    private ResponseStatusException conflict(String message){return new ResponseStatusException(HttpStatus.CONFLICT,message);}
-    private ResponseStatusException badRequest(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}
+    private WarehouseEntity warehouse(UUID id){return warehouses.findByTenantIdAndIdAndActiveTrue(tenant.currentTenantId(),id).orElseThrow(()->new NotFoundException("Active warehouse not found"));}
+    private ResponseStatusException conflict(String message){return new ConflictException(message);}
+    private ResponseStatusException badRequest(String message){return new BadRequestException(message);}
 
     public record CreateWarehouseRequest(@NotBlank @Size(max=32) String code,@NotBlank @Size(max=120) String name,UUID branchId){}
     public record TransferRequest(@NotNull UUID itemId,@NotNull UUID sourceWarehouseId,@NotNull UUID destinationWarehouseId,@Min(1) int quantity,@NotBlank @Size(max=240) String reason,@NotBlank @Size(max=120) String idempotencyKey){}

@@ -1,11 +1,13 @@
 package si.spindl.identity;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.ForbiddenException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -64,7 +66,7 @@ public class TeamService {
         String role = normalizeRole(tenantId,request.role(), INVITABLE_ROLES);
         var existingUser = users.findByEmail(email).orElse(null);
         if (existingUser != null && memberships.existsByTenantIdAndUserId(tenantId, existingUser.getId()))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "This user already belongs to the workspace");
+            throw new ConflictException("This user already belongs to the workspace");
         invitations.deleteAllByTenantIdAndEmailAndAcceptedAtIsNull(tenantId, email);
         subscriptionQuotas.reserveSeatForInvite(tenantId);
         byte[] bytes = new byte[32]; secureRandom.nextBytes(bytes);
@@ -84,12 +86,12 @@ public class TeamService {
 
     @Transactional
     public AuthDtos.AuthResponse accept(TeamDtos.AcceptInvitationRequest request) {
-        var invitation = invitations.findByTokenHash(sha256(request.token())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation is invalid or expired"));
-        if (invitation.isAccepted() || invitation.isExpired()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation is invalid or expired");
+        var invitation = invitations.findByTokenHash(sha256(request.token())).orElseThrow(() -> new BadRequestException("Invitation is invalid or expired"));
+        if (invitation.isAccepted() || invitation.isExpired()) throw new BadRequestException("Invitation is invalid or expired");
         var user = users.findByEmail(invitation.getEmail()).orElse(null);
         if (user == null) user = users.save(new AppUserEntity(invitation.getEmail(), passwordEncoder.encode(request.password()), request.name().trim()));
         else if (!user.isActive() || !passwordEncoder.matches(request.password(), user.getPasswordHash())) throw new BadCredentialsException("Invalid email or password");
-        if (memberships.existsByTenantIdAndUserId(invitation.getTenantId(), user.getId())) throw new ResponseStatusException(HttpStatus.CONFLICT, "This account already belongs to the workspace");
+        if (memberships.existsByTenantIdAndUserId(invitation.getTenantId(), user.getId())) throw new ConflictException("This account already belongs to the workspace");
         subscriptionQuotas.assertSeatAvailableForAcceptance(invitation.getTenantId());
         memberships.save(new TenantMembershipEntity(invitation.getTenantId(), user.getId(), invitation.getRole()));
         UUID acceptedUserId=user.getId();branches.findFirstByTenantIdAndDefaultBranchTrue(invitation.getTenantId()).ifPresent(branch->memberBranches.save(new TenantMembershipBranchEntity(invitation.getTenantId(),acceptedUserId,branch.getId())));
@@ -102,8 +104,8 @@ public class TeamService {
     @Transactional
     public TeamDtos.InvitationView resend(UUID tenantId, UUID actorId, UUID invitationId) {
         var previous=invitations.findByIdAndTenantId(invitationId,tenantId)
-                .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Invitation not found"));
-        if(previous.isAccepted()) throw new ResponseStatusException(HttpStatus.CONFLICT,"An accepted invitation cannot be resent");
+                .orElseThrow(()->new NotFoundException("Invitation not found"));
+        if(previous.isAccepted()) throw new ConflictException("An accepted invitation cannot be resent");
         return invite(tenantId,actorId,new TeamDtos.InviteRequest(previous.getEmail(),previous.getRole()));
     }
 
@@ -111,7 +113,7 @@ public class TeamService {
     public TeamDtos.MembershipView changeRole(UUID tenantId, UUID actorId, UUID membershipId, String requestedRole) {
         var target = membership(tenantId, membershipId);
         String role = normalizeRole(tenantId,requestedRole, ASSIGNABLE_ROLES);
-        if (target.getRole().equals("OWNER")) throw new ResponseStatusException(HttpStatus.CONFLICT, "Workspace ownership cannot be changed here");
+        if (target.getRole().equals("OWNER")) throw new ConflictException("Workspace ownership cannot be changed here");
         if (ADMIN_ROLES.contains(target.getRole()) && !ADMIN_ROLES.contains(role)) ensureAnotherActiveAdmin(tenantId, target);
         target.changeRole(role);
         auditEvents.save(new TenantAuditEventEntity(tenantId, actorId, "MEMBER_ROLE_CHANGED", "membership", membershipId, Map.of("role", role)));
@@ -122,11 +124,11 @@ public class TeamService {
     @Transactional
     public TeamDtos.MembershipView assignScope(UUID tenantId,UUID actorId,UUID membershipId,TeamDtos.MemberScopeRequest request){
         var target=membership(tenantId,membershipId);
-        if("OWNER".equals(target.getRole()))throw new ResponseStatusException(HttpStatus.CONFLICT,"The workspace owner cannot be assigned a restricted branch or team scope");
+        if("OWNER".equals(target.getRole()))throw new ConflictException("The workspace owner cannot be assigned a restricted branch or team scope");
         List<UUID> branchIds=request.branchIds()==null?List.of():request.branchIds().stream().distinct().toList();
-        for(UUID branchId:branchIds)if(branches.findByTenantIdAndId(tenantId,branchId).filter(TenantBranchEntity::isActive).isEmpty())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Choose active branches in this workspace");
+        for(UUID branchId:branchIds)if(branches.findByTenantIdAndId(tenantId,branchId).filter(TenantBranchEntity::isActive).isEmpty())throw new BadRequestException("Choose active branches in this workspace");
         UUID managerId=request.managerUserId();
-        if(managerId!=null){if(managerId.equals(target.getUserId()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A member cannot manage themselves");if(memberships.findActiveRole(tenantId,managerId).isEmpty())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"The team manager must be an active member of this workspace");java.util.Set<UUID> visited=new java.util.HashSet<>();UUID cursor=managerId;while(cursor!=null){if(cursor.equals(target.getUserId()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Team reporting lines cannot contain a cycle");if(!visited.add(cursor))throw new ResponseStatusException(HttpStatus.CONFLICT,"The existing reporting lines contain a cycle");cursor=memberships.findByTenantIdAndUserId(tenantId,cursor).map(TenantMembershipEntity::getManagerUserId).orElse(null);}}
+        if(managerId!=null){if(managerId.equals(target.getUserId()))throw new BadRequestException("A member cannot manage themselves");if(memberships.findActiveRole(tenantId,managerId).isEmpty())throw new BadRequestException("The team manager must be an active member of this workspace");java.util.Set<UUID> visited=new java.util.HashSet<>();UUID cursor=managerId;while(cursor!=null){if(cursor.equals(target.getUserId()))throw new BadRequestException("Team reporting lines cannot contain a cycle");if(!visited.add(cursor))throw new ConflictException("The existing reporting lines contain a cycle");cursor=memberships.findByTenantIdAndUserId(tenantId,cursor).map(TenantMembershipEntity::getManagerUserId).orElse(null);}}
         target.setManagerUserId(managerId);
         memberBranches.deleteAssignments(tenantId,target.getUserId());
         memberBranches.saveAll(branchIds.stream().map(branchId->new TenantMembershipBranchEntity(tenantId,target.getUserId(),branchId)).toList());
@@ -137,7 +139,7 @@ public class TeamService {
     @Transactional
     public TeamDtos.MembershipView setActive(UUID tenantId, UUID actorId, UUID membershipId, boolean active) {
         var target = membership(tenantId, membershipId);
-        if (!active && target.getRole().equals("OWNER")) throw new ResponseStatusException(HttpStatus.CONFLICT, "The workspace owner cannot be deactivated");
+        if (!active && target.getRole().equals("OWNER")) throw new ConflictException("The workspace owner cannot be deactivated");
         if (!active && target.isActive() && ADMIN_ROLES.contains(target.getRole())) ensureAnotherActiveAdmin(tenantId, target);
         target.setActive(active);
         if (!active) authService.revokeAllSessions(target.getUserId());
@@ -149,16 +151,16 @@ public class TeamService {
     @Transactional
     public TeamDtos.OwnershipTransferView requestOwnershipTransfer(UUID tenantId, UUID actorId, TeamDtos.TransferOwnershipRequest request) {
         var actorMembership = memberships.findAllForUpdate(tenantId).stream().filter(m -> m.getUserId().equals(actorId) && m.isActive()).findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "An active workspace owner is required"));
-        if (!"OWNER".equals(actorMembership.getRole())) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the workspace owner can transfer ownership");
+                .orElseThrow(() -> new ForbiddenException("An active workspace owner is required"));
+        if (!"OWNER".equals(actorMembership.getRole())) throw new ForbiddenException("Only the workspace owner can transfer ownership");
         var actor = users.findById(actorId).orElseThrow();
         if (!passwordEncoder.matches(request.password(), actor.getPasswordHash())) throw new BadCredentialsException("Re-authentication failed");
         var target = membership(tenantId, request.targetMembershipId());
         if (!target.isActive() || !"ADMIN".equals(target.getRole()))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Choose an active workspace admin as the new owner");
+            throw new ConflictException("Choose an active workspace admin as the new owner");
         ownershipTransfers.cancelExpired(tenantId);
         if (ownershipTransfers.existsByTenantIdAndAcceptedAtIsNullAndCancelledAtIsNull(tenantId))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "A transfer is already pending for this workspace");
+            throw new ConflictException("A transfer is already pending for this workspace");
         byte[] bytes = new byte[32]; secureRandom.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         Instant expiresAt = Instant.now().plus(24, ChronoUnit.HOURS);
@@ -172,18 +174,18 @@ public class TeamService {
     @Transactional
     public AuthDtos.AuthResponse confirmOwnershipTransfer(UUID tenantId, UUID actorId, TeamDtos.ConfirmOwnershipTransferRequest request) {
         var transfer = ownershipTransfers.findByTokenHashForUpdate(sha256(request.token()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transfer link is invalid or expired"));
+                .orElseThrow(() -> new BadRequestException("Transfer link is invalid or expired"));
         Instant now = Instant.now();
         if (!transfer.getTenantId().equals(tenantId) || !transfer.isPending(now) || !transfer.getToUserId().equals(actorId))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transfer link is invalid or expired");
+            throw new BadRequestException("Transfer link is invalid or expired");
         var targetUser = users.findById(actorId).orElseThrow();
         if (!targetUser.isActive() || !passwordEncoder.matches(request.password(), targetUser.getPasswordHash()))
             throw new BadCredentialsException("Re-authentication failed");
         var lockedMemberships = memberships.findAllForUpdate(tenantId);
         var oldOwner = lockedMemberships.stream().filter(m -> m.getUserId().equals(transfer.getFromUserId()) && m.isActive() && "OWNER".equals(m.getRole())).findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "The initiating owner is no longer the workspace owner"));
+                .orElseThrow(() -> new ConflictException("The initiating owner is no longer the workspace owner"));
         var newOwner = lockedMemberships.stream().filter(m -> m.getUserId().equals(actorId) && m.isActive()).findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "The new owner must remain an active member"));
+                .orElseThrow(() -> new ConflictException("The new owner must remain an active member"));
         oldOwner.changeRole("ADMIN");
         newOwner.changeRole("OWNER");
         transfer.accept(now);
@@ -195,18 +197,18 @@ public class TeamService {
     }
 
     private TenantMembershipEntity membership(UUID tenantId, UUID id) {
-        return memberships.findByIdAndTenantId(id, tenantId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace member not found"));
+        return memberships.findByIdAndTenantId(id, tenantId).orElseThrow(() -> new NotFoundException("Workspace member not found"));
     }
 
     private void ensureAnotherActiveAdmin(UUID tenantId, TenantMembershipEntity target) {
         long activeAdmins = memberships.countByTenantIdAndRoleInAndActiveTrue(tenantId, ADMIN_ROLES);
-        if (target.isActive() && activeAdmins <= 1) throw new ResponseStatusException(HttpStatus.CONFLICT, "The workspace must retain at least one active owner or admin");
+        if (target.isActive() && activeAdmins <= 1) throw new ConflictException("The workspace must retain at least one active owner or admin");
     }
 
     private String normalizeRole(UUID tenantId,String value, Set<String> allowed) {
         String role = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         boolean custom=tenantRoles.findByTenantIdAndRoleCode(tenantId,role).filter(candidate->!candidate.isSystemRole()).isPresent();
-        if (!allowed.contains(role)&&!custom) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported workspace role");
+        if (!allowed.contains(role)&&!custom) throw new BadRequestException("Unsupported workspace role");
         return role;
     }
 

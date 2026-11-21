@@ -1,9 +1,9 @@
 package si.spindl.maintenance;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import si.spindl.catalog.*;
 import si.spindl.inventory.*;
 import si.spindl.identity.AppUserRepository;
@@ -64,7 +64,7 @@ public class MaintenanceService {
     public MaintenanceDtos.AssetView createAsset(UUID tenantId, MaintenanceDtos.AssetRequest request) {
         String code = request.code().trim().toUpperCase();
         if (assetRepo.existsByTenantIdAndCodeIgnoreCase(tenantId, code)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Asset code '" + code + "' already exists");
+            throw new ConflictException("Asset code '" + code + "' already exists");
         }
         AssetEntity asset = new AssetEntity(
             tenantId,
@@ -87,7 +87,7 @@ public class MaintenanceService {
     @Transactional
     public MaintenanceDtos.AssetView updateAsset(UUID tenantId, UUID id, MaintenanceDtos.AssetRequest request) {
         AssetEntity asset = assetRepo.findByTenantIdAndId(tenantId, id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset not found"));
+            .orElseThrow(() -> new NotFoundException("Asset not found"));
         asset.update(
             request.name().trim(),
             request.workCenterId(),
@@ -107,7 +107,7 @@ public class MaintenanceService {
     @Transactional
     public MaintenanceDtos.AssetView setAssetStatus(UUID tenantId, UUID id, String status) {
         AssetEntity asset = assetRepo.findByTenantIdAndId(tenantId, id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset not found"));
+            .orElseThrow(() -> new NotFoundException("Asset not found"));
         asset.setStatus(status);
         return toAssetView(assetRepo.save(asset));
     }
@@ -115,7 +115,7 @@ public class MaintenanceService {
     @Transactional
     public MaintenanceDtos.AssetView updateMeterHours(UUID tenantId, UUID id, BigDecimal meterHours) {
         AssetEntity asset = assetRepo.findByTenantIdAndId(tenantId, id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset not found"));
+            .orElseThrow(() -> new NotFoundException("Asset not found"));
         asset.setMeterHours(meterHours);
         return toAssetView(assetRepo.save(asset));
     }
@@ -164,7 +164,7 @@ public class MaintenanceService {
     @Transactional
     public MaintenanceDtos.ScheduleView createSchedule(UUID tenantId, MaintenanceDtos.ScheduleRequest request) {
         AssetEntity asset = assetRepo.findByTenantIdAndId(tenantId, request.assetId())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset not found"));
+            .orElseThrow(() -> new NotFoundException("Asset not found"));
 
         LocalDate nextDue = request.nextDueDate();
         if (nextDue == null && "CALENDAR_DAYS".equalsIgnoreCase(request.frequencyType())) {
@@ -194,7 +194,7 @@ public class MaintenanceService {
     @Transactional
     public MaintenanceDtos.ScheduleView setScheduleActive(UUID tenantId, UUID id, boolean active) {
         MaintenanceScheduleEntity schedule = scheduleRepo.findByTenantIdAndId(tenantId, id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Schedule not found"));
+            .orElseThrow(() -> new NotFoundException("Schedule not found"));
         schedule.setActive(active);
         return toScheduleView(scheduleRepo.save(schedule));
     }
@@ -235,7 +235,7 @@ public class MaintenanceService {
     @Transactional
     public MaintenanceDtos.WorkOrderView createWorkOrder(UUID tenantId, MaintenanceDtos.WorkOrderRequest request) {
         AssetEntity asset = assetRepo.findByTenantIdAndId(tenantId, request.assetId())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset not found"));
+            .orElseThrow(() -> new NotFoundException("Asset not found"));
 
         String datePrefix = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
         String orderNumber = "MWO-" + datePrefix + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
@@ -274,7 +274,7 @@ public class MaintenanceService {
     @Transactional
     public MaintenanceDtos.WorkOrderView startWorkOrder(UUID tenantId, UUID id) {
         MaintenanceWorkOrderEntity wo = workOrderRepo.findByTenantIdAndId(tenantId, id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Work order not found"));
+            .orElseThrow(() -> new NotFoundException("Work order not found"));
         wo.start();
 
         // Ensure asset marked under maintenance
@@ -289,7 +289,7 @@ public class MaintenanceService {
     @Transactional
     public MaintenanceDtos.WorkOrderView assignWorkOrder(UUID tenantId, UUID id, UUID technicianUserId) {
         MaintenanceWorkOrderEntity wo = workOrderRepo.findByTenantIdAndId(tenantId, id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Work order not found"));
+            .orElseThrow(() -> new NotFoundException("Work order not found"));
         wo.assign(technicianUserId);
         return toWorkOrderView(workOrderRepo.save(wo));
     }
@@ -297,7 +297,7 @@ public class MaintenanceService {
     @Transactional
     public MaintenanceDtos.WorkOrderView completeWorkOrder(UUID tenantId, UUID id, MaintenanceDtos.CompleteWorkOrderRequest request) {
         MaintenanceWorkOrderEntity wo = workOrderRepo.findByTenantIdAndId(tenantId, id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Work order not found"));
+            .orElseThrow(() -> new NotFoundException("Work order not found"));
 
         BigDecimal totalPartsCost = BigDecimal.ZERO;
 
@@ -311,7 +311,7 @@ public class MaintenanceService {
 
                 if ("INTERNAL".equalsIgnoreCase(source) && p.itemId() != null) {
                     ItemEntity item = itemRepo.findByTenantIdAndId(tenantId, p.itemId())
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Spare part item not found: " + p.itemId()));
+                        .orElseThrow(() -> new NotFoundException("Spare part item not found: " + p.itemId()));
 
                     if (p.unitCost() == null && item.getUnitPrice() != null) {
                         unitCost = item.getUnitPrice();
@@ -439,7 +439,7 @@ public class MaintenanceService {
     @Transactional
     public MaintenanceDtos.WorkOrderView cancelWorkOrder(UUID tenantId, UUID id, String notes) {
         MaintenanceWorkOrderEntity wo = workOrderRepo.findByTenantIdAndId(tenantId, id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Work order not found"));
+            .orElseThrow(() -> new NotFoundException("Work order not found"));
         wo.cancel(notes != null ? notes : "Cancelled by technician/manager");
 
         // Restore asset to OPERATIONAL if no other active breakdown work orders

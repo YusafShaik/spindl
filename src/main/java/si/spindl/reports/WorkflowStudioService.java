@@ -1,6 +1,8 @@
 package si.spindl.reports;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -29,7 +31,7 @@ public class WorkflowStudioService {
     private Map<String,Object> toMap(WorkflowConfig config){return Map.of("amountThreshold",config.amountThreshold(),"requiredApprovals",config.requiredApprovals(),"approverRole",config.approverRole());}
     private WorkflowConfig fromMap(Map<String,Object> config){return new WorkflowConfig(new BigDecimal(String.valueOf(config.get("amountThreshold"))),((Number)config.get("requiredApprovals")).intValue(),String.valueOf(config.get("approverRole")));}
     private TenantWorkflowVersionEntity version(UUID tenantId,UUID id){return versions.findById(id).filter(entity->entity.getTenantId().equals(tenantId)&&entity.getWorkflowKey().equals(PURCHASE_ORDER_APPROVAL)).orElseThrow(()->notFound("Workflow version not found"));}
-    private ResponseStatusException badRequest(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}private ResponseStatusException conflict(String message){return new ResponseStatusException(HttpStatus.CONFLICT,message);}private ResponseStatusException notFound(String message){return new ResponseStatusException(HttpStatus.NOT_FOUND,message);}
+    private ResponseStatusException badRequest(String message){return new BadRequestException(message);}private ResponseStatusException conflict(String message){return new ConflictException(message);}private ResponseStatusException notFound(String message){return new NotFoundException(message);}
     public record WorkflowConfig(BigDecimal amountThreshold,int requiredApprovals,String approverRole){}
     public record Policy(BigDecimal amountThreshold,int requiredApprovals,String approverRole,int version){}
     public record PreviewResult(BigDecimal amount,int requiredApprovals,String approverRole,boolean thresholdTriggered){}

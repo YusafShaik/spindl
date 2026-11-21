@@ -1,6 +1,9 @@
 package si.spindl.identity;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.ForbiddenException;
+import si.spindl.common.exception.NotFoundException;
+import si.spindl.common.exception.UnauthorizedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
@@ -10,7 +13,6 @@ import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.text.Normalizer;
 import java.time.Instant;
@@ -54,7 +56,7 @@ public class AuthService {
     @Transactional
     public AuthDtos.AuthResponse register(AuthDtos.RegisterRequest request) {
         String email = request.email().trim().toLowerCase(Locale.ROOT);
-        if (users.existsByEmail(email)) throw new ResponseStatusException(HttpStatus.CONFLICT, "An account already exists for this email");
+        if (users.existsByEmail(email)) throw new ConflictException("An account already exists for this email");
         var user = users.save(new AppUserEntity(email, passwordEncoder.encode(request.password()), request.name().trim()));
         String slug = slug(request.workspaceName());
         if (slug.isBlank()) slug = "workspace";
@@ -101,11 +103,11 @@ public class AuthService {
 
     @Transactional
     public AuthDtos.AuthResponse switchTenant(UUID userId, UUID targetTenantId) {
-        var user = users.findById(userId).filter(AppUserEntity::isActive).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        var user = users.findById(userId).filter(AppUserEntity::isActive).orElseThrow(() -> new UnauthorizedException());
         var membership = memberships.findByTenantIdAndUserIdAndActiveTrue(targetTenantId, userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not belong to this workspace"));
+                .orElseThrow(() -> new ForbiddenException("You do not belong to this workspace"));
         var tenant = tenants.findSummaryById(targetTenantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace not found"));
+                .orElseThrow(() -> new NotFoundException("Workspace not found"));
         return issueToken(user, tenant, membership.getRole());
     }
 

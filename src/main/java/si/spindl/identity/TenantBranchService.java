@@ -1,11 +1,13 @@
 package si.spindl.identity;
 
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.ForbiddenException;
+import si.spindl.common.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import si.spindl.common.event.DomainAuditEvent;
 
 import java.util.List;
@@ -24,7 +26,7 @@ public class TenantBranchService {
     @Transactional(readOnly = true)
     public List<BranchView> list(UUID tenantId, UUID actorId) {
         String role = memberships.findActiveRole(tenantId, actorId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN));
+                .orElseThrow(() -> new ForbiddenException());
         return list(tenantId, actorId, role);
     }
 
@@ -41,7 +43,7 @@ public class TenantBranchService {
     public BranchView create(UUID tenantId, UUID actorId, SaveBranchRequest request) {
         String code = normalizeCode(request.code());
         if (branches.existsByTenantIdAndCodeIgnoreCase(tenantId, code)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Branch code already exists");
+            throw new ConflictException("Branch code already exists");
         }
         var branch = branches.save(new TenantBranchEntity(tenantId, code, clean(request.name(), 120, "Branch name"), cleanOptional(request.legalName(), 180), cleanOptional(request.taxRegistration(), 80), false));
         eventPublisher.publishEvent(new DomainAuditEvent(tenantId, actorId, "TENANT_BRANCH_CREATED", "branch", branch.getId(), Map.of("code", code)));
@@ -53,7 +55,7 @@ public class TenantBranchService {
         var branch = find(tenantId, id);
         String code = normalizeCode(request.code());
         if (!code.equalsIgnoreCase(branch.getCode()) && branches.existsByTenantIdAndCodeIgnoreCase(tenantId, code)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Branch code already exists");
+            throw new ConflictException("Branch code already exists");
         }
         branch.update(code, clean(request.name(), 120, "Branch name"), cleanOptional(request.legalName(), 180), cleanOptional(request.taxRegistration(), 80));
         eventPublisher.publishEvent(new DomainAuditEvent(tenantId, actorId, "TENANT_BRANCH_UPDATED", "branch", id, Map.of("code", code)));
@@ -64,7 +66,7 @@ public class TenantBranchService {
     public BranchView setActive(UUID tenantId, UUID actorId, UUID id, boolean active) {
         var branch = find(tenantId, id);
         if (branch.isDefaultBranch() && !active) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "The default branch cannot be deactivated");
+            throw new ConflictException("The default branch cannot be deactivated");
         }
         branch.setActive(active);
         eventPublisher.publishEvent(new DomainAuditEvent(tenantId, actorId, active ? "TENANT_BRANCH_ACTIVATED" : "TENANT_BRANCH_DEACTIVATED", "branch", id, Map.of()));
@@ -72,20 +74,20 @@ public class TenantBranchService {
     }
 
     private TenantBranchEntity find(UUID tenantId, UUID id) {
-        return branches.findByTenantIdAndId(tenantId, id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Branch not found"));
+        return branches.findByTenantIdAndId(tenantId, id).orElseThrow(() -> new NotFoundException("Branch not found"));
     }
 
     private String normalizeCode(String value) {
         String code = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!code.matches("[A-Z0-9][A-Z0-9_-]{1,39}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Branch code must be 2–40 letters, digits, dashes, or underscores");
+            throw new BadRequestException("Branch code must be 2–40 letters, digits, dashes, or underscores");
         }
         return code;
     }
 
     private String clean(String value, int max, String label) {
         if (value == null || value.isBlank() || value.trim().length() > max) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, label + " is required (max " + max + " characters)");
+            throw new BadRequestException(label + " is required (max " + max + " characters)");
         }
         return value.trim();
     }
@@ -93,7 +95,7 @@ public class TenantBranchService {
     private String cleanOptional(String value, int max) {
         if (value == null || value.isBlank()) return null;
         if (value.trim().length() > max) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Branch details are too long");
+            throw new BadRequestException("Branch details are too long");
         }
         return value.trim();
     }

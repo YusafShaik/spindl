@@ -1,9 +1,9 @@
 package si.spindl.mrp;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import si.spindl.catalog.ItemEntity;
 import si.spindl.catalog.ItemRepository;
 import si.spindl.inventory.WarehouseEntity;
@@ -83,7 +83,7 @@ public class MrpService {
 
     public MrpDtos.MrpRunView getRun(UUID tenantId, UUID runId) {
         MrpRunEntity run = mrpRuns.findByTenantIdAndId(tenantId, runId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "MRP Run not found"));
+                .orElseThrow(() -> new NotFoundException("MRP Run not found"));
         return MrpDtos.MrpRunView.from(run);
     }
 
@@ -127,7 +127,7 @@ public class MrpService {
 
     public MrpDtos.PlannedOrderView getPlannedOrder(UUID tenantId, UUID id) {
         MrpPlannedOrderEntity order = mrpPlannedOrders.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Planned order not found"));
+                .orElseThrow(() -> new NotFoundException("Planned order not found"));
         return MrpDtos.PlannedOrderView.from(order);
     }
 
@@ -281,7 +281,7 @@ public class MrpService {
     @Transactional
     public MrpDtos.PlannedOrderView convertPlannedOrder(UUID tenantId, UUID actorId, UUID orderId) {
         MrpPlannedOrderEntity plannedOrder = mrpPlannedOrders.findByTenantIdAndId(tenantId, orderId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Planned order not found"));
+                .orElseThrow(() -> new NotFoundException("Planned order not found"));
 
         if ("CONVERTED".equalsIgnoreCase(plannedOrder.getStatus())) {
             return MrpDtos.PlannedOrderView.from(plannedOrder);
@@ -292,7 +292,7 @@ public class MrpService {
             if (supplier == null) {
                 supplier = suppliers.findAllByTenantIdAndActiveTrueOrderByName(tenantId).stream()
                         .findFirst()
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "No active supplier available for purchase conversion"));
+                        .orElseThrow(() -> new BadRequestException("No active supplier available for purchase conversion"));
             }
 
             String poNumber = "PO-" + LocalDate.now().toString().replace("-", "") + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
@@ -309,7 +309,7 @@ public class MrpService {
             plannedOrder.markConverted(po.getId(), po.getOrderNumber());
         } else if ("WORK_ORDER".equalsIgnoreCase(plannedOrder.getActionType())) {
             if (plannedOrder.getBom() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No approved BOM associated with this planned work order");
+                throw new BadRequestException("No approved BOM associated with this planned work order");
             }
 
             WarehouseEntity defaultWarehouse = warehouses.findByTenantIdAndIsDefaultTrueAndActiveTrue(tenantId)
@@ -366,7 +366,7 @@ public class MrpService {
     @Transactional
     public MrpDtos.PlannedOrderView dismissPlannedOrder(UUID tenantId, UUID orderId) {
         MrpPlannedOrderEntity plannedOrder = mrpPlannedOrders.findByTenantIdAndId(tenantId, orderId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Planned order not found"));
+                .orElseThrow(() -> new NotFoundException("Planned order not found"));
         plannedOrder.markDismissed();
         mrpPlannedOrders.save(plannedOrder);
         return MrpDtos.PlannedOrderView.from(plannedOrder);

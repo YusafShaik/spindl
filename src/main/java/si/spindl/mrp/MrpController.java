@@ -1,11 +1,12 @@
 package si.spindl.mrp;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import java.util.List;
 import java.util.UUID;
@@ -15,9 +16,9 @@ import java.util.UUID;
 public class MrpController {
 
     private final MrpService service;
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
 
-    public MrpController(MrpService service, DevelopmentTenant tenant) {
+    public MrpController(MrpService service, CurrentTenant tenant) {
         this.service = service;
         this.tenant = tenant;
     }
@@ -47,7 +48,7 @@ public class MrpController {
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody(required = false) MrpDtos.CalculateMrpRequest request
     ) {
-        UUID actorId = jwt != null && jwt.getSubject() != null ? UUID.fromString(jwt.getSubject()) : null;
+        UUID actorId = jwt != null && jwt.getSubject() != null ? AuthenticatedActor.userId(jwt) : null;
         return service.calculateMrp(tenant.currentTenantId(), actorId, request);
     }
 
@@ -74,7 +75,7 @@ public class MrpController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id
     ) {
-        UUID actorId = jwt != null && jwt.getSubject() != null ? UUID.fromString(jwt.getSubject()) : null;
+        UUID actorId = jwt != null && jwt.getSubject() != null ? AuthenticatedActor.userId(jwt) : null;
         return service.convertPlannedOrder(tenant.currentTenantId(), actorId, id);
     }
 
@@ -88,7 +89,7 @@ public class MrpController {
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody MrpDtos.BatchConvertRequest request
     ) {
-        UUID actorId = jwt != null && jwt.getSubject() != null ? UUID.fromString(jwt.getSubject()) : null;
+        UUID actorId = jwt != null && jwt.getSubject() != null ? AuthenticatedActor.userId(jwt) : null;
         return service.convertBatch(tenant.currentTenantId(), actorId, request);
     }
 }

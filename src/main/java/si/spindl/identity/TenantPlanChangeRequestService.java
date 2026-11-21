@@ -1,10 +1,11 @@
 package si.spindl.identity;
 
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -31,23 +32,23 @@ public class TenantPlanChangeRequestService {
 
     @Transactional
     public RequestView create(UUID tenantId,UUID actorId,String requestedPlan){
-        if(requestedPlan==null||requestedPlan.isBlank())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Choose a plan to request");
-        if(requests.existsByTenantIdAndStatusIn(tenantId,List.of("REQUESTED","APPROVED")))throw new ResponseStatusException(HttpStatus.CONFLICT,"A plan change request is already awaiting review or scheduled to apply");
+        if(requestedPlan==null||requestedPlan.isBlank())throw new BadRequestException("Choose a plan to request");
+        if(requests.existsByTenantIdAndStatusIn(tenantId,List.of("REQUESTED","APPROVED")))throw new ConflictException("A plan change request is already awaiting review or scheduled to apply");
         var preview=plans.preview(tenantId,requestedPlan);
-        if(preview.currentPlanCode().equals(preview.targetPlanCode())&&preview.currentVersion()==preview.targetVersion())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"This workspace is already on that plan version");
+        if(preview.currentPlanCode().equals(preview.targetPlanCode())&&preview.currentVersion()==preview.targetVersion())throw new BadRequestException("This workspace is already on that plan version");
         LocalDate effectiveDate;
         try{effectiveDate=LocalDate.parse(preview.effectiveDate());}catch(java.time.format.DateTimeParseException immediate){effectiveDate=LocalDate.now(java.time.ZoneOffset.UTC);}
         TenantPlanChangeRequestEntity request;
         try{request=requests.saveAndFlush(new TenantPlanChangeRequestEntity(tenantId,actorId,preview.currentPlanCode(),preview.currentVersion(),preview.targetPlanCode(),preview.targetVersion(),effectiveDate));}
-        catch(DataIntegrityViolationException exception){throw new ResponseStatusException(HttpStatus.CONFLICT,"A plan change request was submitted by another workspace admin");}
+        catch(DataIntegrityViolationException exception){throw new ConflictException("A plan change request was submitted by another workspace admin");}
         audit.save(new TenantAuditEventEntity(tenantId,actorId,"PLAN_CHANGE_REQUESTED","subscription",request.getId(),Map.of("currentPlan",request.getCurrentPlanCode(),"targetPlan",request.getTargetPlanCode(),"effectiveDate",request.getEffectiveDate().toString())));
         return RequestView.from(request);
     }
 
     @Transactional
     public RequestView cancel(UUID tenantId,UUID actorId,UUID id){
-        var request=requests.findByTenantIdAndIdForUpdate(tenantId,id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan change request not found"));
-        if(!"REQUESTED".equals(request.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"This plan request is no longer pending");
+        var request=requests.findByTenantIdAndIdForUpdate(tenantId,id).orElseThrow(()->new NotFoundException("Plan change request not found"));
+        if(!"REQUESTED".equals(request.getStatus()))throw new ConflictException("This plan request is no longer pending");
         request.cancel();audit.save(new TenantAuditEventEntity(tenantId,actorId,"PLAN_CHANGE_REQUEST_CANCELLED","subscription",id,Map.of("targetPlan",request.getTargetPlanCode())));
         return RequestView.from(request);
     }
@@ -62,11 +63,11 @@ public class TenantPlanChangeRequestService {
 
     @Transactional
     public PlatformRequestView approve(UUID id,UUID reviewerId,String reviewerEmail,String note){
-        var request=requests.findByIdForUpdate(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan change request not found"));
-        if(!"REQUESTED".equals(request.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"This plan request has already been reviewed");
-        var subscription=subscriptions.findByTenantIdForUpdate(request.getTenantId()).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Workspace subscription is unavailable"));
-        if(!subscription.getPlanCode().equals(request.getCurrentPlanCode())||subscription.getPlanVersion()!=request.getCurrentPlanVersion())throw new ResponseStatusException(HttpStatus.CONFLICT,"Workspace plan changed after this request was submitted; ask the workspace admin to preview again");
-        var target=planCatalog.findByPlanCodeAndVersion(request.getTargetPlanCode(),request.getTargetPlanVersion()).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Requested plan version is unavailable"));
+        var request=requests.findByIdForUpdate(id).orElseThrow(()->new NotFoundException("Plan change request not found"));
+        if(!"REQUESTED".equals(request.getStatus()))throw new ConflictException("This plan request has already been reviewed");
+        var subscription=subscriptions.findByTenantIdForUpdate(request.getTenantId()).orElseThrow(()->new ConflictException("Workspace subscription is unavailable"));
+        if(!subscription.getPlanCode().equals(request.getCurrentPlanCode())||subscription.getPlanVersion()!=request.getCurrentPlanVersion())throw new ConflictException("Workspace plan changed after this request was submitted; ask the workspace admin to preview again");
+        var target=planCatalog.findByPlanCodeAndVersion(request.getTargetPlanCode(),request.getTargetPlanVersion()).orElseThrow(()->new ConflictException("Requested plan version is unavailable"));
         request.approve(reviewerId,cleanNote(note));
         saveTenantAudit(request,reviewerId,"PLAN_CHANGE_APPROVED",reviewerEmail,cleanNote(note));
         if(!request.getEffectiveDate().isAfter(LocalDate.now(ZoneOffset.UTC)))apply(request,subscription,target,reviewerId,reviewerEmail);
@@ -76,9 +77,9 @@ public class TenantPlanChangeRequestService {
 
     @Transactional
     public PlatformRequestView reject(UUID id,UUID reviewerId,String reviewerEmail,String note){
-        String reason=cleanNote(note);if(reason==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A reason is required when rejecting a plan request");
-        var request=requests.findByIdForUpdate(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan change request not found"));
-        if(!"REQUESTED".equals(request.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"This plan request has already been reviewed");
+        String reason=cleanNote(note);if(reason==null)throw new BadRequestException("A reason is required when rejecting a plan request");
+        var request=requests.findByIdForUpdate(id).orElseThrow(()->new NotFoundException("Plan change request not found"));
+        if(!"REQUESTED".equals(request.getStatus()))throw new ConflictException("This plan request has already been reviewed");
         request.reject(reviewerId,reason);saveTenantAudit(request,reviewerId,"PLAN_CHANGE_REJECTED",reviewerEmail,reason);
         String tenantName=tenants.findSummaryById(request.getTenantId()).map(TenantRepository.TenantSummary::getDisplayName).orElse("Workspace unavailable");
         return PlatformRequestView.from(request,tenantName);
@@ -109,7 +110,7 @@ public class TenantPlanChangeRequestService {
         Map<String,Object> details=new java.util.LinkedHashMap<>();details.put("requestId",request.getId().toString());details.put("currentPlan",request.getCurrentPlanCode());details.put("targetPlan",request.getTargetPlanCode());details.put("targetVersion",request.getTargetPlanVersion());details.put("effectiveDate",request.getEffectiveDate().toString());details.put("reviewerEmail",actorEmail);if(note!=null)details.put("note",note);
         audit.save(new TenantAuditEventEntity(request.getTenantId(),actorId,event,"subscription",request.getId(),details));
     }
-    private String cleanNote(String note){if(note==null||note.isBlank())return null;String value=note.trim();if(value.length()>500)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Review note must be 500 characters or less");return value;}
+    private String cleanNote(String note){if(note==null||note.isBlank())return null;String value=note.trim();if(value.length()>500)throw new BadRequestException("Review note must be 500 characters or less");return value;}
 
     public record CreateRequest(String planCode){}
     public record RequestView(UUID id,String currentPlanCode,int currentPlanVersion,String targetPlanCode,int targetPlanVersion,LocalDate effectiveDate,String status,java.time.Instant requestedAt,java.time.Instant reviewedAt,String reviewNote,java.time.Instant appliedAt){

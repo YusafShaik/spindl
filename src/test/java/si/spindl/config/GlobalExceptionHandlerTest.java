@@ -1,6 +1,7 @@
 package si.spindl.config;
 
 import org.junit.jupiter.api.Test;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
@@ -65,5 +66,24 @@ class GlobalExceptionHandlerTest {
         assertEquals("Internal Server Error", detail.getTitle());
         assertEquals("Internal server error", detail.getDetail());
         assertNotNull(detail.getProperties().get("timestamp"));
+    }
+
+    @Test
+    void typedApiExceptionMatchesResponseStatusExceptionContract() {
+        ResponseStatusException raw = new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found");
+        NotFoundException typed = new NotFoundException("Item not found");
+        ProblemDetail rawDetail = handler.handleResponseStatusException(raw);
+        ProblemDetail typedDetail = handler.handleApiException(typed);
+
+        assertEquals(rawDetail.getStatus(), typedDetail.getStatus());
+        assertEquals(rawDetail.getTitle(), typedDetail.getTitle());
+        assertEquals(rawDetail.getDetail(), typedDetail.getDetail());
+
+        ResponseStatusException rawWithoutReason = new ResponseStatusException(HttpStatus.NOT_FOUND);
+        ProblemDetail bare = handler.handleApiException(new NotFoundException());
+        ProblemDetail bareRaw = handler.handleResponseStatusException(rawWithoutReason);
+        assertEquals(bareRaw.getStatus(), bare.getStatus());
+        assertEquals(bareRaw.getTitle(), bare.getTitle());
+        assertEquals(bareRaw.getDetail(), bare.getDetail());
     }
 }

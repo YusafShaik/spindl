@@ -1,7 +1,9 @@
 package si.spindl.purchasing;
 
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -9,7 +11,7 @@ import si.spindl.catalog.ItemEntity;
 import si.spindl.catalog.ItemRepository;
 import si.spindl.identity.TenantAuditEventEntity;
 import si.spindl.identity.TenantAuditEventRepository;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Year;
@@ -20,13 +22,13 @@ import static si.spindl.purchasing.PurchaseOrderDtos.PurchaseOrderView;
 
 @Service
 public class PurchaseRequisitionService {
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
     private final PurchaseRequisitionRepository requisitions;
     private final PurchaseOrderRepository purchaseOrders;
     private final SupplierRepository suppliers;
     private final ItemRepository items;
     private final TenantAuditEventRepository audit;
-    public PurchaseRequisitionService(DevelopmentTenant tenant,PurchaseRequisitionRepository requisitions,PurchaseOrderRepository purchaseOrders,SupplierRepository suppliers,ItemRepository items,TenantAuditEventRepository audit){this.tenant=tenant;this.requisitions=requisitions;this.purchaseOrders=purchaseOrders;this.suppliers=suppliers;this.items=items;this.audit=audit;}
+    public PurchaseRequisitionService(CurrentTenant tenant,PurchaseRequisitionRepository requisitions,PurchaseOrderRepository purchaseOrders,SupplierRepository suppliers,ItemRepository items,TenantAuditEventRepository audit){this.tenant=tenant;this.requisitions=requisitions;this.purchaseOrders=purchaseOrders;this.suppliers=suppliers;this.items=items;this.audit=audit;}
 
     @Transactional(readOnly=true)
     public List<View> list(){return requisitions.findAllByTenantIdOrderByCreatedAtDesc(tenant.currentTenantId()).stream().map(View::from).toList();}
@@ -68,7 +70,7 @@ public class PurchaseRequisitionService {
     private List<LineRequest> normalize(List<LineRequest> input){if(input==null||input.isEmpty())throw badRequest("Add at least one item to the requisition");if(input.stream().map(LineRequest::itemId).distinct().count()!=input.size())throw badRequest("Each item can appear only once per requisition");return input.stream().sorted(Comparator.comparing(line->line.itemId().toString())).toList();}
     private String clean(String value){return value==null||value.isBlank()?null:value.trim();}
     private String hash(String input){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8)));}catch(Exception exception){throw new IllegalStateException(exception);}}
-    private PurchaseRequisitionEntity lock(UUID tenantId,UUID id){return requisitions.findForUpdate(tenantId,id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Purchase requisition not found"));}
-    private ResponseStatusException badRequest(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}
-    private ResponseStatusException conflict(String message){return new ResponseStatusException(HttpStatus.CONFLICT,message);}
+    private PurchaseRequisitionEntity lock(UUID tenantId,UUID id){return requisitions.findForUpdate(tenantId,id).orElseThrow(()->new NotFoundException("Purchase requisition not found"));}
+    private ResponseStatusException badRequest(String message){return new BadRequestException(message);}
+    private ResponseStatusException conflict(String message){return new ConflictException(message);}
 }
