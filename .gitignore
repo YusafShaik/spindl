@@ -40,5 +40,27 @@ out/
 
 # Skills & Agents
 .agents/
+**/.agents/
 .hallmark/
+**/.hallmark/
 skills-lock.json
+**/skills-lock.json
+
+# Marketing & Landing Page Experiments / Prototypes / Captures
+frontend/src/features/marketing/
+frontend/public/marketing/
+frontend/public/illustrations/
+docs/prototypes/
+docs/landing-*
+**/captures/
+
+# Frontend Environment & Logs
+frontend/.env*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
