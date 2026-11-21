@@ -3,30 +3,31 @@
 @import "tailwindcss/utilities";
 
 :root {
-  --sp-canvas: #F8F9FA;
-  --sp-sidebar: #F8F9FA;
-  --sp-surface: #FFFFFF;
-  --sp-surface-subtle: #FBFBFC;
-  --sp-surface-hover: #F0F0F3;
-  --sp-text: #1D2024;
-  --sp-text-secondary: #6B6F76;
-  --sp-text-muted: #8E929C;
-  --sp-text-disabled: #B0B3BA;
-  --sp-border: #E8E9ED;
-  --sp-border-subtle: #F0F1F4;
-  --sp-border-strong: #D0D3D9;
-  --sp-brand: #5E46C1;
-  --sp-brand-hover: #4F3AAE;
-  --sp-brand-active: #43319A;
-  --sp-brand-soft: #EBE8F7;
-  --sp-focus: #5E46C1;
-  --sp-success: #1A7A4C;
+  /* Linear Core Foundation Palette (from Mobbin spec) */
+  --sp-canvas: #F7F8F8;          /* Black Haze - Main App Background */
+  --sp-sidebar: #F7F8F8;         /* Black Haze - Sidebar & Nav Chrome */
+  --sp-surface: #FFFFFF;         /* White - Cards, Modals, Inputs, Panels */
+  --sp-surface-subtle: #F7F8F8;  /* Black Haze - Subtle Secondary Surfaces */
+  --sp-surface-hover: #F0F1F2;   /* Hover state for rows, buttons */
+  --sp-text: #08090A;            /* Woodsmoke - Deep primary typography */
+  --sp-text-secondary: #575A60;  /* Secondary text / labels */
+  --sp-text-muted: #8A8F98;      /* Oslo Gray - Placeholders, captions, meta */
+  --sp-text-disabled: #B4B7BD;   /* Disabled text */
+  --sp-border: #E8E9ED;          /* Subtle clean divider */
+  --sp-border-subtle: #F0F1F4;   /* Very soft container separation */
+  --sp-border-strong: #8A8F98;   /* Oslo Gray - Active / hover border accent */
+  --sp-brand: #5E6AD2;           /* Indigo - Linear Primary Brand Accent */
+  --sp-brand-hover: #4F5BC7;     /* Indigo Hover */
+  --sp-brand-active: #444EB5;    /* Indigo Active */
+  --sp-brand-soft: #EEF0FB;      /* Indigo Light Tint */
+  --sp-focus: #5E6AD2;           /* Crisp 1px focus ring */
+  --sp-success: #1A7A4C;         /* Semantic Success */
   --sp-success-soft: #EAF7EE;
-  --sp-warning: #8B5A17;
+  --sp-warning: #8B5A17;         /* Semantic Warning */
   --sp-warning-soft: #FFF6E8;
-  --sp-danger: #C13E3E;
+  --sp-danger: #C13E3E;          /* Semantic Danger */
   --sp-danger-soft: #FDE8E8;
-  --sp-info: #2763A5;
+  --sp-info: #2763A5;            /* Semantic Info */
   --sp-info-soft: #EDF5FE;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--sp-text);

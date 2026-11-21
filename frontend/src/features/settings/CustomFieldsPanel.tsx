@@ -501,12 +501,12 @@ export function CustomFieldsPanel({ role, notify }: CustomFieldsPanelProps) {
             <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '24%' }}>FIELD NAME</th>
-                  <th style={{ width: '20%' }}>FIELD KEY</th>
-                  <th style={{ width: '16%' }}>DATA TYPE</th>
-                  <th style={{ width: '16%' }}>REQUIREMENT</th>
-                  <th style={{ width: '12%' }}>STATUS</th>
-                  {canEdit && <th style={{ width: '12%', textAlign: 'right' }}>ACTION</th>}
+                  <th style={{ width: '24%' }}>Field name</th>
+                  <th style={{ width: '20%' }}>Field key</th>
+                  <th style={{ width: '16%' }}>Data type</th>
+                  <th style={{ width: '16%' }}>Requirement</th>
+                  <th style={{ width: '12%' }}>Status</th>
+                  {canEdit && <th style={{ width: '12%', textAlign: 'right' }}>Action</th>}
                 </tr>
               </thead>
               <tbody>

@@ -2,7 +2,9 @@ package si.spindl.maintenance;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -20,7 +22,7 @@ public class MaintenanceScheduleEntity {
     @Column(name = "frequency_interval", nullable = false) private int frequencyInterval;
     @Column(name = "last_performed_at") private Instant lastPerformedAt;
     @Column(name = "next_due_date") private LocalDate nextDueDate;
-    @Column(columnDefinition = "JSONB", nullable = false) private String checklist = "[]";
+    @JdbcTypeCode(SqlTypes.JSON) @Column(columnDefinition = "jsonb", nullable = false) private String checklist = "[]";
     @Column(nullable = false) private boolean active = true;
     @CreationTimestamp @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
 

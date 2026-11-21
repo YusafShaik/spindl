@@ -141,6 +141,7 @@ public class MaintenanceService {
             a.getModel(),
             a.getStatus(),
             a.getMeterHours(),
+            a.getTotalMaintenanceCost(),
             a.getInstallationDate(),
             a.getWarrantyExpiry(),
             a.getLastServiceDate(),
@@ -240,6 +241,12 @@ public class MaintenanceService {
 
         LocalDate scheduled = request.scheduledDate() != null ? request.scheduledDate() : LocalDate.now();
 
+        String techType = request.technicianType() != null && !request.technicianType().isBlank()
+            ? request.technicianType().toUpperCase()
+            : "INTERNAL";
+        UUID techId = "INTERNAL".equalsIgnoreCase(techType) ? request.assignedTechnicianUserId() : null;
+        String contractor = "EXTERNAL".equalsIgnoreCase(techType) ? request.externalContractorName() : null;
+
         MaintenanceWorkOrderEntity wo = new MaintenanceWorkOrderEntity(
             tenantId,
             orderNumber,
@@ -247,10 +254,12 @@ public class MaintenanceService {
             request.scheduleId(),
             request.type(),
             request.priority(),
-            request.assignedTechnicianUserId(),
+            techId,
             request.failureSymptom(),
             scheduled
         );
+        wo.setTechnicianType(techType);
+        wo.setExternalContractorName(contractor);
 
         // If breakdown or high/emergency priority, mark asset under maintenance
         if ("BREAKDOWN".equalsIgnoreCase(request.type()) || "HIGH".equalsIgnoreCase(request.priority()) || "EMERGENCY".equalsIgnoreCase(request.priority())) {
@@ -289,55 +298,115 @@ public class MaintenanceService {
         MaintenanceWorkOrderEntity wo = workOrderRepo.findByTenantIdAndId(tenantId, id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Work order not found"));
 
-        wo.complete(request.rootCause(), request.resolutionNotes(), request.downtimeMinutes());
+        BigDecimal totalPartsCost = BigDecimal.ZERO;
 
-        // Process parts consumption and inventory stock deduction
+        // Process parts consumption (both in-house stock parts and outside purchased parts)
         if (request.partsConsumed() != null && !request.partsConsumed().isEmpty()) {
             for (var p : request.partsConsumed()) {
-                if (p.quantity().compareTo(BigDecimal.ZERO) <= 0) continue;
+                if (p.quantity() == null || p.quantity().compareTo(BigDecimal.ZERO) <= 0) continue;
 
-                ItemEntity item = itemRepo.findByTenantIdAndId(tenantId, p.itemId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Spare part item not found: " + p.itemId()));
+                String source = p.partSource() != null && !p.partSource().isBlank() ? p.partSource().toUpperCase() : "INTERNAL";
+                BigDecimal unitCost = p.unitCost() != null ? p.unitCost() : BigDecimal.ZERO;
 
-                BigDecimal cost = p.unitCost() != null ? p.unitCost() : (item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO);
+                if ("INTERNAL".equalsIgnoreCase(source) && p.itemId() != null) {
+                    ItemEntity item = itemRepo.findByTenantIdAndId(tenantId, p.itemId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Spare part item not found: " + p.itemId()));
 
-                MaintenancePartConsumptionEntity partRecord = new MaintenancePartConsumptionEntity(
-                    tenantId,
-                    wo.getId(),
-                    item.getId(),
-                    p.warehouseId(),
-                    p.quantity(),
-                    cost
-                );
-                partRepo.save(partRecord);
+                    if (p.unitCost() == null && item.getUnitPrice() != null) {
+                        unitCost = item.getUnitPrice();
+                    }
 
-                // Deduct stock from warehouse if warehouse provided
-                if (p.warehouseId() != null) {
-                    var warehouse = warehouseRepo.findByTenantIdAndIdAndActiveTrue(tenantId, p.warehouseId());
-                    if (warehouse.isPresent()) {
-                        int qtyInt = p.quantity().intValue();
-                        var stockOpt = warehouseStockRepo.findByLocationAndItem(tenantId, p.warehouseId(), item.getId());
-                        if (stockOpt.isPresent()) {
-                            var stock = stockOpt.get();
-                            if (stock.getOnHand() >= qtyInt) {
-                                stock.sellAvailable(qtyInt);
-                                warehouseStockRepo.save(stock);
+                    MaintenancePartConsumptionEntity partRecord = new MaintenancePartConsumptionEntity(
+                        tenantId,
+                        wo.getId(),
+                        item.getId(),
+                        p.warehouseId(),
+                        p.quantity(),
+                        unitCost,
+                        "INTERNAL",
+                        item.getName(),
+                        item.getSku(),
+                        null,
+                        null
+                    );
+                    partRepo.save(partRecord);
 
-                                movementRepo.save(new InventoryMovementEntity(
-                                    tenantId,
-                                    item,
-                                    warehouse.get(),
-                                    -qtyInt,
-                                    "MAINTENANCE_PARTS_CONSUMPTION",
-                                    wo.getOrderNumber(),
-                                    UUID.randomUUID().toString()
-                                ));
+                    BigDecimal lineTotal = p.quantity().multiply(unitCost).setScale(2, RoundingMode.HALF_UP);
+                    totalPartsCost = totalPartsCost.add(lineTotal);
+
+                    // Deduct stock from warehouse if warehouse provided
+                    if (p.warehouseId() != null) {
+                        var warehouse = warehouseRepo.findByTenantIdAndIdAndActiveTrue(tenantId, p.warehouseId());
+                        if (warehouse.isPresent()) {
+                            int qtyInt = p.quantity().intValue();
+                            var stockOpt = warehouseStockRepo.findByLocationAndItem(tenantId, p.warehouseId(), item.getId());
+                            if (stockOpt.isPresent()) {
+                                var stock = stockOpt.get();
+                                if (stock.getOnHand() >= qtyInt) {
+                                    stock.sellAvailable(qtyInt);
+                                    warehouseStockRepo.save(stock);
+
+                                    movementRepo.save(new InventoryMovementEntity(
+                                        tenantId,
+                                        item,
+                                        warehouse.get(),
+                                        -qtyInt,
+                                        "MAINTENANCE_PARTS_CONSUMPTION",
+                                        wo.getOrderNumber(),
+                                        UUID.randomUUID().toString()
+                                    ));
+                                }
                             }
                         }
                     }
+                } else {
+                    // External replacement part purchased from outside supplier / local vendor
+                    String extName = p.externalPartName() != null && !p.externalPartName().isBlank()
+                        ? p.externalPartName().trim()
+                        : "External Replacement Part";
+
+                    MaintenancePartConsumptionEntity partRecord = new MaintenancePartConsumptionEntity(
+                        tenantId,
+                        wo.getId(),
+                        null,
+                        null,
+                        p.quantity(),
+                        unitCost,
+                        "EXTERNAL",
+                        extName,
+                        p.externalPartNumber(),
+                        p.supplierName(),
+                        p.invoiceReference()
+                    );
+                    partRepo.save(partRecord);
+
+                    BigDecimal lineTotal = p.quantity().multiply(unitCost).setScale(2, RoundingMode.HALF_UP);
+                    totalPartsCost = totalPartsCost.add(lineTotal);
                 }
             }
         }
+
+        BigDecimal laborCost = request.laborCost() != null ? request.laborCost() : BigDecimal.ZERO;
+        String techType = request.technicianType() != null && !request.technicianType().isBlank()
+            ? request.technicianType().toUpperCase()
+            : wo.getTechnicianType();
+        String extContractor = request.externalContractorName() != null ? request.externalContractorName() : wo.getExternalContractorName();
+        String extInvoice = request.externalInvoiceRef() != null ? request.externalInvoiceRef() : wo.getExternalInvoiceRef();
+
+        if (request.assignedTechnicianUserId() != null) {
+            wo.assign(request.assignedTechnicianUserId());
+        }
+
+        wo.complete(
+            request.rootCause(),
+            request.resolutionNotes(),
+            request.downtimeMinutes(),
+            techType,
+            extContractor,
+            extInvoice,
+            laborCost,
+            totalPartsCost
+        );
 
         // Update schedule if tied to one
         if (wo.getScheduleId() != null) {
@@ -350,10 +419,11 @@ public class MaintenanceService {
             });
         }
 
-        // Restore asset to OPERATIONAL and update service dates
+        // Restore asset to OPERATIONAL, update service dates and accumulate maintenance cost
         assetRepo.findByTenantIdAndId(tenantId, wo.getAssetId()).ifPresent(a -> {
             a.setStatus("OPERATIONAL");
             a.setLastServiceDate(LocalDate.now());
+            a.addMaintenanceCost(wo.getTotalCost());
             if (wo.getScheduleId() != null) {
                 scheduleRepo.findByTenantIdAndId(tenantId, wo.getScheduleId()).ifPresent(s -> {
                     if (s.getNextDueDate() != null) a.setNextServiceDueDate(s.getNextDueDate());
@@ -410,12 +480,14 @@ public class MaintenanceService {
 
         List<MaintenanceDtos.PartConsumedView> parts = partRepo.findAllByTenantIdAndWorkOrderId(w.getTenantId(), w.getId())
             .stream().map(p -> {
-                String sku = null;
-                String iName = null;
-                var item = itemRepo.findByTenantIdAndId(w.getTenantId(), p.getItemId());
-                if (item.isPresent()) {
-                    sku = item.get().getSku();
-                    iName = item.get().getName();
+                String sku = p.getExternalPartNumber();
+                String iName = p.getExternalPartName();
+                if (p.getItemId() != null) {
+                    var item = itemRepo.findByTenantIdAndId(w.getTenantId(), p.getItemId());
+                    if (item.isPresent()) {
+                        sku = item.get().getSku();
+                        iName = item.get().getName();
+                    }
                 }
                 String whName = null;
                 if (p.getWarehouseId() != null) {
@@ -425,11 +497,16 @@ public class MaintenanceService {
                 BigDecimal totalCost = p.getQuantity().multiply(p.getUnitCost()).setScale(2, RoundingMode.HALF_UP);
                 return new MaintenanceDtos.PartConsumedView(
                     p.getId(),
+                    p.getPartSource(),
                     p.getItemId(),
                     sku,
                     iName,
                     p.getWarehouseId(),
                     whName,
+                    p.getExternalPartName(),
+                    p.getExternalPartNumber(),
+                    p.getSupplierName(),
+                    p.getInvoiceReference(),
                     p.getQuantity(),
                     p.getUnitCost(),
                     totalCost,
@@ -450,8 +527,14 @@ public class MaintenanceService {
             w.getType(),
             w.getPriority(),
             w.getStatus(),
+            w.getTechnicianType(),
             w.getAssignedTechnicianUserId(),
             techName,
+            w.getExternalContractorName(),
+            w.getExternalInvoiceRef(),
+            w.getLaborCost(),
+            w.getPartsCost(),
+            w.getTotalCost(),
             w.getFailureSymptom(),
             w.getRootCause(),
             w.getResolutionNotes(),
@@ -500,6 +583,11 @@ public class MaintenanceService {
             .reduce(BigDecimal.ZERO, BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
 
+        BigDecimal totalExpenditure = completed.stream()
+            .map(w -> w.getTotalCost() != null ? w.getTotalCost() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+
         return new MaintenanceDtos.MaintenanceMetricsView(
             totalAssets,
             operational,
@@ -510,7 +598,8 @@ public class MaintenanceService {
             mtbfHours,
             mttrMinutes,
             partsCount,
-            partsValue
+            partsValue,
+            totalExpenditure
         );
     }
 }

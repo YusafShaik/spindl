@@ -302,13 +302,13 @@ export function TenantApiTokensPanel({ role, notify }: TenantApiTokensPanelProps
             <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '20%' }}>TOKEN NAME</th>
-                  <th style={{ width: '14%' }}>PREFIX</th>
-                  <th style={{ width: '26%' }}>SCOPES</th>
-                  <th style={{ width: '14%' }}>EXPIRES</th>
-                  <th style={{ width: '14%' }}>LAST USED</th>
-                  <th style={{ width: '6%' }}>STATUS</th>
-                  {canManage && <th style={{ width: '6%', textAlign: 'right' }}>ACTION</th>}
+                  <th style={{ width: '20%' }}>Token name</th>
+                  <th style={{ width: '14%' }}>Prefix</th>
+                  <th style={{ width: '26%' }}>Scopes</th>
+                  <th style={{ width: '14%' }}>Expires</th>
+                  <th style={{ width: '14%' }}>Last used</th>
+                  <th style={{ width: '6%' }}>Status</th>
+                  {canManage && <th style={{ width: '6%', textAlign: 'right' }}>Action</th>}
                 </tr>
               </thead>
               <tbody>
@@ -627,12 +627,12 @@ export function TenantWebhooksPanel({ role, notify }: TenantWebhooksPanelProps) 
             <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '20%' }}>NAME</th>
-                  <th style={{ width: '28%' }}>DESTINATION URL</th>
-                  <th style={{ width: '26%' }}>TRIGGER EVENTS</th>
-                  <th style={{ width: '10%' }}>DEAD LETTERS</th>
-                  <th style={{ width: '8%' }}>STATUS</th>
-                  {canManage && <th style={{ width: '8%', textAlign: 'right' }}>ACTION</th>}
+                  <th style={{ width: '20%' }}>Name</th>
+                  <th style={{ width: '28%' }}>Destination URL</th>
+                  <th style={{ width: '26%' }}>Trigger events</th>
+                  <th style={{ width: '10%' }}>Dead letters</th>
+                  <th style={{ width: '8%' }}>Status</th>
+                  {canManage && <th style={{ width: '8%', textAlign: 'right' }}>Action</th>}
                 </tr>
               </thead>
               <tbody>
@@ -706,13 +706,13 @@ export function TenantWebhooksPanel({ role, notify }: TenantWebhooksPanelProps) 
             <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '20%' }}>ENDPOINT</th>
-                  <th style={{ width: '20%' }}>EVENT</th>
-                  <th style={{ width: '10%' }}>ATTEMPTS</th>
-                  <th style={{ width: '12%' }}>HTTP STATUS</th>
-                  <th style={{ width: '16%' }}>QUEUED AT</th>
-                  <th style={{ width: '12%' }}>STATUS</th>
-                  {canManage && <th style={{ width: '10%', textAlign: 'right' }}>ACTION</th>}
+                  <th style={{ width: '20%' }}>Endpoint</th>
+                  <th style={{ width: '20%' }}>Event</th>
+                  <th style={{ width: '10%' }}>Attempts</th>
+                  <th style={{ width: '12%' }}>HTTP status</th>
+                  <th style={{ width: '16%' }}>Queued at</th>
+                  <th style={{ width: '12%' }}>Status</th>
+                  {canManage && <th style={{ width: '10%', textAlign: 'right' }}>Action</th>}
                 </tr>
               </thead>
               <tbody>

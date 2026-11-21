@@ -1,5 +1,6 @@
 package si.spindl.workforce;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import si.spindl.identity.AppUserEntity;
@@ -28,6 +29,7 @@ public class WorkforceService {
     private final TenantMembershipRepository membershipRepository;
     private final AppUserRepository userRepository;
     private final WorkCenterRepository workCenterRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public WorkforceService(
             WorkforceSkillRepository skillRepository,
@@ -36,7 +38,8 @@ public class WorkforceService {
             WorkforceRosterAssignmentRepository rosterRepository,
             TenantMembershipRepository membershipRepository,
             AppUserRepository userRepository,
-            WorkCenterRepository workCenterRepository
+            WorkCenterRepository workCenterRepository,
+            PasswordEncoder passwordEncoder
     ) {
         this.skillRepository = skillRepository;
         this.qualificationRepository = qualificationRepository;
@@ -45,6 +48,139 @@ public class WorkforceService {
         this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
         this.workCenterRepository = workCenterRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    // ==========================================
+    // EMPLOYEES & WORKFORCE DIRECTORY
+    // ==========================================
+
+    @Transactional(readOnly = true)
+    public List<WorkforceDtos.EmployeeDto> listEmployees(UUID tenantId) {
+        List<TenantMembershipEntity> memberships = membershipRepository.findAllByTenantIdOrderByCreatedAtAsc(tenantId);
+        List<WorkforceOperatorQualificationEntity> allQuals = qualificationRepository.findAllByTenantIdOrderByCreatedAtDesc(tenantId);
+
+        Map<UUID, List<WorkforceOperatorQualificationEntity>> qualsByUser = allQuals.stream()
+                .collect(Collectors.groupingBy(q -> q.getUser().getId()));
+
+        List<WorkforceDtos.EmployeeDto> result = new ArrayList<>();
+        for (TenantMembershipEntity m : memberships) {
+            Optional<AppUserEntity> userOpt = userRepository.findById(m.getUserId());
+            if (userOpt.isEmpty()) continue;
+            AppUserEntity user = userOpt.get();
+
+            List<WorkforceOperatorQualificationEntity> userQuals = qualsByUser.getOrDefault(user.getId(), Collections.emptyList());
+            List<WorkforceDtos.EmployeeSkillDto> skillDtos = userQuals.stream()
+                    .map(q -> new WorkforceDtos.EmployeeSkillDto(
+                            q.getId(),
+                            q.getSkill().getId(),
+                            q.getSkill().getSkillCode(),
+                            q.getSkill().getName(),
+                            q.getSkill().getCategory(),
+                            q.getQualificationLevel(),
+                            q.getCertifiedAt(),
+                            q.getExpiresAt(),
+                            q.getStatus(),
+                            q.getNotes()
+                    ))
+                    .toList();
+
+            result.add(new WorkforceDtos.EmployeeDto(
+                    user.getId(),
+                    m.getId(),
+                    user.getDisplayName(),
+                    user.getEmail(),
+                    m.getRole(),
+                    m.isActive(),
+                    skillDtos,
+                    m.getCreatedAt()
+            ));
+        }
+        return result;
+    }
+
+    public WorkforceDtos.EmployeeDto createEmployee(UUID tenantId, UUID actorId, WorkforceDtos.CreateEmployeeRequest req) {
+        if (req.name() == null || req.name().isBlank()) {
+            throw new IllegalArgumentException("Employee name is required.");
+        }
+        if (req.email() == null || req.email().isBlank()) {
+            throw new IllegalArgumentException("Employee email is required.");
+        }
+
+        String email = req.email().trim().toLowerCase();
+        String name = req.name().trim();
+        String role = (req.role() != null && !req.role().isBlank()) ? req.role().trim().toUpperCase() : "OPERATOR";
+
+        AppUserEntity user = userRepository.findByEmail(email).orElseGet(() -> {
+            String randomPassword = UUID.randomUUID().toString().replace("-", "");
+            AppUserEntity newUser = new AppUserEntity(email, passwordEncoder.encode(randomPassword), name);
+            return userRepository.save(newUser);
+        });
+
+        // Ensure user belongs to this tenant
+        TenantMembershipEntity membership = membershipRepository.findByTenantIdAndUserId(tenantId, user.getId())
+                .orElseGet(() -> membershipRepository.save(new TenantMembershipEntity(tenantId, user.getId(), role)));
+
+        if (!membership.isActive()) {
+            membership.setActive(true);
+            membership.changeRole(role);
+            membership = membershipRepository.save(membership);
+        }
+
+        // Add initial skills if provided
+        List<WorkforceDtos.EmployeeSkillDto> skillDtos = new ArrayList<>();
+        if (req.skills() != null && !req.skills().isEmpty()) {
+            AppUserEntity certifyingUser = actorId != null ? userRepository.findById(actorId).orElse(null) : null;
+            for (WorkforceDtos.InitialSkillAssignment assign : req.skills()) {
+                if (assign.skillId() == null) continue;
+                WorkforceSkillEntity skill = skillRepository.findByTenantIdAndId(tenantId, assign.skillId()).orElse(null);
+                if (skill == null) continue;
+
+                String level = (assign.level() != null && !assign.level().isBlank()) ? assign.level().trim().toUpperCase() : "OPERATOR";
+                WorkforceOperatorQualificationEntity qual = qualificationRepository.findByTenantIdAndUserIdAndSkillId(tenantId, user.getId(), skill.getId())
+                        .orElseGet(WorkforceOperatorQualificationEntity::new);
+
+                qual.setTenantId(tenantId);
+                qual.setUser(user);
+                qual.setSkill(skill);
+                qual.setQualificationLevel(level);
+                qual.setCertifiedAt(LocalDate.now());
+                qual.setStatus("ACTIVE");
+                if (certifyingUser != null) {
+                    qual.setCertifiedByUser(certifyingUser);
+                }
+                WorkforceOperatorQualificationEntity savedQual = qualificationRepository.save(qual);
+                skillDtos.add(new WorkforceDtos.EmployeeSkillDto(
+                        savedQual.getId(),
+                        skill.getId(),
+                        skill.getSkillCode(),
+                        skill.getName(),
+                        skill.getCategory(),
+                        savedQual.getQualificationLevel(),
+                        savedQual.getCertifiedAt(),
+                        savedQual.getExpiresAt(),
+                        savedQual.getStatus(),
+                        savedQual.getNotes()
+                ));
+            }
+        }
+
+        return new WorkforceDtos.EmployeeDto(
+                user.getId(),
+                membership.getId(),
+                user.getDisplayName(),
+                user.getEmail(),
+                membership.getRole(),
+                membership.isActive(),
+                skillDtos,
+                membership.getCreatedAt()
+        );
+    }
+
+    public void deleteQualification(UUID tenantId, UUID qualificationId) {
+        WorkforceOperatorQualificationEntity qual = qualificationRepository.findByTenantIdAndId(tenantId, qualificationId)
+                .orElseThrow(() -> new IllegalArgumentException("Qualification not found: " + qualificationId));
+        qualificationRepository.delete(qual);
     }
 
     // ==========================================
@@ -132,6 +268,9 @@ public class WorkforceService {
             UUID certifyingUserId,
             WorkforceDtos.UpsertQualificationRequest req
     ) {
+        if (!membershipRepository.existsByTenantIdAndUserIdAndActiveTrue(tenantId, req.userId())) {
+            throw new IllegalArgumentException("User not found: " + req.userId());
+        }
         AppUserEntity user = userRepository.findById(req.userId())
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + req.userId()));
         WorkforceSkillEntity skill = skillRepository.findByTenantIdAndId(tenantId, req.skillId())
@@ -153,7 +292,7 @@ public class WorkforceService {
         entity.setStatus(req.status() != null ? req.status().toUpperCase() : "ACTIVE");
         entity.setNotes(req.notes());
 
-        if (certifyingUserId != null) {
+        if (certifyingUserId != null && membershipRepository.existsByTenantIdAndUserIdAndActiveTrue(tenantId, certifyingUserId)) {
             userRepository.findById(certifyingUserId).ifPresent(entity::setCertifiedByUser);
         }
 
@@ -187,6 +326,35 @@ public class WorkforceService {
         return toShiftDto(saved);
     }
 
+    public WorkforceDtos.ShiftDto updateShift(UUID tenantId, UUID shiftId, WorkforceDtos.UpdateShiftRequest req) {
+        WorkforceShiftEntity entity = shiftRepository.findByTenantIdAndId(tenantId, shiftId)
+                .orElseThrow(() -> new IllegalArgumentException("Shift not found: " + shiftId));
+        if (req.shiftCode() != null && !req.shiftCode().isBlank() && !req.shiftCode().trim().equalsIgnoreCase(entity.getShiftCode())) {
+            String newCode = req.shiftCode().trim().toUpperCase();
+            if (shiftRepository.existsByTenantIdAndShiftCode(tenantId, newCode)) {
+                throw new IllegalArgumentException("Shift code " + newCode + " already exists.");
+            }
+            entity.setShiftCode(newCode);
+        }
+        if (req.name() != null && !req.name().isBlank()) {
+            entity.setName(req.name().trim());
+        }
+        if (req.startTime() != null) {
+            entity.setStartTime(req.startTime());
+        }
+        if (req.endTime() != null) {
+            entity.setEndTime(req.endTime());
+        }
+        if (req.breakMinutes() >= 0) {
+            entity.setBreakMinutes(req.breakMinutes());
+        }
+        if (req.isActive() != null) {
+            entity.setActive(req.isActive());
+        }
+        WorkforceShiftEntity saved = shiftRepository.save(entity);
+        return toShiftDto(saved);
+    }
+
     // ==========================================
     // ROSTER & ATTENDANCE
     // ==========================================
@@ -204,6 +372,9 @@ public class WorkforceService {
     public WorkforceDtos.RosterAssignmentDto createRosterAssignment(UUID tenantId, WorkforceDtos.CreateRosterAssignmentRequest req) {
         WorkforceShiftEntity shift = shiftRepository.findByTenantIdAndId(tenantId, req.shiftId())
                 .orElseThrow(() -> new IllegalArgumentException("Shift not found: " + req.shiftId()));
+        if (!membershipRepository.existsByTenantIdAndUserIdAndActiveTrue(tenantId, req.userId())) {
+            throw new IllegalArgumentException("User not found: " + req.userId());
+        }
         AppUserEntity user = userRepository.findById(req.userId())
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + req.userId()));
 
@@ -265,6 +436,9 @@ public class WorkforceService {
             UUID tenantId,
             WorkforceDtos.SkillGuardVerificationRequest req
     ) {
+        if (!membershipRepository.existsByTenantIdAndUserIdAndActiveTrue(tenantId, req.operatorUserId())) {
+            throw new IllegalArgumentException("Operator not found");
+        }
         AppUserEntity user = userRepository.findById(req.operatorUserId())
                 .orElseThrow(() -> new IllegalArgumentException("Operator not found"));
 

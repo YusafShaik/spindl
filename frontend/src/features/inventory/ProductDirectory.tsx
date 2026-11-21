@@ -1,28 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  Barcode,
   Boxes,
   Check,
   CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Clock,
-  Cpu,
-  DollarSign,
   Download,
   Edit2,
-  ExternalLink,
-  Filter,
+  FolderTree,
   IndianRupee,
-  Layers,
   Package,
   Plus,
   Search,
   SlidersHorizontal,
   Tag,
-  Warehouse,
-  Wrench,
   X
 } from 'lucide-react';
 import { Status } from '../../components/ui/Status';
@@ -30,7 +20,6 @@ import { CustomFieldEditor } from '../customers/CustomFieldEditor';
 import { API, apiFetch } from '../../lib/api/client';
 import { formatCurrency } from '../../lib/utils/currency';
 import type { InventoryMovement, ItemSummary } from '../../types/inventory';
-import type { ManufacturingBom } from '../manufacturing/ManufacturingPanel';
 
 export interface ProductDirectoryProps {
   title: string;
@@ -40,7 +29,6 @@ export interface ProductDirectoryProps {
   data: ItemSummary[];
   allItems?: ItemSummary[];
   movements?: InventoryMovement[];
-  boms?: ManufacturingBom[];
   notify: (message: string) => void;
   onAdjust?: ((item: ItemSummary) => void) | null;
   onThreshold?: ((item: ItemSummary) => void) | null;
@@ -49,7 +37,7 @@ export interface ProductDirectoryProps {
   role?: string;
 }
 
-type ProductSubTab = 'catalog' | 'pricing' | 'thresholds' | 'boms';
+type ProductSubTab = 'catalog' | 'pricing' | 'thresholds';
 type ItemTypeFilter = 'ALL' | 'FINISHED' | 'RAW' | 'WIP' | 'SERVICE' | 'LOW_STOCK';
 
 function parseAmount(val: string | number | null | undefined): number {
@@ -58,6 +46,12 @@ function parseAmount(val: string | number | null | undefined): number {
   const cleaned = String(val).replace(/[^0-9.-]+/g, '');
   const parsed = parseFloat(cleaned);
   return isNaN(parsed) ? 0 : parsed;
+}
+
+function isItemLowStock(item: ItemSummary): boolean {
+  const avail = item.available !== undefined && item.available !== null ? Number(item.available) : Number(item.stock || 0);
+  const threshold = Number(item.lowStockThreshold || 0);
+  return avail <= threshold;
 }
 
 function messageFrom(error: unknown, fallback: string): string {
@@ -87,7 +81,6 @@ function EditProductModal({ item, onClose, onRefresh, notify }: EditProductModal
   const [unit, setUnit] = useState(item.unit || 'pcs');
   const [unitPrice, setUnitPrice] = useState(item.unitPrice ? String(item.unitPrice) : '0');
   const [itemType, setItemType] = useState(item.itemType || 'FINISHED');
-  const [barcode, setBarcode] = useState(item.barcode || '');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,8 +93,7 @@ function EditProductModal({ item, onClose, onRefresh, notify }: EditProductModal
         unit: unit.trim(),
         unitPrice: parseFloat(unitPrice) || 0,
         active: true,
-        itemType: itemType.trim().toUpperCase(),
-        barcode: barcode.trim() || null
+        itemType: itemType.trim().toUpperCase()
       };
 
       const res = await apiFetch(`${API}/items/${item.id}`, {
@@ -217,23 +209,6 @@ function EditProductModal({ item, onClose, onRefresh, notify }: EditProductModal
               />
             </div>
           </div>
-
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
-              Barcode (EAN-13 / Code-128)
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                disabled={saving}
-                placeholder="Optional scanner barcode..."
-                style={{ width: '100%', height: '34px', padding: '0 10px 0 30px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}
-              />
-              <Barcode size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--sp-text-muted)' }} />
-            </div>
-          </div>
         </div>
 
         <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px' }}>
@@ -347,25 +322,41 @@ function EditThresholdModal({ item, onClose, onRefresh, notify }: EditThresholdM
 /* Item Specification Drawer / Modal */
 interface ProductSpecsDrawerProps {
   item: ItemSummary;
-  boms?: ManufacturingBom[];
   onClose: () => void;
   onEdit?: () => void;
+  onThreshold?: () => void;
 }
 
-function ProductSpecsDrawer({ item, boms = [], onClose, onEdit }: ProductSpecsDrawerProps) {
-  const associatedBom = boms.find((b) => b.finishedItemId === item.id || b.finishedSku === item.sku);
+function ProductSpecsDrawer({ item, onClose, onEdit, onThreshold }: ProductSpecsDrawerProps) {
+  const price = parseAmount(item.unitPrice || item.price);
+  const stock = item.stock || 0;
+  const valuation = price * stock;
+  const available = item.available ?? stock;
+  const isLowStock = isItemLowStock(item);
+
+  const typeLabels: Record<string, string> = {
+    RAW: 'Raw Material',
+    WIP: 'Work in Progress',
+    FINISHED: 'Finished Good',
+    SERVICE: 'Service'
+  };
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="record-modal" style={{ width: 'min(580px, 95vw)', maxHeight: '88vh' }}>
         <div className="modal-title">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span className={`sales-customer-avatar ${item.tone || 'lavender'}`}>
               {item.mark}
             </span>
             <div>
-              <h2>{item.name}</h2>
-              <p>SKU: <code>{item.sku}</code> · {item.category}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 style={{ margin: 0, fontSize: '16px' }}>{item.name}</h2>
+                <span className="sales-ref-badge">{item.sku}</span>
+              </div>
+              <p style={{ margin: '2px 0 0', fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
+                Category: <strong>{item.category}</strong> · {typeLabels[item.itemType] || 'Product'}
+              </p>
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close dialog">
@@ -373,86 +364,151 @@ function ProductSpecsDrawer({ item, boms = [], onClose, onEdit }: ProductSpecsDr
           </button>
         </div>
 
-        {/* Spec Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-          <div style={{ padding: '10px 12px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
-            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 500 }}>Commercial Price</div>
-            <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--sp-text)', marginTop: '2px' }}>
-              {formatCurrency(item.unitPrice || item.price)}
+        {/* 4-Stat KPI Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', margin: '14px 0' }}>
+          <div style={{ padding: '12px 14px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
+            <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+              Commercial Unit Price
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)' }}>Per {item.unit}</div>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--sp-text)', marginTop: '3px', fontVariantNumeric: 'tabular-nums' }}>
+              {formatCurrency(price)}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)', marginTop: '2px' }}>
+              Per {item.unit}
+            </div>
           </div>
 
-          <div style={{ padding: '10px 12px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
-            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 500 }}>Total Book Value</div>
-            <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--sp-text)', marginTop: '2px' }}>
-              {formatCurrency(parseAmount(item.unitPrice || item.price) * (item.stock || 0))}
+          <div style={{ padding: '12px 14px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
+            <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+              Total Asset Valuation
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)' }}>Based on {item.stock} {item.unit} in stock</div>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--sp-text)', marginTop: '3px', fontVariantNumeric: 'tabular-nums' }}>
+              {formatCurrency(valuation)}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)', marginTop: '2px' }}>
+              Based on {stock.toLocaleString()} {item.unit} on-hand
+            </div>
+          </div>
+
+          <div style={{ padding: '12px 14px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
+            <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+              Physical Stock On Hand
+            </div>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--sp-text)', marginTop: '3px', fontVariantNumeric: 'tabular-nums' }}>
+              {stock.toLocaleString()} <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--sp-text-muted)' }}>{item.unit}</span>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)', marginTop: '2px' }}>
+              {item.reserved || 0} {item.unit} reserved for orders
+            </div>
+          </div>
+
+          <div style={{ padding: '12px 14px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
+            <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+              Net Available to Allocate
+            </div>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: isLowStock ? '#d97706' : 'var(--sp-text)', marginTop: '3px', fontVariantNumeric: 'tabular-nums' }}>
+              {available.toLocaleString()} <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--sp-text-muted)' }}>{item.unit}</span>
+            </div>
+            <div style={{ fontSize: '11px', color: isLowStock ? '#d97706' : 'var(--sp-text-secondary)', marginTop: '2px' }}>
+              {isLowStock ? 'Below reorder threshold' : 'Sufficient stock level'}
+            </div>
           </div>
         </div>
 
-        {/* Details Table */}
-        <div style={{ border: '1px solid var(--sp-border)', borderRadius: '6px', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--sp-surface-hover)', fontSize: '11.5px', borderBottom: '1px solid var(--sp-border)' }}>
-            <span style={{ color: 'var(--sp-text-secondary)' }}>Item Classification</span>
-            <span className={`product-type-badge ${item.itemType?.toLowerCase() || 'finished'}`}>
-              {({ RAW: 'Raw Material', WIP: 'Work in Progress', FINISHED: 'Finished Good', SERVICE: 'Service' })[item.itemType] || 'Finished Good'}
+        {/* Master Properties Card */}
+        <div className="linear-properties-card" style={{ marginBottom: '14px' }}>
+          <div className="linear-properties-title">Product Master Data & Rules</div>
+
+          <div className="linear-property-row">
+            <span className="linear-property-label">Item Classification</span>
+            <span className="linear-property-value">
+              <span className={`product-type-badge ${item.itemType?.toLowerCase() || 'finished'}`}>
+                {typeLabels[item.itemType] || 'Finished Good'}
+              </span>
             </span>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', fontSize: '11.5px', borderBottom: '1px solid var(--sp-border)' }}>
-            <span style={{ color: 'var(--sp-text-secondary)' }}>Barcode / GTIN</span>
-            <span className="product-barcode-chip">
-              <Barcode size={12} /> {item.barcode || 'Not assigned'}
+          <div className="linear-property-row">
+            <span className="linear-property-label">Category Group</span>
+            <span className="linear-property-value" style={{ fontWeight: 500 }}>
+              {item.category}
             </span>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--sp-surface-hover)', fontSize: '11.5px', borderBottom: '1px solid var(--sp-border)' }}>
-            <span style={{ color: 'var(--sp-text-secondary)' }}>Stock Status</span>
-            <Status label={item.state} />
+          <div className="linear-property-row">
+            <span className="linear-property-label">Operational Status</span>
+            <span className="linear-property-value">
+              <Status label={item.state} />
+            </span>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', fontSize: '11.5px', borderBottom: '1px solid var(--sp-border)' }}>
-            <span style={{ color: 'var(--sp-text-secondary)' }}>Stock Allocation</span>
-            <span><strong>{item.stock}</strong> on hand · <strong>{item.reserved || 0}</strong> reserved · <strong>{item.available ?? item.stock}</strong> available</span>
+          <div className="linear-property-row">
+            <span className="linear-property-label">Reorder Level Alarm</span>
+            <span className="linear-property-value">
+              ≤ <strong>{item.lowStockThreshold}</strong> {item.unit}
+            </span>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--sp-surface-hover)', fontSize: '11.5px' }}>
-            <span style={{ color: 'var(--sp-text-secondary)' }}>Reorder Threshold</span>
-            <span><strong>{item.lowStockThreshold}</strong> {item.unit}</span>
+          <div className="linear-property-row">
+            <span className="linear-property-label">Health & Risk Check</span>
+            <span className="linear-property-value">
+              {isLowStock ? (
+                <span className="customer-risk-chip hold">
+                  <AlertTriangle size={10} /> Low Stock Alert
+                </span>
+              ) : (
+                <span className="customer-risk-chip good">
+                  <CheckCircle2 size={10} /> Stock Level Safe
+                </span>
+              )}
+            </span>
           </div>
         </div>
 
-        {/* BOM Linkage */}
-        {associatedBom && (
-          <div style={{ padding: '12px', background: 'var(--sp-surface-subtle)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Layers size={14} style={{ color: 'var(--sp-brand)' }} />
-                <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)' }}>Active Bill of Materials ({associatedBom.revision})</span>
-              </div>
-              <span className="sales-status-chip completed">{associatedBom.status}</span>
+        {/* Health Advisory Banner */}
+        {isLowStock ? (
+          <div style={{ padding: '10px 12px', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+            <AlertTriangle size={15} color="#d97706" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: '11.5px', color: '#b45309' }}>
+              <strong>Inventory Warning:</strong> Available stock ({available} {item.unit}) has dropped to or below the safety threshold ({item.lowStockThreshold} {item.unit}). Create a purchase or production order to replenish.
             </div>
-            <div style={{ fontSize: '11.5px', color: 'var(--sp-text-secondary)' }}>
-              Engineered with {associatedBom.lines?.length || 0} component lines. Effective from {associatedBom.effectiveFrom}.
+          </div>
+        ) : (
+          <div style={{ padding: '8px 12px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.06)', border: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+            <CheckCircle2 size={14} color="#059669" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: '11.5px', color: '#065f46' }}>
+              Stock level is healthy and ready for quotation or immediate fulfillment.
             </div>
           </div>
         )}
 
         <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {onEdit && (
-            <button
-              type="button"
-              className="sales-action-btn secondary"
-              onClick={() => {
-                onClose();
-                onEdit();
-              }}
-            >
-              <Edit2 size={13} /> Edit Specification
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {onEdit && (
+              <button
+                type="button"
+                className="sales-action-btn secondary"
+                onClick={() => {
+                  onClose();
+                  onEdit();
+                }}
+              >
+                <Edit2 size={12} /> Edit Details
+              </button>
+            )}
+            {onThreshold && (
+              <button
+                type="button"
+                className="sales-action-btn secondary"
+                onClick={() => {
+                  onClose();
+                  onThreshold();
+                }}
+              >
+                <SlidersHorizontal size={12} /> Set Threshold
+              </button>
+            )}
+          </div>
           <button type="button" className="button button-secondary" onClick={onClose}>
             Close
           </button>
@@ -463,52 +519,34 @@ function ProductSpecsDrawer({ item, boms = [], onClose, onEdit }: ProductSpecsDr
 }
 
 export function ProductDirectory({
-  title,
-  subtitle,
   query,
   setQuery,
   data,
-  allItems = [],
-  boms: initialBoms,
   notify,
-  onAdjust,
-  onThreshold,
   onNewItem,
   onRefresh
 }: ProductDirectoryProps) {
   const [activeTab, setActiveTab] = useState<ProductSubTab>('catalog');
   const [typeFilter, setTypeFilter] = useState<ItemTypeFilter>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [pricingQuery, setPricingQuery] = useState('');
+  const [thresholdQuery, setThresholdQuery] = useState('');
+  const [thresholdFilter, setThresholdFilter] = useState<'ALL' | 'LOW' | 'SAFE'>('ALL');
   const [editingItem, setEditingItem] = useState<ItemSummary | null>(null);
   const [thresholdItem, setThresholdItem] = useState<ItemSummary | null>(null);
   const [specsItem, setSpecsItem] = useState<ItemSummary | null>(null);
 
-  // BOM state
-  const [boms, setBoms] = useState<ManufacturingBom[]>(initialBoms || []);
-  const [selectedBomId, setSelectedBomId] = useState<string>('');
-
-  // Fetch BOMs if not provided
-  useEffect(() => {
-    let current = true;
-    apiFetch(`${API}/boms`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((rows: ManufacturingBom[]) => {
-        if (current && Array.isArray(rows)) {
-          setBoms(rows);
-          if (rows.length > 0 && !selectedBomId) {
-            setSelectedBomId(rows[0].id);
-          }
-        }
-      })
-      .catch(() => {
-        // Soft fallback
-      });
-    return () => {
-      current = false;
-    };
-  }, []);
+  // Distinct categories
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    data.forEach((i) => {
+      if (i.category) set.add(i.category);
+    });
+    return Array.from(set).sort();
+  }, [data]);
 
   // Executive KPI Calculations across catalog items
-  const { totalValuation, finishedCount, rawCount, wipCount, serviceCount, lowStockCount, inStockPct } =
+  const { totalValuation, finishedCount, rawCount, wipCount, serviceCount, lowStockCount, inStockPct, totalStockUnits } =
     useMemo(() => {
       let sumValuation = 0;
       let finished = 0;
@@ -516,11 +554,13 @@ export function ProductDirectory({
       let wip = 0;
       let service = 0;
       let low = 0;
+      let stockUnits = 0;
 
       for (const item of data) {
         const price = parseAmount(item.unitPrice || item.price);
         const stock = item.stock || 0;
         sumValuation += price * stock;
+        stockUnits += stock;
 
         const type = (item.itemType || 'FINISHED').toUpperCase();
         if (type === 'FINISHED') finished++;
@@ -528,8 +568,7 @@ export function ProductDirectory({
         else if (type === 'WIP') wip++;
         else if (type === 'SERVICE') service++;
 
-        const isLow = (item.available ?? item.stock) <= (item.lowStockThreshold || 0);
-        if (isLow && type !== 'SERVICE') low++;
+        if (isItemLowStock(item)) low++;
       }
 
       const total = data.length;
@@ -542,7 +581,8 @@ export function ProductDirectory({
         wipCount: wip,
         serviceCount: service,
         lowStockCount: low,
-        inStockPct
+        inStockPct,
+        totalStockUnits: stockUnits
       };
     }, [data]);
 
@@ -550,14 +590,49 @@ export function ProductDirectory({
   const filteredItems = useMemo(() => {
     return data.filter((item) => {
       const type = (item.itemType || 'FINISHED').toUpperCase();
-      if (typeFilter === 'FINISHED') return type === 'FINISHED';
-      if (typeFilter === 'RAW') return type === 'RAW';
-      if (typeFilter === 'WIP') return type === 'WIP';
-      if (typeFilter === 'SERVICE') return type === 'SERVICE';
-      if (typeFilter === 'LOW_STOCK') return (item.available ?? item.stock) <= (item.lowStockThreshold || 0);
+      if (typeFilter === 'FINISHED' && type !== 'FINISHED') return false;
+      if (typeFilter === 'RAW' && type !== 'RAW') return false;
+      if (typeFilter === 'WIP' && type !== 'WIP') return false;
+      if (typeFilter === 'SERVICE' && type !== 'SERVICE') return false;
+      if (typeFilter === 'LOW_STOCK' && !isItemLowStock(item)) return false;
+
+      if (categoryFilter !== 'ALL' && item.category !== categoryFilter) return false;
+
+      if (query.trim()) {
+        const q = query.toLowerCase();
+        const matchSku = item.sku.toLowerCase().includes(q);
+        const matchName = item.name.toLowerCase().includes(q);
+        const matchCat = item.category?.toLowerCase().includes(q);
+        if (!matchSku && !matchName && !matchCat) return false;
+      }
+
       return true;
     });
-  }, [data, typeFilter]);
+  }, [data, typeFilter, categoryFilter, query]);
+
+  // Tab 2 Filtered Items for Pricing
+  const filteredPricingItems = useMemo(() => {
+    if (!pricingQuery.trim()) return data;
+    const q = pricingQuery.toLowerCase();
+    return data.filter(
+      (i) => i.sku.toLowerCase().includes(q) || i.name.toLowerCase().includes(q) || i.category?.toLowerCase().includes(q)
+    );
+  }, [data, pricingQuery]);
+
+  // Tab 3 Filtered Items for Thresholds
+  const filteredThresholdItems = useMemo(() => {
+    return data.filter((item) => {
+      const isLow = isItemLowStock(item);
+      if (thresholdFilter === 'LOW' && !isLow) return false;
+      if (thresholdFilter === 'SAFE' && isLow) return false;
+
+      if (thresholdQuery.trim()) {
+        const q = thresholdQuery.toLowerCase();
+        return item.sku.toLowerCase().includes(q) || item.name.toLowerCase().includes(q) || item.category?.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [data, thresholdFilter, thresholdQuery]);
 
   // CSV Export
   const exportCatalogCSV = () => {
@@ -573,8 +648,7 @@ export function ProductDirectory({
       'Available Quantity',
       'Low Stock Threshold',
       'Inventory Valuation (₹)',
-      'Stock State',
-      'Barcode'
+      'Stock State'
     ];
 
     const rows = filteredItems.map((item) => {
@@ -594,8 +668,7 @@ export function ProductDirectory({
         item.available ?? stock,
         item.lowStockThreshold,
         valuation,
-        `"${item.state}"`,
-        `"${item.barcode || ''}"`
+        `"${item.state}"`
       ];
     });
 
@@ -609,8 +682,6 @@ export function ProductDirectory({
     document.body.removeChild(link);
     notify(`Exported ${filteredItems.length} catalog items to CSV`);
   };
-
-  const selectedBom = boms.find((b) => b.id === selectedBomId) || boms[0];
 
   return (
     <div className="sales-screen-layout">
@@ -658,15 +729,15 @@ export function ProductDirectory({
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
-            <span className="sales-metric-label">ENGINEERING & ASSEMBLIES</span>
-            <Layers size={14} className="sales-metric-icon" aria-hidden="true" />
+            <span className="sales-metric-label">PRODUCT CATEGORIES</span>
+            <FolderTree size={14} className="sales-metric-icon" aria-hidden="true" />
           </div>
           <div className="sales-metric-val">
-            {boms.length} Active {boms.length === 1 ? 'Spec' : 'Specs'}
+            {categories.length} {categories.length === 1 ? 'Category' : 'Categories'}
           </div>
           <div className="sales-metric-sub">
-            <span className="kpi-badge kpi-badge-neutral">BOMs</span>
-            <span>Production sub-assemblies</span>
+            <span className="kpi-badge kpi-badge-neutral">{totalStockUnits.toLocaleString()} units</span>
+            <span>Across catalog lines</span>
           </div>
         </div>
       </div>
@@ -708,16 +779,6 @@ export function ProductDirectory({
             ) : (
               <span className="sales-subnav-badge">Healthy</span>
             )}
-          </button>
-
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'boms' ? 'active' : ''}`}
-            onClick={() => setActiveTab('boms')}
-          >
-            <Layers size={14} />
-            <span>BOM & Assemblies</span>
-            <span className="sales-subnav-badge">{boms.length} specs</span>
           </button>
         </div>
 
@@ -794,15 +855,39 @@ export function ProductDirectory({
               </button>
             </div>
 
-            <div className="sales-search-box">
-              <Search size={14} className="sales-search-icon" />
-              <input
-                className="sales-search-input"
-                placeholder="Search catalog by name, SKU, barcode, or category..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <kbd className="sales-search-kbd">/</kbd>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {categories.length > 1 && (
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    fontSize: '12px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--sp-border)',
+                    background: 'var(--sp-surface)',
+                    color: 'var(--sp-text)'
+                  }}
+                  aria-label="Filter by Category"
+                >
+                  <option value="ALL">All Categories</option>
+                  {categories.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              )}
+
+              <div className="sales-search-box">
+                <Search size={14} className="sales-search-icon" />
+                <input
+                  className="sales-search-input"
+                  placeholder="Search catalog by name, SKU, or category..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <kbd className="sales-search-kbd">/</kbd>
+              </div>
             </div>
           </div>
 
@@ -829,7 +914,9 @@ export function ProductDirectory({
                           <Boxes size={32} className="sales-empty-icon" />
                           <div className="sales-empty-title">No catalog items found</div>
                           <div className="sales-empty-desc">
-                            {query ? 'No products match your search query.' : 'Add your first catalog item to start selling and manufacturing.'}
+                            {query || categoryFilter !== 'ALL' || typeFilter !== 'ALL'
+                              ? 'No products match your current filters.'
+                              : 'Add your first catalog item to start selling and manufacturing.'}
                           </div>
                         </div>
                       </td>
@@ -837,6 +924,12 @@ export function ProductDirectory({
                   ) : (
                     filteredItems.map((item) => {
                       const typeClass = (item.itemType || 'finished').toLowerCase();
+                      const typeLabels: Record<string, string> = {
+                        RAW: 'Raw Material',
+                        WIP: 'Work in Progress',
+                        FINISHED: 'Finished Good',
+                        SERVICE: 'Service'
+                      };
 
                       return (
                         <tr key={item.sku} className="sales-row">
@@ -847,28 +940,41 @@ export function ProductDirectory({
                                 {item.mark}
                               </span>
                               <div className="customer-info-cell" style={{ minWidth: 0, overflow: 'hidden' }}>
-                                <strong style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', display: 'block', maxWidth: '220px' }}>{item.name}</strong>
+                                <strong
+                                  style={{
+                                    textOverflow: 'ellipsis',
+                                    overflow: 'hidden',
+                                    whiteSpace: 'nowrap',
+                                    display: 'block',
+                                    maxWidth: '220px',
+                                    cursor: 'pointer'
+                                  }}
+                                  onClick={() => setSpecsItem(item)}
+                                  title="View product details"
+                                >
+                                  {item.name}
+                                </strong>
                                 <small>Category: {item.category}</small>
-                                {item.barcode && (
-                                  <div style={{ marginTop: '2px' }}>
-                                    <span className="product-barcode-chip">
-                                      <Barcode size={10} /> {item.barcode}
-                                    </span>
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </td>
 
                           {/* SKU */}
                           <td>
-                            <span className="sales-ref-badge">{item.sku}</span>
+                            <button
+                              type="button"
+                              className="sales-ref-badge interactive"
+                              onClick={() => setSpecsItem(item)}
+                              title="Inspect product specifications"
+                            >
+                              {item.sku}
+                            </button>
                           </td>
 
                           {/* Item Type */}
                           <td>
                             <span className={`product-type-badge ${typeClass}`}>
-                              {({ RAW: 'Raw Material', WIP: 'Work in Progress', FINISHED: 'Finished Good', SERVICE: 'Service' })[item.itemType] || 'Finished Good'}
+                              {typeLabels[item.itemType] || 'Finished Good'}
                             </span>
                           </td>
 
@@ -882,7 +988,7 @@ export function ProductDirectory({
 
                           {/* Reserved / Avail */}
                           <td>
-                            <div style={{ fontSize: '11.5px', color: 'var(--sp-text)' }}>
+                            <div style={{ fontSize: '11.5px', color: isItemLowStock(item) ? '#d97706' : 'var(--sp-text)' }}>
                               <strong>{Number(item.available ?? item.stock).toLocaleString()}</strong> avail
                             </div>
                             <small style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)' }}>
@@ -991,6 +1097,22 @@ export function ProductDirectory({
             </div>
           </div>
 
+          {/* Pricing Toolbar */}
+          <div className="sales-toolbar" style={{ marginTop: '2px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text-secondary)' }}>
+              Pricing & commercial valuation by SKU
+            </div>
+            <div className="sales-search-box">
+              <Search size={14} className="sales-search-icon" />
+              <input
+                className="sales-search-input"
+                placeholder="Filter pricing items..."
+                value={pricingQuery}
+                onChange={(e) => setPricingQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
           {/* Pricing Table */}
           <div className="sales-table-card">
             <div className="sales-table-scroll">
@@ -1008,62 +1130,86 @@ export function ProductDirectory({
                   </tr>
                 </thead>
                 <tbody>
-                  {data.map((item) => {
-                    const price = parseAmount(item.unitPrice || item.price);
-                    const stock = item.stock || 0;
-                    const valuation = price * stock;
+                  {filteredPricingItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="sales-empty-cell">
+                        <div className="sales-empty-state">
+                          <Tag size={28} className="sales-empty-icon" />
+                          <div className="sales-empty-title">No pricing items found</div>
+                          <div className="sales-empty-desc">No products match your search filter.</div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPricingItems.map((item) => {
+                      const price = parseAmount(item.unitPrice || item.price);
+                      const stock = item.stock || 0;
+                      const valuation = price * stock;
 
-                    return (
-                      <tr key={item.sku} className="sales-row">
-                        <td>
-                          <strong>{item.name}</strong>
-                          <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>{item.category}</div>
-                        </td>
+                      return (
+                        <tr key={item.sku} className="sales-row">
+                          <td>
+                            <strong
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => setSpecsItem(item)}
+                              title="Inspect specifications"
+                            >
+                              {item.name}
+                            </strong>
+                            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>{item.category}</div>
+                          </td>
 
-                        <td>
-                          <span className="sales-ref-badge">{item.sku}</span>
-                        </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="sales-ref-badge interactive"
+                              onClick={() => setSpecsItem(item)}
+                            >
+                              {item.sku}
+                            </button>
+                          </td>
 
-                        <td>
-                          <span className="sales-warehouse-pill">{item.unit}</span>
-                        </td>
+                          <td>
+                            <span className="sales-warehouse-pill">{item.unit}</span>
+                          </td>
 
-                        <td>
-                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
-                            {formatCurrency(price)}
-                          </span>
-                        </td>
+                          <td>
+                            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                              {formatCurrency(price)}
+                            </span>
+                          </td>
 
-                        <td>
-                          <span style={{ fontSize: '12.5px', color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
-                            {stock.toLocaleString()}
-                          </span>
-                        </td>
+                          <td>
+                            <span style={{ fontSize: '12.5px', color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                              {stock.toLocaleString()}
+                            </span>
+                          </td>
 
-                        <td>
-                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
-                            {formatCurrency(valuation)}
-                          </span>
-                        </td>
+                          <td>
+                            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                              {formatCurrency(valuation)}
+                            </span>
+                          </td>
 
-                        <td>
-                          <span className="customer-risk-chip good">
-                            <Check size={11} /> Ready to Quote
-                          </span>
-                        </td>
+                          <td>
+                            <span className="customer-risk-chip good">
+                              <Check size={11} /> Ready to Quote
+                            </span>
+                          </td>
 
-                        <td style={{ textAlign: 'right' }}>
-                          <button
-                            type="button"
-                            className="sales-action-btn secondary"
-                            onClick={() => setEditingItem(item)}
-                          >
-                            Edit Price
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              type="button"
+                              className="sales-action-btn secondary"
+                              onClick={() => setEditingItem(item)}
+                            >
+                              Edit Price
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1079,9 +1225,9 @@ export function ProductDirectory({
             <div style={{ background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px', padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="sales-metric-label">OPERATING SAFETY RATIO</span>
-                <CheckCircle2 size={15} color="#10b981" />
+                {lowStockCount > 0 ? <AlertTriangle size={15} color="#d97706" /> : <CheckCircle2 size={15} color="#10b981" />}
               </div>
-              <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--sp-text)', margin: '4px 0 2px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 600, color: lowStockCount > 0 ? '#d97706' : 'var(--sp-text)', margin: '4px 0 2px' }}>
                 {inStockPct}% In Stock
               </div>
               <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
@@ -1095,11 +1241,48 @@ export function ProductDirectory({
                 {lowStockCount > 0 ? <AlertTriangle size={15} color="#d97706" /> : <CheckCircle2 size={15} color="#10b981" />}
               </div>
               <div style={{ fontSize: '20px', fontWeight: 600, color: lowStockCount > 0 ? '#d97706' : 'var(--sp-text)', margin: '4px 0 2px' }}>
-                {lowStockCount} Items to Restock
+                {lowStockCount} {lowStockCount === 1 ? 'Item' : 'Items'} to Restock
               </div>
               <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
                 Requires PO or manufacturing work order
               </div>
+            </div>
+          </div>
+
+          {/* Thresholds Toolbar */}
+          <div className="sales-toolbar" style={{ marginTop: '2px' }}>
+            <div className="sales-pill-group">
+              <button
+                type="button"
+                className={`sales-pill-btn ${thresholdFilter === 'ALL' ? 'active' : ''}`}
+                onClick={() => setThresholdFilter('ALL')}
+              >
+                All Rules <span className="sales-pill-count">{data.length}</span>
+              </button>
+              <button
+                type="button"
+                className={`sales-pill-btn ${thresholdFilter === 'LOW' ? 'active' : ''}`}
+                onClick={() => setThresholdFilter('LOW')}
+              >
+                Low Stock Alerts <span className="sales-pill-count" style={{ color: lowStockCount > 0 ? '#d97706' : undefined }}>{lowStockCount}</span>
+              </button>
+              <button
+                type="button"
+                className={`sales-pill-btn ${thresholdFilter === 'SAFE' ? 'active' : ''}`}
+                onClick={() => setThresholdFilter('SAFE')}
+              >
+                Healthy Stock <span className="sales-pill-count">{data.length - lowStockCount}</span>
+              </button>
+            </div>
+
+            <div className="sales-search-box">
+              <Search size={14} className="sales-search-icon" />
+              <input
+                className="sales-search-input"
+                placeholder="Filter rules by SKU or product..."
+                value={thresholdQuery}
+                onChange={(e) => setThresholdQuery(e.target.value)}
+              />
             </div>
           </div>
 
@@ -1120,72 +1303,96 @@ export function ProductDirectory({
                   </tr>
                 </thead>
                 <tbody>
-                  {data.map((item) => {
-                    const isLow = (item.available ?? item.stock) <= (item.lowStockThreshold || 0);
+                  {filteredThresholdItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="sales-empty-cell">
+                        <div className="sales-empty-state">
+                          <SlidersHorizontal size={28} className="sales-empty-icon" />
+                          <div className="sales-empty-title">No threshold rules match</div>
+                          <div className="sales-empty-desc">No products match your current threshold filter.</div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredThresholdItems.map((item) => {
+                      const isLow = isItemLowStock(item);
 
-                    return (
-                      <tr key={item.sku} className="sales-row">
-                        <td>
-                          <strong>{item.name}</strong>
-                          <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                            {item.sku}
-                          </div>
-                        </td>
+                      return (
+                        <tr key={item.sku} className="sales-row">
+                          <td>
+                            <strong
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => setSpecsItem(item)}
+                              title="Inspect specifications"
+                            >
+                              {item.name}
+                            </strong>
+                            <div style={{ marginTop: '2px' }}>
+                              <button
+                                type="button"
+                                className="sales-ref-badge interactive"
+                                onClick={() => setSpecsItem(item)}
+                              >
+                                {item.sku}
+                              </button>
+                            </div>
+                          </td>
 
-                        <td>
-                          <span className={`product-type-badge ${(item.itemType || 'finished').toLowerCase()}`}>
-                            {item.itemType || 'FINISHED'}
-                          </span>
-                        </td>
-
-                        <td>
-                          <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)' }}>
-                            {item.stock} {item.unit}
-                          </span>
-                        </td>
-
-                        <td>
-                          <span style={{ fontSize: '12px', color: 'var(--sp-text-muted)' }}>
-                            {item.reserved || 0} {item.unit}
-                          </span>
-                        </td>
-
-                        <td>
-                          <span style={{ fontSize: '12.5px', fontWeight: 500, color: isLow ? '#d97706' : 'var(--sp-text)' }}>
-                            {item.available ?? item.stock} {item.unit}
-                          </span>
-                        </td>
-
-                        <td>
-                          <span style={{ fontSize: '12.5px', color: 'var(--sp-text)' }}>
-                            ≤ <strong>{item.lowStockThreshold}</strong> {item.unit}
-                          </span>
-                        </td>
-
-                        <td>
-                          {isLow ? (
-                            <span className="customer-risk-chip hold">
-                              <AlertTriangle size={10} /> Low Stock
+                          <td>
+                            <span className={`product-type-badge ${(item.itemType || 'finished').toLowerCase()}`}>
+                              {item.itemType || 'FINISHED'}
                             </span>
-                          ) : (
-                            <span className="customer-risk-chip good">
-                              <CheckCircle2 size={10} /> Safe
-                            </span>
-                          )}
-                        </td>
+                          </td>
 
-                        <td style={{ textAlign: 'right' }}>
-                          <button
-                            type="button"
-                            className="sales-action-btn secondary"
-                            onClick={() => setThresholdItem(item)}
-                          >
-                            Set Threshold
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          <td>
+                            <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)' }}>
+                              {item.stock} {item.unit}
+                            </span>
+                          </td>
+
+                          <td>
+                            <span style={{ fontSize: '12px', color: 'var(--sp-text-muted)' }}>
+                              {item.reserved || 0} {item.unit}
+                            </span>
+                          </td>
+
+                          <td>
+                            <span style={{ fontSize: '12.5px', fontWeight: 500, color: isLow ? '#d97706' : 'var(--sp-text)' }}>
+                              {item.available ?? item.stock} {item.unit}
+                            </span>
+                          </td>
+
+                          <td>
+                            <span style={{ fontSize: '12.5px', color: 'var(--sp-text)' }}>
+                              ≤ <strong>{item.lowStockThreshold}</strong> {item.unit}
+                            </span>
+                          </td>
+
+                          <td>
+                            {isLow ? (
+                              <span className="customer-risk-chip hold">
+                                <AlertTriangle size={10} /> Low Stock
+                              </span>
+                            ) : (
+                              <span className="customer-risk-chip good">
+                                <CheckCircle2 size={10} /> Safe
+                              </span>
+                            )}
+                          </td>
+
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              type="button"
+                              className="sales-action-btn secondary"
+                              onClick={() => setThresholdItem(item)}
+                            >
+                              Set Threshold
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1193,192 +1400,7 @@ export function ProductDirectory({
         </div>
       )}
 
-      {/* 6. SUB-TAB 4: BOM & Assemblies Register */}
-      {activeTab === 'boms' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: '16px' }}>
-          {/* BOM Finished Goods Selector */}
-          <div className="sales-table-card" style={{ padding: '14px', height: 'fit-content' }}>
-            <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--sp-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
-              Engineered Assemblies ({boms.length})
-            </div>
-            {boms.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--sp-text-muted)', fontSize: '12px' }}>
-                No active BOMs found in workspace.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {boms.map((bom) => {
-                  const isSelected = bom.id === selectedBomId || (selectedBom && selectedBom.id === bom.id);
-
-                  return (
-                    <button
-                      key={bom.id}
-                      type="button"
-                      onClick={() => setSelectedBomId(bom.id)}
-                      style={{
-                        textAlign: 'left',
-                        padding: '10px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid',
-                        borderColor: isSelected ? 'var(--sp-brand)' : 'var(--sp-border)',
-                        background: isSelected ? 'var(--sp-brand-soft)' : 'var(--sp-surface)',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: '12.5px', color: isSelected ? 'var(--sp-brand)' : 'var(--sp-text)' }}>
-                          {bom.finishedItemName || bom.finishedSku}
-                        </strong>
-                        <span className="sales-ref-badge" style={{ fontSize: '10px' }}>{bom.revision}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '4px' }}>
-                        <span>{bom.lines?.length || 0} components</span>
-                        <span style={{ color: '#059669', fontWeight: 600 }}>{bom.status}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* BOM Specification Card */}
-          <div className="sales-table-card" style={{ padding: '16px 20px' }}>
-            {selectedBom ? (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '14px', borderBottom: '1px solid var(--sp-border)', marginBottom: '14px' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--sp-text)', margin: 0 }}>
-                        {selectedBom.finishedItemName}
-                      </h3>
-                      <span className="sales-ref-badge">{selectedBom.finishedSku}</span>
-                      <span className="sales-status-chip completed">{selectedBom.status}</span>
-                    </div>
-                    <p style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', margin: '4px 0 0' }}>
-                      Revision: <strong>{selectedBom.revision}</strong> · Effective from: {selectedBom.effectiveFrom}
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '10px' }}>
-                  Components & Raw Materials Required per 1 Unit:
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {selectedBom.lines && selectedBom.lines.length > 0 ? (
-                    selectedBom.lines.map((line, idx) => {
-                      const compItem = data.find((it) => it.id === line.componentItemId || it.sku === line.sku);
-                      const compUnit = compItem?.unit || 'units';
-
-                      return (
-                        <div key={line.id || idx} className="product-bom-component-row">
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <strong style={{ fontSize: '13px', color: 'var(--sp-text)' }}>{line.itemName || line.sku}</strong>
-                              <span className="sales-ref-badge" style={{ fontSize: '10.5px' }}>{line.sku}</span>
-                            </div>
-                            {line.alternativeGroup && (
-                              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
-                                Alt Group: {line.alternativeGroup}
-                              </div>
-                            )}
-                          </div>
-
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
-                              {line.quantityPerUnit} {compUnit} / unit
-                            </div>
-                            <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)', marginTop: '1px' }}>
-                              Scrap allowance: {line.scrapAllowancePercent}%
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--sp-text-muted)', fontSize: '12px' }}>
-                      No components defined in this BOM revision.
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="sales-empty-state" style={{ padding: '60px 20px' }}>
-                <Layers size={36} className="sales-empty-icon" />
-                <div className="sales-empty-title">Select a Bill of Materials</div>
-                <div className="sales-empty-desc">
-                  Choose a finished product on the left to inspect its multi-level component structure and scrap allowances.
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 7. ERP Product Engineering & Catalog Governance Guide */}
-      <div className="sales-pipeline-banner">
-        <div className="sales-pipeline-header">
-          <div className="sales-pipeline-title">
-            <span className="sales-pipeline-dot" />
-            <span>Product Lifecycle & Engineering Catalog Governance</span>
-          </div>
-          <span className="sales-pipeline-tag">ISO 9001 · ERP Master Data</span>
-        </div>
-
-        <div className="sales-pipeline-stages">
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">01</div>
-            <div className="sales-step-content">
-              <b>Specification & SKU</b>
-              <span>Item typing (Finished, Raw, WIP, Service) & barcode mapping</span>
-            </div>
-          </div>
-
-          <ChevronRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">02</div>
-            <div className="sales-step-content">
-              <b>Costing & Pricing</b>
-              <span>Unit pricing, asset book valuation & commercial margins</span>
-            </div>
-          </div>
-
-          <ChevronRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">03</div>
-            <div className="sales-step-content">
-              <b>Engineering & BOMs</b>
-              <span>Component consumption, scrap allowances & revision control</span>
-            </div>
-          </div>
-
-          <ChevronRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">04</div>
-            <div className="sales-step-content">
-              <b>Stock Thresholds</b>
-              <span>Reorder level alarms, safety stock & replenishment rules</span>
-            </div>
-          </div>
-
-          <ChevronRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">05</div>
-            <div className="sales-step-content">
-              <b>Commercial Release</b>
-              <span>Quotation availability, POS sales & customer fulfillments</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 8. Modals & Drawers */}
+      {/* 6. Modals & Drawers */}
       {editingItem && (
         <EditProductModal
           item={editingItem}
@@ -1400,9 +1422,9 @@ export function ProductDirectory({
       {specsItem && (
         <ProductSpecsDrawer
           item={specsItem}
-          boms={boms}
           onClose={() => setSpecsItem(null)}
           onEdit={() => setEditingItem(specsItem)}
+          onThreshold={() => setThresholdItem(specsItem)}
         />
       )}
     </div>

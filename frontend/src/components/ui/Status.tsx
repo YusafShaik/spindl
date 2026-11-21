@@ -87,12 +87,26 @@ export function statusTone(label: string): StatusTone {
   return 'slate';
 }
 
+export function formatStatusLabel(label: string): string {
+  if (!label) return '';
+  const str = String(label)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  return str
+    .toLowerCase()
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export function Status({ label }: StatusProps) {
   const tone = statusTone(label);
+  const formatted = formatStatusLabel(label);
   return (
     <span className={`status status-${tone}`}>
       <i aria-hidden="true" />
-      <span>{label}</span>
+      <span>{formatted}</span>
     </span>
   );
 }

@@ -51,46 +51,6 @@ export interface PlannedOrder {
   createdAt: string;
 }
 
-export interface TimePhasedBucket {
-  bucketLabel: string;
-  startDate: string;
-  endDate: string;
-  grossDemand: number;
-  scheduledReceipts: number;
-  projectedAvailable: number;
-  netRequirements: number;
-  plannedOrderReleases: number;
-}
-
-export interface TimePhasedMatrixRow {
-  itemId: string;
-  sku: string;
-  itemName: string;
-  unit: string;
-  itemType: string;
-  onHand: number;
-  safetyStock: number;
-  leadTimeDays: number;
-  actionType: PlannedOrderActionType;
-  buckets: TimePhasedBucket[];
-}
-
-export interface BomExplosionNode {
-  itemId: string;
-  sku: string;
-  itemName: string;
-  level: number;
-  itemType: string;
-  quantityPerUnit: number;
-  scrapPercent: number;
-  leadTimeDays: number;
-  onHand: number;
-  available: number;
-  netShortage: number;
-  actionType: PlannedOrderActionType;
-  children: BomExplosionNode[];
-}
-
 export interface MrpMetrics {
   totalRuns: number;
   openShortagesCount: number;
@@ -120,6 +80,4 @@ export interface BatchConvertResponse {
 }
 
 export type MrpPlannedOrder = PlannedOrder;
-export type MrpMatrixRow = TimePhasedMatrixRow;
-export type BomExplosionTree = BomExplosionNode;
 export type BatchConvertResult = BatchConvertResponse;

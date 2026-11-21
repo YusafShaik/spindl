@@ -2,7 +2,6 @@ import { useState, useMemo, type ReactNode } from 'react';
 import {
   ArrowDownLeft,
   ArrowLeftRight,
-  ArrowRight,
   ArrowUpRight,
   Calendar,
   CreditCard,
@@ -419,67 +418,6 @@ export function TransactionRegister({
 
       {/* Tab 4: Tax Summary & Invoicing Setup */}
       {activeTab === 'tax' && invoiceSettings}
-
-      {/* 5. ERP Financial Invariants Banner */}
-      <div className="sales-pipeline-banner">
-        <div className="sales-pipeline-header">
-          <div className="sales-pipeline-title">
-            <span className="sales-pipeline-dot"></span>
-            ERP Double-Entry General Ledger & Invoicing Standard
-          </div>
-          <div className="sales-pipeline-tag">Strict Double-Entry General Ledger Invariants</div>
-        </div>
-
-        <div className="sales-pipeline-stages">
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">01</div>
-            <div className="sales-step-content">
-              <b>Invoice / Bill</b>
-              <span>Accounts receivable or payable recognized from order flow</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">02</div>
-            <div className="sales-step-content">
-              <b>Tax Snapshot</b>
-              <span>Statutory GST / VAT rate locked immutably at issuance</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">03</div>
-            <div className="sales-step-content">
-              <b>Settlement</b>
-              <span>Bank transfer, RTGS, or UPI payment posts cash entry</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">04</div>
-            <div className="sales-step-content">
-              <b>Credit / Refund</b>
-              <span>Return debit or customer refund reconciles balance</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">05</div>
-            <div className="sales-step-content">
-              <b>Tax Period Filing</b>
-              <span>Monthly summary closed and exported for compliance</span>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

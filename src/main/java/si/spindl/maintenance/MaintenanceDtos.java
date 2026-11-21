@@ -38,6 +38,7 @@ public class MaintenanceDtos {
         String model,
         String status,
         BigDecimal meterHours,
+        BigDecimal totalMaintenanceCost,
         LocalDate installationDate,
         LocalDate warrantyExpiry,
         LocalDate lastServiceDate,
@@ -75,32 +76,49 @@ public class MaintenanceDtos {
         UUID scheduleId,
         @NotBlank String type, // PREVENTIVE, BREAKDOWN
         @NotBlank String priority, // LOW, MEDIUM, HIGH, EMERGENCY
+        String technicianType, // INTERNAL, EXTERNAL
         UUID assignedTechnicianUserId,
+        String externalContractorName,
         String failureSymptom,
         LocalDate scheduledDate
     ) {}
 
     public record PartConsumptionItem(
-        @NotNull UUID itemId,
+        UUID itemId, // nullable for external parts
         UUID warehouseId,
         @NotNull BigDecimal quantity,
-        BigDecimal unitCost
+        BigDecimal unitCost,
+        String partSource, // INTERNAL, EXTERNAL
+        String externalPartName,
+        String externalPartNumber,
+        String supplierName,
+        String invoiceReference
     ) {}
 
     public record CompleteWorkOrderRequest(
         String rootCause,
         @NotBlank String resolutionNotes,
         int downtimeMinutes,
+        String technicianType, // INTERNAL or EXTERNAL
+        UUID assignedTechnicianUserId,
+        String externalContractorName,
+        String externalInvoiceRef,
+        BigDecimal laborCost,
         List<PartConsumptionItem> partsConsumed
     ) {}
 
     public record PartConsumedView(
         UUID id,
+        String partSource, // INTERNAL or EXTERNAL
         UUID itemId,
         String sku,
         String itemName,
         UUID warehouseId,
         String warehouseName,
+        String externalPartName,
+        String externalPartNumber,
+        String supplierName,
+        String invoiceReference,
         BigDecimal quantity,
         BigDecimal unitCost,
         BigDecimal totalCost,
@@ -120,8 +138,14 @@ public class MaintenanceDtos {
         String type,
         String priority,
         String status,
+        String technicianType,
         UUID assignedTechnicianUserId,
         String assignedTechnicianName,
+        String externalContractorName,
+        String externalInvoiceRef,
+        BigDecimal laborCost,
+        BigDecimal partsCost,
+        BigDecimal totalCost,
         String failureSymptom,
         String rootCause,
         String resolutionNotes,
@@ -143,6 +167,7 @@ public class MaintenanceDtos {
         double mtbfHours,
         double mttrMinutes,
         long totalPartsConsumedCount,
-        BigDecimal totalPartsConsumedValue
+        BigDecimal totalPartsConsumedValue,
+        BigDecimal totalMaintenanceExpenditure
     ) {}
 }

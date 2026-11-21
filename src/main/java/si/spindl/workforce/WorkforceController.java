@@ -24,6 +24,28 @@ public class WorkforceController {
     }
 
     // ==========================================
+    // EMPLOYEES & DIRECTORY
+    // ==========================================
+
+    @GetMapping("/employees")
+    public List<WorkforceDtos.EmployeeDto> listEmployees() {
+        return service.listEmployees(tenant.currentTenantId());
+    }
+
+    @PostMapping("/employees")
+    @ResponseStatus(HttpStatus.CREATED)
+    public WorkforceDtos.EmployeeDto createEmployee(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody WorkforceDtos.CreateEmployeeRequest req
+    ) {
+        UUID actorId = null;
+        if (jwt != null && jwt.getSubject() != null) {
+            try { actorId = UUID.fromString(jwt.getSubject()); } catch (Exception ignored) {}
+        }
+        return service.createEmployee(tenant.currentTenantId(), actorId, req);
+    }
+
+    // ==========================================
     // SUMMARY & MATRIX
     // ==========================================
 
@@ -76,6 +98,12 @@ public class WorkforceController {
         return service.upsertQualification(tenant.currentTenantId(), certifyingUserId, req);
     }
 
+    @DeleteMapping("/qualifications/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteQualification(@PathVariable UUID id) {
+        service.deleteQualification(tenant.currentTenantId(), id);
+    }
+
     // ==========================================
     // SHIFTS
     // ==========================================
@@ -89,6 +117,14 @@ public class WorkforceController {
     @ResponseStatus(HttpStatus.CREATED)
     public WorkforceDtos.ShiftDto createShift(@RequestBody WorkforceDtos.CreateShiftRequest req) {
         return service.createShift(tenant.currentTenantId(), req);
+    }
+
+    @PutMapping("/shifts/{id}")
+    public WorkforceDtos.ShiftDto updateShift(
+            @PathVariable UUID id,
+            @RequestBody WorkforceDtos.UpdateShiftRequest req
+    ) {
+        return service.updateShift(tenant.currentTenantId(), id, req);
     }
 
     // ==========================================

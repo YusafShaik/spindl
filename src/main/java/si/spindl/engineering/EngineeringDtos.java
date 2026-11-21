@@ -166,33 +166,6 @@ public final class EngineeringDtos {
         }
     }
 
-    public record RedlineComponentLine(
-            UUID itemId,
-            String sku,
-            String name,
-            String unit,
-            int quantity,
-            BigDecimal scrapPercent,
-            String changeStatus, // 'UNCHANGED', 'ADDED', 'REMOVED', 'MODIFIED'
-            Integer previousQuantity,
-            BigDecimal previousScrapPercent,
-            String changeNotes
-    ) {}
-
-    public record BomRedlineComparison(
-            UUID ecoId,
-            String ecoNumber,
-            String finishedSku,
-            String finishedItemName,
-            String baseRevision,
-            String targetRevision,
-            List<RedlineComponentLine> baselineLines,
-            List<RedlineComponentLine> proposedLines,
-            int addedCount,
-            int removedCount,
-            int modifiedCount
-    ) {}
-
     public record EngineeringMetricsView(
             long activeEcos,
             long pendingSignOffs,

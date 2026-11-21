@@ -517,32 +517,32 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
           {/* High-Density Toolbar: Segmented Report Picker + Dates + Search */}
           <div className="reports-toolbar">
             <div className="reports-toolbar-left">
-              {/* Linear Segmented Report Picker */}
-              <div className="reports-segmented-group">
+              {/* Linear Pill Report Picker */}
+              <div className="sales-pill-group">
                 <button
                   type="button"
-                  className={`reports-segmented-btn ${kind === 'receivables' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${kind === 'receivables' ? 'active' : ''}`}
                   onClick={() => setKind('receivables')}
                 >
                   Receivables (AR)
                 </button>
                 <button
                   type="button"
-                  className={`reports-segmented-btn ${kind === 'payables' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${kind === 'payables' ? 'active' : ''}`}
                   onClick={() => setKind('payables')}
                 >
                   Payables (AP)
                 </button>
                 <button
                   type="button"
-                  className={`reports-segmented-btn ${kind === 'margins' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${kind === 'margins' ? 'active' : ''}`}
                   onClick={() => setKind('margins')}
                 >
                   Sales Margins
                 </button>
                 <button
                   type="button"
-                  className={`reports-segmented-btn ${kind === 'inventory-valuation' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${kind === 'inventory-valuation' ? 'active' : ''}`}
                   onClick={() => setKind('inventory-valuation')}
                 >
                   Inventory Valuation
@@ -552,7 +552,7 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
               {/* Date Controls */}
               {!valuationReport && (
                 <div className="reports-date-filter">
-                  <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)', textTransform: 'uppercase', fontWeight: 500 }}>
                     {costingReport ? 'Period:' : 'Due:'}
                   </span>
                   <input
@@ -573,12 +573,12 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
                   {(from || to) && (
                     <button
                       type="button"
-                      className="mini-action muted"
+                      className="sales-action-btn secondary"
                       onClick={() => {
                         setFrom('');
                         setTo('');
                       }}
-                      style={{ height: '26px' }}
+                      style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
                     >
                       Clear
                     </button>
@@ -879,20 +879,22 @@ export function OperationalReports({ notify, role, enhancements }: OperationalRe
       {/* Sub-Tab 5: Document & Pipeline Studios */}
       {activeTab === 'studios' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div className="reports-segmented-group" style={{ width: 'fit-content' }}>
+          <div className="sales-pill-group" style={{ width: 'fit-content' }}>
             <button
               type="button"
-              className={`reports-segmented-btn ${studioSection === 'invoice' ? 'active' : ''}`}
+              className={`sales-pill-btn ${studioSection === 'invoice' ? 'active' : ''}`}
               onClick={() => setStudioSection('invoice')}
             >
-              Invoice Template Designer
+              <FileText size={12} />
+              <span>Invoice Template Designer</span>
             </button>
             <button
               type="button"
-              className={`reports-segmented-btn ${studioSection === 'pipeline' ? 'active' : ''}`}
+              className={`sales-pill-btn ${studioSection === 'pipeline' ? 'active' : ''}`}
               onClick={() => setStudioSection('pipeline')}
             >
-              Lead Pipeline Stages Studio
+              <GitBranch size={12} />
+              <span>Lead Pipeline Stages Studio</span>
             </button>
           </div>
 

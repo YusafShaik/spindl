@@ -67,6 +67,15 @@ export interface CreateShiftPayload {
   breakMinutes: number;
 }
 
+export interface UpdateShiftPayload {
+  shiftCode?: string;
+  name?: string;
+  startTime?: string;
+  endTime?: string;
+  breakMinutes?: number;
+  isActive?: boolean;
+}
+
 export interface RosterAssignment {
   id: string;
   tenantId: string;
@@ -97,6 +106,42 @@ export interface CreateRosterPayload {
   rosterDate: string;
   plannedHours?: number;
   notes?: string;
+}
+
+export interface EmployeeSkill {
+  qualificationId: string;
+  skillId: string;
+  skillCode: string;
+  skillName: string;
+  category: string;
+  level: QualificationLevel;
+  certifiedAt: string;
+  expiresAt?: string | null;
+  status: QualificationStatus;
+  notes?: string | null;
+}
+
+export interface WorkforceEmployee {
+  id: string; // userId
+  membershipId: string;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+  skills: EmployeeSkill[];
+  joinedAt: string;
+}
+
+export interface InitialSkillAssignmentPayload {
+  skillId: string;
+  level: QualificationLevel;
+}
+
+export interface CreateEmployeePayload {
+  name: string;
+  email: string;
+  role: string;
+  skills?: InitialSkillAssignmentPayload[];
 }
 
 export interface SkillsMatrixRow {

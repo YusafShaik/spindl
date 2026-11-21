@@ -10,6 +10,7 @@ export interface AssetSummary {
   model: string | null;
   status: 'OPERATIONAL' | 'UNDER_MAINTENANCE' | 'DECOMMISSIONED' | string;
   meterHours: number;
+  totalMaintenanceCost?: number;
   installationDate: string | null;
   warrantyExpiry: string | null;
   lastServiceDate: string | null;
@@ -40,11 +41,16 @@ export interface MaintenanceSchedule {
 
 export interface PartConsumed {
   id: string;
-  itemId: string;
-  sku: string;
-  itemName: string;
-  warehouseId: string | null;
-  warehouseName: string | null;
+  partSource: 'INTERNAL' | 'EXTERNAL' | string;
+  itemId?: string | null;
+  sku?: string | null;
+  itemName?: string | null;
+  warehouseId?: string | null;
+  warehouseName?: string | null;
+  externalPartName?: string | null;
+  externalPartNumber?: string | null;
+  supplierName?: string | null;
+  invoiceReference?: string | null;
   quantity: number;
   unitCost: number;
   totalCost: number;
@@ -64,8 +70,14 @@ export interface MaintenanceWorkOrder {
   type: 'PREVENTIVE' | 'BREAKDOWN' | string;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY' | string;
   status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | string;
+  technicianType?: 'INTERNAL' | 'EXTERNAL' | string;
   assignedTechnicianUserId: string | null;
   assignedTechnicianName: string | null;
+  externalContractorName?: string | null;
+  externalInvoiceRef?: string | null;
+  laborCost?: number;
+  partsCost?: number;
+  totalCost?: number;
   failureSymptom: string | null;
   rootCause: string | null;
   resolutionNotes: string | null;
@@ -88,4 +100,5 @@ export interface MaintenanceMetrics {
   mttrMinutes: number;
   totalPartsConsumedCount: number;
   totalPartsConsumedValue: number;
+  totalMaintenanceExpenditure?: number;
 }

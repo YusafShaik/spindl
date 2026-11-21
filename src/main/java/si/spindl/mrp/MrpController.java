@@ -83,28 +83,12 @@ public class MrpController {
         return service.dismissPlannedOrder(tenant.currentTenantId(), id);
     }
 
-    @PostMapping("/batch-convert")
+    @PostMapping({"/batch-convert", "/planned-orders/convert-batch"})
     public MrpDtos.BatchConvertResponse convertBatch(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody MrpDtos.BatchConvertRequest request
     ) {
         UUID actorId = jwt != null && jwt.getSubject() != null ? UUID.fromString(jwt.getSubject()) : null;
         return service.convertBatch(tenant.currentTenantId(), actorId, request);
-    }
-
-    // ==========================================
-    // SCHEDULE MATRIX & BOM EXPLOSION
-    // ==========================================
-
-    @GetMapping("/time-phased")
-    public List<MrpDtos.TimePhasedMatrixRow> timePhasedSchedule(
-            @RequestParam(required = false, defaultValue = "5") Integer horizonWeeks
-    ) {
-        return service.getTimePhasedSchedule(tenant.currentTenantId(), horizonWeeks);
-    }
-
-    @GetMapping("/bom-explosion/{itemId}")
-    public MrpDtos.BomExplosionNode bomExplosion(@PathVariable UUID itemId) {
-        return service.getBomExplosion(tenant.currentTenantId(), itemId);
     }
 }

@@ -14,7 +14,6 @@ import {
   Copy,
   Download,
   FileText,
-  Filter,
   Flame,
   Kanban,
   LayoutList,
@@ -68,11 +67,11 @@ interface StageMeta {
 }
 
 const STAGES: StageMeta[] = [
-  { id: 'NEW', label: 'New', color: '#38bdf8', desc: 'Newly captured prospect' },
-  { id: 'QUALIFIED', label: 'Qualified', color: '#f59e0b', desc: 'Budget & requirements verified' },
-  { id: 'PROPOSAL', label: 'Proposal', color: '#8b5cf6', desc: 'Commercial quotation sent' },
-  { id: 'WON', label: 'Won', color: '#10b981', desc: 'Converted to customer' },
-  { id: 'LOST', label: 'Lost', color: '#64748b', desc: 'Disqualified or closed' }
+  { id: 'NEW', label: 'New', color: 'var(--sp-info, #2763A5)', desc: 'Newly captured prospect' },
+  { id: 'QUALIFIED', label: 'Qualified', color: 'var(--sp-warning, #8B5A17)', desc: 'Budget & requirements verified' },
+  { id: 'PROPOSAL', label: 'Proposal', color: 'var(--sp-brand, #5E6AD2)', desc: 'Commercial quotation sent' },
+  { id: 'WON', label: 'Won', color: 'var(--sp-success, #1A7A4C)', desc: 'Converted to customer' },
+  { id: 'LOST', label: 'Lost', color: 'var(--sp-text-muted, #8A8F98)', desc: 'Disqualified or closed' }
 ];
 
 interface LeadPanelProps {
@@ -416,17 +415,22 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
   const renderActivityIcon = (type: string) => {
     switch (type) {
       case 'CALL':
-        return <PhoneCall size={12} color="#3b82f6" />;
+        return <PhoneCall size={11} color="var(--sp-info, #2763A5)" />;
       case 'EMAIL':
-        return <Mail size={12} color="#8b5cf6" />;
+        return <Mail size={11} color="var(--sp-brand, #5E6AD2)" />;
       case 'MEETING':
-        return <UserCheck size={12} color="#10b981" />;
+        return <UserCheck size={11} color="var(--sp-success, #1A7A4C)" />;
       case 'TASK':
-        return <CheckSquare size={12} color="#f59e0b" />;
+        return <CheckSquare size={11} color="var(--sp-warning, #8B5A17)" />;
       default:
-        return <FileText size={12} color="#64748b" />;
+        return <FileText size={11} color="var(--sp-text-muted, #8A8F98)" />;
     }
   };
+
+  // Visible stages for responsive board layout (zero horizontal scroll)
+  const visibleStages = useMemo(() => {
+    return STAGES.filter((s) => selectedStageFilter === 'ALL' || selectedStageFilter === s.id);
+  }, [selectedStageFilter]);
 
   return (
     <div className="lead-layout">
@@ -466,7 +470,7 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
           </div>
           <div className="lead-metric-value">
             {metrics.overdueCount > 0 ? (
-              <span style={{ color: 'var(--sp-error, #ef4444)' }}>{metrics.overdueCount} Overdue</span>
+              <span style={{ color: 'var(--sp-danger, #C13E3E)' }}>{metrics.overdueCount} Overdue</span>
             ) : (
               'On Track'
             )}
@@ -477,157 +481,169 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
         </div>
       </div>
 
-      {/* 2. Linear View Toolbar & Search */}
+      {/* 2. Linear Unified Toolbar & Common Filters (No Loose Tabs) */}
       <div className="leads-toolbar">
         <div className="leads-toolbar-top">
-          {/* Segmented View Switcher */}
-          <div className="leads-view-toggle">
-            <button
-              type="button"
-              className={`leads-view-btn ${view === 'board' ? 'active' : ''}`}
-              onClick={() => setView('board')}
-            >
-              <Kanban size={13} />
-              Board
-            </button>
-            <button
-              type="button"
-              className={`leads-view-btn ${view === 'list' ? 'active' : ''}`}
-              onClick={() => setView('list')}
-            >
-              <LayoutList size={13} />
-              List
-            </button>
-          </div>
-
-          {/* Quick Search */}
-          <div className="leads-search-box">
-            <Search size={14} />
-            <input
-              type="text"
-              className="leads-search-input"
-              placeholder="Filter leads by name, company, contact or source…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
+          {/* Left: View Switcher & Structured Common Filters */}
+          <div className="leads-toolbar-left">
+            <div className="leads-view-toggle">
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
-                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0 }}
+                className={`leads-view-btn ${view === 'board' ? 'active' : ''}`}
+                onClick={() => setView('board')}
+                title="Board View"
               >
-                <X size={12} />
+                <Kanban size={13} />
+                <span>Board</span>
+              </button>
+              <button
+                type="button"
+                className={`leads-view-btn ${view === 'list' ? 'active' : ''}`}
+                onClick={() => setView('list')}
+                title="List View"
+              >
+                <LayoutList size={13} />
+                <span>List</span>
+              </button>
+            </div>
+
+            <div className="leads-toolbar-sep" />
+
+            {/* Common Filter: Stage Filter Dropdown */}
+            <div className="leads-filter-group">
+              <select
+                aria-label="Filter by stage"
+                className="leads-filter-dropdown"
+                value={selectedStageFilter}
+                onChange={(e) => {
+                  setSelectedStageFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+              >
+                <option value="ALL">All Stages ({leads.length})</option>
+                {STAGES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label} ({stageCounts[s.id]?.count || 0})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Common Filter 2: Branch (if applicable) */}
+            {branches.length > 1 && (
+              <div className="leads-filter-group">
+                <select
+                  aria-label="Filter by branch"
+                  className="leads-filter-dropdown"
+                  value={selectedBranchFilter}
+                  onChange={(e) => {
+                    setSelectedBranchFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value="ALL">All Branches</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Reset Filters Shortcut Button */}
+            {(selectedStageFilter !== 'ALL' || selectedBranchFilter !== 'ALL' || searchQuery) && (
+              <button
+                type="button"
+                className="leads-reset-btn"
+                onClick={() => {
+                  setSelectedStageFilter('ALL');
+                  setPresetFilter('ALL');
+                  setSelectedBranchFilter('ALL');
+                  setSearchQuery('');
+                  setCurrentPage(1);
+                }}
+                title="Reset all filters"
+              >
+                <X size={11} />
+                <span>Reset</span>
               </button>
             )}
           </div>
 
-          {/* Action buttons & Branch */}
-          <div className="leads-toolbar-actions">
-            {branches.length > 1 && (
-              <select
-                aria-label="Filter by branch"
-                className="leads-branch-select"
-                value={selectedBranchFilter}
-                onChange={(e) => setSelectedBranchFilter(e.target.value)}
-              >
-                <option value="ALL">All branches</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            )}
+          {/* Right: Search Box & New Lead Action */}
+          <div className="leads-toolbar-right">
+            <div className="sales-search-box" style={{ width: '280px', height: '32px' }}>
+              <Search size={13} className="sales-search-icon" />
+              <input
+                type="text"
+                className="sales-search-input"
+                placeholder="Filter leads by name, company, contact…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  className="sales-search-clear"
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              ) : (
+                <kbd className="sales-search-kbd">/</kbd>
+              )}
+            </div>
 
             <button
               type="button"
-              className="button button-primary"
+              className="sales-action-btn primary"
+              style={{ height: '32px', gap: '5px' }}
               onClick={() => {
                 setShowCreatePanel(!showCreatePanel);
                 setCreateInitialStage('NEW');
               }}
             >
-              <Plus size={14} />
-              {showCreatePanel ? 'Close form' : 'New lead'}
+              <Plus size={13} />
+              <span>{showCreatePanel ? 'Close form' : 'New lead'}</span>
             </button>
           </div>
         </div>
 
-        {/* Smart Triage Presets */}
-        <div className="leads-smart-presets">
-          <button
-            type="button"
-            className={`leads-preset-btn ${presetFilter === 'ALL' ? 'active' : ''}`}
-            onClick={() => {
-              setPresetFilter('ALL');
-              setCurrentPage(1);
-            }}
-          >
-            All Prospects
-            <span className="leads-preset-count">{leads.length}</span>
-          </button>
-          <button
-            type="button"
-            className={`leads-preset-btn urgent ${presetFilter === 'OVERDUE' ? 'active' : ''}`}
-            onClick={() => {
-              setPresetFilter('OVERDUE');
-              setCurrentPage(1);
-            }}
-          >
-            <Flame size={12} color={presetFilter === 'OVERDUE' ? 'var(--sp-danger)' : '#f97316'} />
-            Needs Attention (Overdue)
-            <span className="leads-preset-count">{metrics.overdueCount}</span>
-          </button>
-          <button
-            type="button"
-            className={`leads-preset-btn ${presetFilter === 'HIGH_VALUE' ? 'active' : ''}`}
-            onClick={() => {
-              setPresetFilter('HIGH_VALUE');
-              setCurrentPage(1);
-            }}
-          >
-            💎 High Value (≥ ₹5L)
-            <span className="leads-preset-count">
-              {leads.filter((l) => (Number(l.expectedValue) || 0) >= 500000).length}
+        {/* Active Filters Telemetry Bar */}
+        {(selectedStageFilter !== 'ALL' || selectedBranchFilter !== 'ALL' || searchQuery) && (
+          <div className="leads-active-filters-bar">
+            <span className="leads-active-label">Active Filters:</span>
+            {selectedStageFilter !== 'ALL' && (
+              <span className="leads-active-tag">
+                Stage: {STAGES.find((s) => s.id === selectedStageFilter)?.label || selectedStageFilter}
+                <button type="button" onClick={() => setSelectedStageFilter('ALL')}>
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {selectedBranchFilter !== 'ALL' && (
+              <span className="leads-active-tag">
+                Branch: {branches.find((b) => b.id === selectedBranchFilter)?.name || selectedBranchFilter}
+                <button type="button" onClick={() => setSelectedBranchFilter('ALL')}>
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {searchQuery && (
+              <span className="leads-active-tag">
+                Search: "{searchQuery}"
+                <button type="button" onClick={() => setSearchQuery('')}>
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+              Showing {processedLeads.length} of {leads.length} prospects
             </span>
-          </button>
-          <button
-            type="button"
-            className={`leads-preset-btn ${presetFilter === 'TODAY' ? 'active' : ''}`}
-            onClick={() => {
-              setPresetFilter('TODAY');
-              setCurrentPage(1);
-            }}
-          >
-            <Clock size={12} />
-            Next Action Due
-            <span className="leads-preset-count">
-              {leads.filter((l) => l.nextActivityAt && !isOverdue(l.nextActivityAt) && l.stage !== 'WON' && l.stage !== 'LOST').length}
-            </span>
-          </button>
-        </div>
-
-        {/* Filter Pills */}
-        <div className="leads-filter-pills">
-          <button
-            type="button"
-            className={`leads-filter-pill ${selectedStageFilter === 'ALL' ? 'active' : ''}`}
-            onClick={() => setSelectedStageFilter('ALL')}
-          >
-            All leads <span className="leads-pill-count">{leads.length}</span>
-          </button>
-          {STAGES.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className={`leads-filter-pill ${selectedStageFilter === s.id ? 'active' : ''}`}
-              onClick={() => setSelectedStageFilter(selectedStageFilter === s.id ? 'ALL' : s.id)}
-            >
-              <span className="leads-stage-dot" style={{ backgroundColor: s.color }} />
-              {s.label} <span className="leads-pill-count">{stageCounts[s.id]?.count || 0}</span>
-            </button>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* 3. Collapsible Add Lead Drawer Panel */}
@@ -716,14 +732,21 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
         </div>
       ) : leads.length === 0 ? (
         <div className="panel production-empty" style={{ padding: '60px 24px', textAlign: 'center' }}>
-          <Sparkles size={24} style={{ color: 'var(--sp-brand, #8b5cf6)', marginBottom: '8px' }} />
+          <Sparkles size={24} style={{ color: 'var(--sp-brand, #5E6AD2)', marginBottom: '8px' }} />
           <h3>No prospects in pipeline</h3>
           <p>Click "New lead" above to capture prospects and start moving deals forward.</p>
         </div>
       ) : view === 'board' ? (
         /* COMPACT HIGH-SCALE KANBAN BOARD VIEW */
-        <div className="leads-board-container">
-          {STAGES.filter((s) => selectedStageFilter === 'ALL' || selectedStageFilter === s.id).map((stageItem) => {
+        <div
+          className="leads-board-container"
+          style={{
+            gridTemplateColumns: visibleStages.length === 1
+              ? 'minmax(320px, 460px)'
+              : `repeat(${visibleStages.length}, minmax(0, 1fr))`
+          }}
+        >
+          {visibleStages.map((stageItem) => {
             const columnLeads = processedLeads.filter((l) => l.stage === stageItem.id);
             const colTotalValue = columnLeads.reduce((sum, l) => sum + (Number(l.expectedValue) || 0), 0);
 
@@ -790,7 +813,7 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
                             {lead.convertedCustomerId ? (
                               <span
                                 className="lead-action-pill"
-                                style={{ background: 'var(--sp-success-soft, #d1fae5)', color: 'var(--sp-success, #10b981)' }}
+                                style={{ background: 'var(--sp-success-soft)', color: 'var(--sp-success)' }}
                               >
                                 ✓ Customer
                               </span>
@@ -830,7 +853,7 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
                     }
                     onChange={() => toggleSelectAll(paginatedLeads.map((l) => l.id))}
                     aria-label="Select all on this page"
-                    style={{ cursor: 'pointer', accentColor: 'var(--sp-brand, #8b5cf6)' }}
+                    style={{ cursor: 'pointer', accentColor: 'var(--sp-brand, #5E6AD2)' }}
                   />
                 </th>
                 <th
@@ -924,7 +947,7 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
                           checked={isSelected}
                           onChange={(e) => toggleSelectLead(lead.id, e)}
                           aria-label={`Select ${lead.name}`}
-                          style={{ cursor: 'pointer', accentColor: 'var(--sp-brand, #8b5cf6)' }}
+                          style={{ cursor: 'pointer', accentColor: 'var(--sp-brand, #5E6AD2)' }}
                         />
                       </td>
                       <td>
@@ -1146,65 +1169,36 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
         </div>
       )}
 
-      {/* Slide-Over Lead Inspector Drawer */}
+      {/* Linear-Grade Slide-Over Lead Inspector Drawer */}
       {inspectedLead && (
         <div className="leads-drawer-backdrop" onClick={() => setSelectedLeadId(null)}>
           <div className="leads-drawer" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="leads-drawer-header">
-              <div className="leads-drawer-title">
+              <div className="leads-drawer-header-left">
+                <div className="leads-drawer-meta-breadcrumb">
+                  <span>Leads</span>
+                  <span className="leads-drawer-crumb-sep">/</span>
+                  <span className="leads-drawer-id">#{inspectedLead.id.slice(0, 8)}</span>
+                </div>
                 <h2 className="leads-drawer-h2">{inspectedLead.company || inspectedLead.name}</h2>
                 {inspectedLead.company && (
-                  <span className="leads-drawer-sub">
-                    <User size={12} style={{ display: 'inline', verticalAlign: '-1px' }} /> {inspectedLead.name}
-                  </span>
+                  <div className="leads-drawer-sub">
+                    <User size={12} style={{ color: 'var(--sp-text-muted)' }} />
+                    <span>{inspectedLead.name}</span>
+                  </div>
                 )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="leads-drawer-header-right">
                 {inspectedLead.expectedValue != null && (
-                  <span className="lead-card-value-badge" style={{ fontSize: '12px', padding: '3px 8px' }}>
+                  <span className="leads-drawer-value-tag" title="Deal Value">
                     {formatCurrency(inspectedLead.expectedValue)}
                   </span>
                 )}
-                <button
-                  type="button"
-                  className="leads-modal-close-btn"
-                  onClick={() => setSelectedLeadId(null)}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Stage Stepper */}
-            <div className="leads-drawer-stepper">
-              {STAGES.map((s) => {
-                const isCurrent = inspectedLead.stage === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    className={`leads-stepper-btn ${isCurrent ? 'active' : ''}`}
-                    disabled={saving || (s.id === 'WON' && !inspectedLead.convertedCustomerId)}
-                    onClick={() => stage(inspectedLead, s.id)}
-                    title={s.desc}
-                  >
-                    <span className="leads-stage-dot" style={{ backgroundColor: s.color }} />
-                    {s.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Drawer Body */}
-            <div className="leads-drawer-body">
-              {/* Quick Action Bar */}
-              <div className="leads-drawer-actions">
                 {!inspectedLead.convertedCustomerId && inspectedLead.stage !== 'WON' ? (
                   <button
                     type="button"
-                    className="button button-primary"
-                    style={{ height: '32px', fontSize: '12px' }}
+                    className="leads-drawer-convert-btn"
                     onClick={() => {
                       setConvertModalLead(inspectedLead);
                       setConvertWithQuote(false);
@@ -1212,111 +1206,162 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
                       setConvertQuantity(1);
                       setConvertUnitPrice(Number(items[0]?.unitPrice) || 0);
                     }}
+                    title="Convert to Customer & Quote"
                   >
-                    <UserCheck size={14} />
-                    Convert to Customer & Quote
+                    <UserCheck size={13} />
+                    <span>Convert</span>
                   </button>
                 ) : (
-                  <span className="lead-converted-badge" style={{ padding: '6px 12px', fontSize: '12px' }}>
-                    <Check size={13} /> Converted Customer Record
+                  <span className="leads-drawer-converted-badge">
+                    <Check size={12} />
+                    <span>Converted</span>
                   </span>
                 )}
+                <button
+                  type="button"
+                  className="leads-modal-close-btn"
+                  onClick={() => setSelectedLeadId(null)}
+                  title="Close (Esc)"
+                >
+                  <X size={15} />
+                </button>
               </div>
+            </div>
 
-              {/* Prospect Dossier Card */}
-              <div className="leads-dossier-card">
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                  Prospect Dossier
-                </div>
-                <div className="leads-dossier-grid">
-                  <div className="leads-dossier-field">
-                    <span className="label">Contact Name</span>
-                    <span className="val">{inspectedLead.name}</span>
+            {/* Linear Stage Segmented Progress Bar */}
+            <div className="leads-drawer-stepper-wrap">
+              <div className="leads-linear-stepper">
+                {STAGES.map((s) => {
+                  const isCurrent = inspectedLead.stage === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`leads-linear-step-btn ${isCurrent ? 'active' : ''}`}
+                      disabled={saving || (s.id === 'WON' && !inspectedLead.convertedCustomerId)}
+                      onClick={() => stage(inspectedLead, s.id)}
+                      title={s.desc}
+                    >
+                      <span className="leads-step-dot" style={{ backgroundColor: s.color }} />
+                      <span>{s.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Drawer Body */}
+            <div className="leads-drawer-body">
+              {/* Linear Properties Section */}
+              <div className="leads-properties-section">
+                <div className="leads-section-label">Properties</div>
+                <div className="leads-properties-list">
+                  <div className="leads-prop-row">
+                    <span className="leads-prop-key">Status</span>
+                    <div className="leads-prop-val">
+                      <span
+                        className="leads-step-dot"
+                        style={{
+                          backgroundColor: STAGES.find((s) => s.id === inspectedLead.stage)?.color || 'var(--sp-brand)'
+                        }}
+                      />
+                      <span>{STAGES.find((s) => s.id === inspectedLead.stage)?.label || inspectedLead.stage}</span>
+                    </div>
                   </div>
-                  <div className="leads-dossier-field">
-                    <span className="label">Company</span>
-                    <span className="val">{inspectedLead.company || '—'}</span>
+                  <div className="leads-prop-row">
+                    <span className="leads-prop-key">Deal Value</span>
+                    <div className="leads-prop-val" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                      {inspectedLead.expectedValue != null ? formatCurrency(inspectedLead.expectedValue) : '—'}
+                    </div>
                   </div>
-                  <div className="leads-dossier-field">
-                    <span className="label">Work Email</span>
-                    <span className="val">
+                  <div className="leads-prop-row">
+                    <span className="leads-prop-key">Contact</span>
+                    <div className="leads-prop-val">{inspectedLead.name}</div>
+                  </div>
+                  <div className="leads-prop-row">
+                    <span className="leads-prop-key">Company</span>
+                    <div className="leads-prop-val">{inspectedLead.company || '—'}</div>
+                  </div>
+                  <div className="leads-prop-row">
+                    <span className="leads-prop-key">Work Email</span>
+                    <div className="leads-prop-val">
                       {inspectedLead.email ? (
-                        <>
-                          <a href={`mailto:${inspectedLead.email}`} style={{ color: 'var(--sp-brand)' }}>
+                        <div className="leads-prop-link-group">
+                          <a href={`mailto:${inspectedLead.email}`} className="leads-prop-link">
                             {inspectedLead.email}
                           </a>
                           <button
                             type="button"
+                            className="leads-prop-copy-btn"
                             onClick={() => copyToClipboard(inspectedLead.email!, 'Email')}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                             title="Copy email"
                           >
-                            <Copy size={11} color="var(--sp-text-muted)" />
+                            <Copy size={11} />
                           </button>
-                        </>
+                        </div>
                       ) : (
                         '—'
                       )}
-                    </span>
+                    </div>
                   </div>
-                  <div className="leads-dossier-field">
-                    <span className="label">Phone</span>
-                    <span className="val">
+                  <div className="leads-prop-row">
+                    <span className="leads-prop-key">Phone</span>
+                    <div className="leads-prop-val">
                       {inspectedLead.phone ? (
-                        <>
-                          <a href={`tel:${inspectedLead.phone}`} style={{ color: 'var(--sp-text)' }}>
+                        <div className="leads-prop-link-group">
+                          <a href={`tel:${inspectedLead.phone}`} className="leads-prop-link">
                             {inspectedLead.phone}
                           </a>
                           <button
                             type="button"
+                            className="leads-prop-copy-btn"
                             onClick={() => copyToClipboard(inspectedLead.phone!, 'Phone')}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                             title="Copy phone"
                           >
-                            <Copy size={11} color="var(--sp-text-muted)" />
+                            <Copy size={11} />
                           </button>
-                        </>
+                        </div>
                       ) : (
                         '—'
                       )}
-                    </span>
+                    </div>
                   </div>
-                  <div className="leads-dossier-field">
-                    <span className="label">Source</span>
-                    <span className="val">{inspectedLead.source || 'Direct outreach'}</span>
+                  <div className="leads-prop-row">
+                    <span className="leads-prop-key">Source</span>
+                    <div className="leads-prop-val">{inspectedLead.source || 'Direct outreach'}</div>
                   </div>
-                  <div className="leads-dossier-field">
-                    <span className="label">Branch</span>
-                    <span className="val">
+                  <div className="leads-prop-row">
+                    <span className="leads-prop-key">Branch</span>
+                    <div className="leads-prop-val">
                       {branches.find((b) => b.id === inspectedLead.branchId)?.name || 'Default Branch'}
-                    </span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Scheduled Next Action Card */}
-              <div className="leads-drawer-next-action-card">
-                <div className="leads-drawer-next-action-header">
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-brand)', textTransform: 'uppercase' }}>
-                    Scheduled Next Action
-                  </span>
+              {/* Scheduled Next Action Strip */}
+              <div className="leads-next-action-strip">
+                <div className="leads-next-action-top">
+                  <div className="leads-next-action-label">
+                    <Calendar size={12} />
+                    <span>Scheduled Next Action</span>
+                  </div>
                   {inspectedLead.nextActivityAt && (
-                    <span className={`lead-action-pill ${isOverdue(inspectedLead.nextActivityAt) ? 'overdue' : 'scheduled'}`}>
+                    <span className={`leads-action-status-tag ${isOverdue(inspectedLead.nextActivityAt) ? 'overdue' : 'scheduled'}`}>
                       <Clock size={11} />
                       {isOverdue(inspectedLead.nextActivityAt) ? 'Overdue · ' : 'Due · '}
                       {formatDate(inspectedLead.nextActivityAt)}
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>
+                <div className="leads-next-action-body">
                   {inspectedLead.nextActivityTitle || 'No immediate action scheduled'}
                 </div>
                 {inspectedLead.nextActivityTitle && (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <div className="leads-next-action-footer">
                     <button
                       type="button"
-                      className="button button-secondary"
-                      style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
+                      className="leads-next-action-complete-btn"
                       onClick={async () => {
                         await send(`/leads/${inspectedLead.id}/activities`, 'POST', {
                           activityType: 'TASK',
@@ -1330,74 +1375,82 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
                       }}
                     >
                       <Check size={12} />
-                      Mark Completed
+                      <span>Mark Completed</span>
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* Quick Activity Logger Form */}
-              <div className="lead-inline-activity-box" style={{ background: 'var(--sp-surface-subtle)', padding: '12px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '8px' }}>
-                  Record Note / Activity
-                </div>
+              {/* Linear Activity Composer */}
+              <div className="leads-composer-card">
                 <form onSubmit={(e) => addActivity(e, inspectedLead)}>
-                  <div className="lead-inline-activity-top">
-                    <select name="activityType" defaultValue="NOTE">
-                      <option value="NOTE">Note</option>
-                      <option value="CALL">Call</option>
-                      <option value="EMAIL">Email</option>
-                      <option value="MEETING">Meeting</option>
-                      <option value="TASK">Task</option>
-                    </select>
-                    <input name="dueAt" type="datetime-local" title="Due date (optional)" />
-                  </div>
                   <textarea
                     name="body"
                     required
                     maxLength={2000}
-                    placeholder="Add activity recap, customer feedback, next steps…"
-                    style={{ width: '100%', minHeight: '60px', marginTop: '6px', fontSize: '12px', padding: '8px', border: '1px solid var(--sp-border)', borderRadius: '4px' }}
+                    className="leads-composer-textarea"
+                    placeholder="Write an activity note, call summary, or next step… (⌘ Enter to save)"
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                        e.currentTarget.form?.requestSubmit();
+                      }
+                    }}
                   />
-                  <div className="lead-inline-activity-bottom">
-                    <button
-                      type="submit"
-                      className="button button-primary"
-                      style={{ height: '28px', padding: '0 12px', fontSize: '11.5px' }}
-                      disabled={saving}
-                    >
-                      {saving ? 'Saving…' : 'Save note'}
-                    </button>
+                  <div className="leads-composer-footer">
+                    <div className="leads-composer-tools">
+                      <select name="activityType" defaultValue="NOTE" className="leads-composer-type-select">
+                        <option value="NOTE">Note</option>
+                        <option value="CALL">Call</option>
+                        <option value="EMAIL">Email</option>
+                        <option value="MEETING">Meeting</option>
+                        <option value="TASK">Task</option>
+                      </select>
+                      <div className="leads-composer-date-wrap">
+                        <Clock size={11} style={{ color: 'var(--sp-text-muted)' }} />
+                        <input
+                          name="dueAt"
+                          type="datetime-local"
+                          className="leads-composer-date-input"
+                          title="Due date (optional)"
+                        />
+                      </div>
+                    </div>
+                    <div className="leads-composer-actions">
+                      <span className="leads-composer-hint">⌘+Enter to log</span>
+                      <button
+                        type="submit"
+                        className="leads-composer-submit-btn"
+                        disabled={saving}
+                      >
+                        {saving ? 'Saving…' : 'Log Activity'}
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
 
-              {/* Timeline Feed */}
-              <div>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '10px' }}>
-                  Activity Timeline ({inspectedLead.activities?.length || 0})
+              {/* Linear Activity Timeline */}
+              <div className="leads-timeline-section">
+                <div className="leads-section-label">
+                  Activity Feed ({inspectedLead.activities?.length || 0})
                 </div>
                 {(!inspectedLead.activities || inspectedLead.activities.length === 0) ? (
-                  <div style={{ padding: '16px', textAlign: 'center', fontSize: '12px', color: 'var(--sp-text-muted)' }}>
-                    No timeline events recorded yet.
+                  <div className="leads-timeline-empty">
+                    <span>No timeline events recorded yet.</span>
                   </div>
                 ) : (
-                  <div className="leads-timeline-feed">
+                  <div className="leads-linear-timeline">
                     {inspectedLead.activities.map((act) => (
-                      <div key={act.id} className="leads-timeline-item">
-                        <div className="leads-timeline-icon">
+                      <div key={act.id} className="leads-timeline-entry">
+                        <div className="leads-timeline-node">
                           {renderActivityIcon(act.activityType)}
                         </div>
-                        <div className="leads-timeline-content">
-                          <div className="leads-timeline-top">
-                            <span style={{ fontWeight: 600, color: 'var(--sp-text)' }}>
-                              {act.activityType}
-                            </span>
-                            <time style={{ color: 'var(--sp-text-muted)' }}>
-                              {formatDate(act.createdAt)}
-                            </time>
+                        <div className="leads-timeline-bubble">
+                          <div className="leads-timeline-header">
+                            <span className="leads-timeline-type-pill">{act.activityType}</span>
+                            <time className="leads-timeline-time">{formatDate(act.createdAt)}</time>
                           </div>
-                          <p className="leads-timeline-text">{act.body}</p>
+                          <p className="leads-timeline-body">{act.body}</p>
                         </div>
                       </div>
                     ))}
@@ -1415,7 +1468,7 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
           <div className="leads-modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="leads-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <UserCheck size={16} color="var(--sp-brand, #8b5cf6)" />
+                <UserCheck size={16} color="var(--sp-brand, #5E6AD2)" />
                 <h3>Convert Prospect to Customer</h3>
               </div>
               <button
@@ -1438,7 +1491,7 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
                       .join(' · ')}
                   </span>
                   {convertModalLead.expectedValue != null && (
-                    <span style={{ fontWeight: 600, color: 'var(--sp-success, #10b981)', marginTop: '2px' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--sp-text)', marginTop: '2px' }}>
                       Pipeline value: {formatCurrency(convertModalLead.expectedValue)}
                     </span>
                   )}
@@ -1466,7 +1519,7 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
                       type="checkbox"
                       checked={convertWithQuote}
                       onChange={(e) => setConvertWithQuote(e.target.checked)}
-                      style={{ width: '16px', height: '16px', accentColor: 'var(--sp-brand, #8b5cf6)' }}
+                      style={{ width: '16px', height: '16px', accentColor: 'var(--sp-brand, #5E6AD2)' }}
                     />
                     Generate initial Sales Quotation
                   </label>
@@ -1535,7 +1588,7 @@ export function LeadPanel({ items, notify, onConverted }: LeadPanelProps) {
                           }}
                         >
                           <span>Estimated Quote Subtotal:</span>
-                          <span style={{ color: 'var(--sp-brand, #8b5cf6)', fontVariantNumeric: 'tabular-nums' }}>
+                          <span style={{ color: 'var(--sp-brand, #5E6AD2)', fontVariantNumeric: 'tabular-nums' }}>
                             {formatCurrency(convertQuantity * convertUnitPrice)}
                           </span>
                         </div>

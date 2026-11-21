@@ -478,8 +478,9 @@ export function PurchaseDirectory({
               <thead>
                 <tr>
                   <th style={{ width: '130px' }}>ORDER #</th>
-                  <th style={{ width: '180px' }}>SUPPLIER</th>
-                  <th>ITEMS · RECEIVED / ORDERED</th>
+                  <th style={{ width: '220px' }}>SUPPLIER</th>
+                  <th style={{ minWidth: '160px' }}>ITEMS</th>
+                  <th style={{ width: '170px' }}>RECEIVED / ORDERED</th>
                   <th style={{ width: '120px', textAlign: 'right' }}>TOTAL</th>
                   <th style={{ width: '110px' }}>STATUS</th>
                   <th style={{ width: '220px', textAlign: 'right' }}>ACTIONS</th>
@@ -504,11 +505,19 @@ export function PurchaseDirectory({
                         </td>
                         <td>
                           <div className="sales-order-lines-list">
+                            {order.lines.map(line => (
+                              <div key={line.id} className="sales-order-line-item">
+                                <span className="sales-item-sku">{line.sku}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="sales-order-lines-list">
                             {order.lines.map(line => {
                               const done = line.receivedQuantity >= line.orderedQuantity;
                               return (
                                 <div key={line.id} className="sales-order-line-item">
-                                  <span className="sales-item-sku">{line.sku}</span>
                                   <span className={`sales-fulfillment-tag ${done ? 'shipped' : 'pending'}`}>
                                     {line.receivedQuantity}/{line.orderedQuantity} received
                                   </span>
@@ -574,7 +583,7 @@ export function PurchaseDirectory({
                   })
                 ) : (
                   <tr>
-                    <td colSpan={6} className="sales-empty-cell">
+                    <td colSpan={7} className="sales-empty-cell">
                       <div className="sales-empty-state">
                         <ShoppingCart size={24} className="sales-empty-icon" />
                         <div className="sales-empty-title">No purchase orders found</div>
@@ -884,67 +893,6 @@ export function PurchaseDirectory({
           </div>
         </div>
       )}
-
-      {/* 5. Linear Procurement Lifecycle Pipeline Guide */}
-      <div className="sales-pipeline-banner">
-        <div className="sales-pipeline-header">
-          <div className="sales-pipeline-title">
-            <span className="sales-pipeline-dot"></span>
-            ERP Procurement Lifecycle Execution Standard
-          </div>
-          <div className="sales-pipeline-tag">Strict Double-Entry Stock & Accounting Invariants</div>
-        </div>
-
-        <div className="sales-pipeline-stages">
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">01</div>
-            <div className="sales-step-content">
-              <b>Requisition</b>
-              <span>Item request by floor team with need-by date.</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">02</div>
-            <div className="sales-step-content">
-              <b>Approval & PO</b>
-              <span>Manager approval converts requisition into binding PO.</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">03</div>
-            <div className="sales-step-content">
-              <b>Goods Receipt</b>
-              <span>Stock-in posting updates inventory ledger movements.</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">04</div>
-            <div className="sales-step-content">
-              <b>Supplier Bill</b>
-              <span>Payable recognized against accepted quantities.</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">05</div>
-            <div className="sales-step-content">
-              <b>Payment / Credit</b>
-              <span>Cash payment or debit note reduces payable balance.</span>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

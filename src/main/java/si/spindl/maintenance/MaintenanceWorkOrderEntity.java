@@ -21,7 +21,13 @@ public class MaintenanceWorkOrderEntity {
     @Column(nullable = false, length = 20) private String type; // PREVENTIVE, BREAKDOWN
     @Column(nullable = false, length = 20) private String priority; // LOW, MEDIUM, HIGH, EMERGENCY
     @Column(nullable = false, length = 20) private String status = "OPEN"; // OPEN, IN_PROGRESS, COMPLETED, CANCELLED
+    @Column(name = "technician_type", nullable = false, length = 20) private String technicianType = "INTERNAL"; // INTERNAL, EXTERNAL
     @Column(name = "assigned_technician_user_id") private UUID assignedTechnicianUserId;
+    @Column(name = "external_contractor_name", length = 160) private String externalContractorName;
+    @Column(name = "external_invoice_ref", length = 100) private String externalInvoiceRef;
+    @Column(name = "labor_cost", nullable = false, precision = 12, scale = 2) private java.math.BigDecimal laborCost = java.math.BigDecimal.ZERO;
+    @Column(name = "parts_cost", nullable = false, precision = 12, scale = 2) private java.math.BigDecimal partsCost = java.math.BigDecimal.ZERO;
+    @Column(name = "total_cost", nullable = false, precision = 12, scale = 2) private java.math.BigDecimal totalCost = java.math.BigDecimal.ZERO;
     @Column(name = "failure_symptom", columnDefinition = "TEXT") private String failureSymptom;
     @Column(name = "root_cause", columnDefinition = "TEXT") private String rootCause;
     @Column(name = "resolution_notes", columnDefinition = "TEXT") private String resolutionNotes;
@@ -56,7 +62,19 @@ public class MaintenanceWorkOrderEntity {
     public String getType() { return type; }
     public String getPriority() { return priority; }
     public String getStatus() { return status; }
+    public String getTechnicianType() { return technicianType != null ? technicianType : "INTERNAL"; }
+    public void setTechnicianType(String technicianType) { this.technicianType = technicianType; }
     public UUID getAssignedTechnicianUserId() { return assignedTechnicianUserId; }
+    public String getExternalContractorName() { return externalContractorName; }
+    public void setExternalContractorName(String externalContractorName) { this.externalContractorName = externalContractorName; }
+    public String getExternalInvoiceRef() { return externalInvoiceRef; }
+    public void setExternalInvoiceRef(String externalInvoiceRef) { this.externalInvoiceRef = externalInvoiceRef; }
+    public java.math.BigDecimal getLaborCost() { return laborCost != null ? laborCost : java.math.BigDecimal.ZERO; }
+    public void setLaborCost(java.math.BigDecimal laborCost) { this.laborCost = laborCost; }
+    public java.math.BigDecimal getPartsCost() { return partsCost != null ? partsCost : java.math.BigDecimal.ZERO; }
+    public void setPartsCost(java.math.BigDecimal partsCost) { this.partsCost = partsCost; }
+    public java.math.BigDecimal getTotalCost() { return totalCost != null ? totalCost : java.math.BigDecimal.ZERO; }
+    public void setTotalCost(java.math.BigDecimal totalCost) { this.totalCost = totalCost; }
     public String getFailureSymptom() { return failureSymptom; }
     public String getRootCause() { return rootCause; }
     public String getResolutionNotes() { return resolutionNotes; }
@@ -75,12 +93,25 @@ public class MaintenanceWorkOrderEntity {
         this.assignedTechnicianUserId = technicianUserId;
     }
 
-    public void complete(String rootCause, String resolutionNotes, int downtimeMinutes) {
+    public void complete(String rootCause, String resolutionNotes, int downtimeMinutes,
+                         String technicianType, String externalContractorName, String externalInvoiceRef,
+                         java.math.BigDecimal laborCost, java.math.BigDecimal partsCost) {
         this.status = "COMPLETED";
         this.rootCause = rootCause;
         this.resolutionNotes = resolutionNotes;
         this.downtimeMinutes = downtimeMinutes;
+        if (technicianType != null && !technicianType.isBlank()) this.technicianType = technicianType;
+        if (externalContractorName != null) this.externalContractorName = externalContractorName;
+        if (externalInvoiceRef != null) this.externalInvoiceRef = externalInvoiceRef;
+        if (laborCost != null) this.laborCost = laborCost;
+        if (partsCost != null) this.partsCost = partsCost;
+        this.totalCost = (this.laborCost != null ? this.laborCost : java.math.BigDecimal.ZERO)
+            .add(this.partsCost != null ? this.partsCost : java.math.BigDecimal.ZERO);
         this.completedAt = Instant.now();
+    }
+
+    public void complete(String rootCause, String resolutionNotes, int downtimeMinutes) {
+        complete(rootCause, resolutionNotes, downtimeMinutes, null, null, null, null, null);
     }
 
     public void cancel(String notes) {

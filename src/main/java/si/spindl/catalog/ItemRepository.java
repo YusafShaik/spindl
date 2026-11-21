@@ -17,8 +17,6 @@ public interface ItemRepository extends JpaRepository<ItemEntity, UUID> {
     Page<ItemEntity> findAllByTenantIdAndActiveTrueOrderByName(UUID tenantId,Pageable pageable);
     Optional<ItemEntity> findByTenantIdAndId(UUID tenantId, UUID id);
     boolean existsByTenantIdAndSkuIgnoreCase(UUID tenantId, String sku);
-    boolean existsByTenantIdAndBarcodeIgnoreCase(UUID tenantId,String barcode);
-    boolean existsByTenantIdAndBarcodeIgnoreCaseAndIdNot(UUID tenantId,String barcode,UUID id);
     long countByTenantIdAndActiveTrue(UUID tenantId);
     @Query("select sum(i.onHand * i.unitPrice) from ItemEntity i where i.tenantId=:tenantId and i.active=true")
     Optional<BigDecimal> calculateInventoryValue(@Param("tenantId") UUID tenantId);

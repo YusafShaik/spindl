@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Download, Menu, Plus, Boxes, Building2, FileText, ShoppingCart, UserPlus, Receipt } from 'lucide-react';
 import { API, apiFetch } from './lib/api/client.ts';
 import { navModuleCode } from './app/navigation.ts';
@@ -70,11 +70,41 @@ function App() {
   const { enabledModules, setEnabledModules } = useTenantModules(session);
   const tenantData = useTenantData(session);
   const { items, setItems, customers, setCustomers, suppliers, setSuppliers, purchaseOrders, setPurchaseOrders, purchaseRequisitions, setPurchaseRequisitions, supplierBills, setSupplierBills, supplierCredits, setSupplierCredits, customerCredits, setCustomerCredits, transactions, setTransactions, quotes, setQuotes, salesOrders, setSalesOrders, invoices, setInvoices, movements, setMovements, trend, metrics, setMetrics, apiOnline, setApiOnline } = tenantData;
-  const [authMode, setAuthMode] = useState<AuthMode>(() => { const params = new URLSearchParams(window.location.search); return params.has('reset') ? 'reset' : params.has('invite') ? 'accept' : 'register'; });
+  const [authMode, setAuthMode] = useState<AuthMode>(() => { const params = new URLSearchParams(window.location.search); return params.has('reset') ? 'reset' : params.has('invite') ? 'accept' : params.get('mode') === 'register' ? 'register' : 'login'; });
   const [authError, setAuthError] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
-  const [section, setSection] = useState('Overview');
+  const [section, setSection] = useState(() => {
+    try {
+      const hash = window.location.hash.replace(/^#\/?/, '');
+      if (hash) return decodeURIComponent(hash);
+      const saved = localStorage.getItem('spindl_active_section');
+      if (saved) return saved;
+    } catch {}
+    return 'Overview';
+  });
+
+  useEffect(() => {
+    if (!session) {
+      const modeLabel =
+        authMode === 'register'
+          ? 'Sign up'
+          : authMode === 'accept'
+          ? 'Join team'
+          : authMode === 'reset-request'
+          ? 'Reset password'
+          : authMode === 'reset'
+          ? 'Set password'
+          : 'Sign in';
+      document.title = `Spindl — ${modeLabel}`;
+    } else {
+      document.title = section ? `Spindl — ${section}` : 'Spindl';
+      try {
+        localStorage.setItem('spindl_active_section', section);
+        window.location.hash = encodeURIComponent(section);
+      } catch {}
+    }
+  }, [session, authMode, section]);
   const [query, setQuery] = useState('');
   const [importResource, setImportResource] = useState<ImportResource>('CUSTOMERS');
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -128,7 +158,7 @@ function App() {
   };
 
 
-  const filteredItems = useMemo(() => items.filter(item => `${item.name} ${item.sku} ${item.barcode||''} ${item.category} ${item.itemType||''}`.toLowerCase().includes(query.toLowerCase())), [items, query]);
+  const filteredItems = useMemo(() => items.filter(item => `${item.name} ${item.sku} ${item.category} ${item.itemType||''}`.toLowerCase().includes(query.toLowerCase())), [items, query]);
   const filteredCustomers = useMemo(() => customers.filter(customer => `${customer.code} ${customer.name} ${customer.email} ${customer.phone||''} ${customer.contactName||''} ${customer.tags||''} ${customer.city||''}`.toLowerCase().includes(query.toLowerCase())), [customers, query]);
   const filteredPurchaseOrders = useMemo(() => purchaseOrders.filter(order => `${order.orderNumber} ${order.supplierName} ${order.status}`.toLowerCase().includes(query.toLowerCase())), [purchaseOrders, query]);
   function notify(text: string): void { setToast(text); window.setTimeout(() => setToast(''), 2800); }

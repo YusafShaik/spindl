@@ -70,7 +70,7 @@ public class CsvImportService {
     public String export(String resource,UUID actorId){
         String type=normalizeExportResource(resource);UUID tenantId=tenant.currentTenantId();String resourceCode=resourceCode(type);
         var definitions=customFieldDefinitions.findAllByTenantIdAndResourceCodeOrderByCreatedAtAsc(tenantId,resourceCode).stream().filter(si.spindl.identity.TenantCustomFieldEntity::isPublished).toList();
-        StringBuilder csv=new StringBuilder();List<String> headers=new ArrayList<>(switch(type){case "CUSTOMERS"->List.of("code","name","email","status","customerType","contactName","phone","addressLine1","addressLine2","city","region","postalCode","countryCode","taxId","paymentTermsDays","creditLimit","tags","creditHold");case "ITEMS"->List.of("sku","name","barcode","category","openingStock","unit","unitPrice","lowStockThreshold","itemType");case "SUPPLIERS"->List.of("code","name","email","contactName","phone","addressLine1","addressLine2","city","region","postalCode","countryCode","taxId","paymentTermsDays","leadTimeDays","rating","notes");case "WORK_ORDERS"->List.of("orderNumber","bomId","finishedItemId","outputWarehouseId","targetQuantity","goodQuantity","scrapQuantity","status","priority","plannedStart","dueDate","createdAt");case "PURCHASE_ORDERS"->List.of("orderNumber","supplier","status","createdAt","lines","notes");case "QUOTES"->List.of("quoteNumber","customer","status","validUntil","total","createdAt","lines","notes");case "SALES_ORDERS"->List.of("orderNumber","customer","quoteNumber","status","createdAt","total","lines");default->List.of("invoiceNumber","customer","salesOrder","issuedAt","dueDate","status","subtotal","taxCode","taxRate","taxTotal","total","amountPaid","creditTotal","balance");});
+        StringBuilder csv=new StringBuilder();List<String> headers=new ArrayList<>(switch(type){case "CUSTOMERS"->List.of("code","name","email","status","customerType","contactName","phone","addressLine1","addressLine2","city","region","postalCode","countryCode","taxId","paymentTermsDays","creditLimit","tags","creditHold");case "ITEMS"->List.of("sku","name","category","openingStock","unit","unitPrice","lowStockThreshold","itemType");case "SUPPLIERS"->List.of("code","name","email","contactName","phone","addressLine1","addressLine2","city","region","postalCode","countryCode","taxId","paymentTermsDays","leadTimeDays","rating","notes");case "WORK_ORDERS"->List.of("orderNumber","bomId","finishedItemId","outputWarehouseId","targetQuantity","goodQuantity","scrapQuantity","status","priority","plannedStart","dueDate","createdAt");case "PURCHASE_ORDERS"->List.of("orderNumber","supplier","status","createdAt","lines","notes");case "QUOTES"->List.of("quoteNumber","customer","status","validUntil","total","createdAt","lines","notes");case "SALES_ORDERS"->List.of("orderNumber","customer","quoteNumber","status","createdAt","total","lines");default->List.of("invoiceNumber","customer","salesOrder","issuedAt","dueDate","status","subtotal","taxCode","taxRate","taxTotal","total","amountPaid","creditTotal","balance");});
         definitions.forEach(field->headers.add(field.getFieldKey()));appendCsvRow(csv,headers,Collections.nCopies(headers.size(),false));
         Map<UUID,String> keyByFieldId=new HashMap<>();definitions.forEach(field->keyByFieldId.put(field.getId(),field.getFieldKey()));
         int rowCount;
@@ -81,7 +81,7 @@ public class CsvImportService {
         }else if(type.equals("ITEMS")){
             var page=items.findAllByTenantIdAndActiveTrueOrderByName(tenantId,PageRequest.of(0,10001));if(page.getTotalElements()>10000)throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Export is limited to 10,000 active records; narrow the export and try again");
             var records=page.getContent();rowCount=records.size();var customValues=loadExportValues(tenantId,resourceCode,records.stream().map(ItemEntity::getId).toList(),keyByFieldId,definitions);
-            for(ItemEntity record:records){List<String> row=new ArrayList<>(List.of(record.getSku(),record.getName(),Objects.toString(record.getBarcode(),""),record.getCategory(),Integer.toString(record.getOnHand()),record.getUnit(),record.getUnitPrice().toPlainString(),Integer.toString(record.getLowStockThreshold()),record.getItemType()));appendCustomValues(row,definitions,customValues.get(record.getId()));List<Boolean> safe=new ArrayList<>(List.of(true,true,true,true,false,true,false,false,true));definitions.forEach(field->safe.add(!Set.of("NUMBER","BOOLEAN").contains(field.getFieldType())));appendCsvRow(csv,row,safe);}
+            for(ItemEntity record:records){List<String> row=new ArrayList<>(List.of(record.getSku(),record.getName(),record.getCategory(),Integer.toString(record.getOnHand()),record.getUnit(),record.getUnitPrice().toPlainString(),Integer.toString(record.getLowStockThreshold()),record.getItemType()));appendCustomValues(row,definitions,customValues.get(record.getId()));List<Boolean> safe=new ArrayList<>(List.of(true,true,true,false,true,false,false,true));definitions.forEach(field->safe.add(!Set.of("NUMBER","BOOLEAN").contains(field.getFieldType())));appendCsvRow(csv,row,safe);}
         }else if(type.equals("SUPPLIERS")){
             var page=suppliers.findAllByTenantIdAndActiveTrueOrderByName(tenantId,PageRequest.of(0,10001));if(page.getTotalElements()>10000)throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Export is limited to 10,000 active records; narrow the export and try again");
             var records=page.getContent();rowCount=records.size();var customValues=loadExportValues(tenantId,resourceCode,records.stream().map(SupplierEntity::getId).toList(),keyByFieldId,definitions);
@@ -135,7 +135,7 @@ public class CsvImportService {
                 Map<String,CustomerRow> customValues=validation.rows().stream().map(CustomerRow.class::cast).collect(java.util.stream.Collectors.toMap(CustomerRow::code,row->row));
                 for(CustomerEntity customer:saved)customFields.saveImportedValues(tenantId,actorId,"customers",customer.getId(),customValues.get(customer.getCode()).customValues());
             }else if(type.equals("ITEMS")){
-                List<ItemEntity> rows=validation.rows().stream().map(row->{ItemRow item=(ItemRow)row;ItemEntity entity=new ItemEntity(tenantId,item.sku(),item.name(),item.category(),item.openingStock(),item.unit(),item.unitPrice(),item.lowStockThreshold());entity.updateType(item.itemType());entity.setBarcode(item.barcode());return entity;}).toList();
+                List<ItemEntity> rows=validation.rows().stream().map(row->{ItemRow item=(ItemRow)row;ItemEntity entity=new ItemEntity(tenantId,item.sku(),item.name(),item.category(),item.openingStock(),item.unit(),item.unitPrice(),item.lowStockThreshold());entity.updateType(item.itemType());return entity;}).toList();
                 List<ItemEntity> saved=items.saveAllAndFlush(rows);
                 Map<String,ItemRow> customValues=validation.rows().stream().map(ItemRow.class::cast).collect(java.util.stream.Collectors.toMap(ItemRow::sku,row->row));
                 for(ItemEntity item:saved)customFields.saveImportedValues(tenantId,actorId,"items",item.getId(),customValues.get(item.getSku()).customValues());
@@ -180,13 +180,12 @@ public class CsvImportService {
         if(csv.records().size()-1>MAX_ROWS)return Validation.invalid(csv.records().size()-1,new ImportError(1,"Import is limited to 500 data rows"));
         Map<String,Integer> indexes=new HashMap<>();for(int i=0;i<header.size();i++)indexes.put(header.get(i),i);
         List<TenantCustomFieldService.ImportField> customDefinitions=customFields.importFields(tenant.currentTenantId(),resourceCode(type));
-        List<ImportRow> validRows=new ArrayList<>();Set<String> seen=new HashSet<>();Set<String> seenBarcodes=new HashSet<>();int total=csv.records().size()-1;
+        List<ImportRow> validRows=new ArrayList<>();Set<String> seen=new HashSet<>();int total=csv.records().size()-1;
         for(int recordIndex=1;recordIndex<csv.records().size();recordIndex++){
             List<String> values=csv.records().get(recordIndex);int rowNumber=recordIndex+1;
             if(values.stream().allMatch(String::isBlank))continue;
             if(values.size()!=header.size()){errors.add(new ImportError(rowNumber,"Expected "+header.size()+" columns but found "+values.size()));continue;}
             Map<String,String> row=new HashMap<>();for(int i=0;i<header.size();i++)row.put(header.get(i),values.get(i).trim());
-            if(type.equals("ITEMS")){String barcode=row.getOrDefault("barcode","").trim().toUpperCase(Locale.ROOT);if(!barcode.isBlank()&&!seenBarcodes.add(barcode)){errors.add(new ImportError(rowNumber,"Duplicate barcode in this file: "+barcode));continue;}}
             String code=type.equals("ITEMS")?row.get("sku"):row.get("code");
             String normalized=code.toLowerCase(Locale.ROOT);
             if(!seen.add(normalized)){errors.add(new ImportError(rowNumber,"Duplicate code/SKU in this file: "+code));continue;}
@@ -221,9 +220,9 @@ public class CsvImportService {
             int stock=integer(row.get("openingstock"),"openingStock"),threshold=row.containsKey("lowstockthreshold")&&!row.get("lowstockthreshold").isBlank()?integer(row.get("lowstockthreshold"),"lowStockThreshold"):10;
             BigDecimal price=new BigDecimal(row.get("unitprice"));
             if(stock<0||threshold<0||price.signum()<0||price.scale()>2||price.precision()>14)throw new IllegalArgumentException();
-            String itemType=optional(row,"itemtype").isBlank()?"FINISHED":optional(row,"itemtype").toUpperCase(Locale.ROOT);if(!Set.of("RAW","WIP","FINISHED","SERVICE").contains(itemType))throw new IllegalArgumentException("itemType");String barcode=optional(row,"barcode").trim();if(barcode.length()>64)throw new IllegalArgumentException("barcode");if(!barcode.isBlank()&&items.existsByTenantIdAndBarcodeIgnoreCase(tenantId,barcode))throw new IllegalArgumentException("barcode already exists");
+            String itemType=optional(row,"itemtype").isBlank()?"FINISHED":optional(row,"itemtype").toUpperCase(Locale.ROOT);if(!Set.of("RAW","WIP","FINISHED","SERVICE").contains(itemType))throw new IllegalArgumentException("itemType");
             if(items.existsByTenantIdAndSkuIgnoreCase(tenantId,sku)){errors.add(new ImportError(number,"SKU already exists: "+sku));return;}
-            valid.add(new ItemRow(sku,name,category,stock,unit,price,threshold,itemType,barcode.isBlank()?null:barcode.toUpperCase(Locale.ROOT),customValues));
+            valid.add(new ItemRow(sku,name,category,stock,unit,price,threshold,itemType,customValues));
         }catch(RuntimeException exception){errors.add(new ImportError(number,"openingStock and lowStockThreshold must be non-negative integers; unitPrice must be a non-negative amount with up to 2 decimals"));}
     }
 
@@ -268,7 +267,7 @@ public class CsvImportService {
 
     private sealed interface ImportRow permits CustomerRow,ItemRow,SupplierRow{}
     private record CustomerRow(String code,String name,String email,String status,String customerType,String contactName,String phone,String addressLine1,String addressLine2,String city,String region,String postalCode,String countryCode,String taxId,int paymentTermsDays,BigDecimal creditLimit,String tags,boolean creditHold,Map<String,tools.jackson.databind.JsonNode> customValues)implements ImportRow{}
-    private record ItemRow(String sku,String name,String category,int openingStock,String unit,BigDecimal unitPrice,int lowStockThreshold,String itemType,String barcode,Map<String,tools.jackson.databind.JsonNode> customValues)implements ImportRow{}
+    private record ItemRow(String sku,String name,String category,int openingStock,String unit,BigDecimal unitPrice,int lowStockThreshold,String itemType,Map<String,tools.jackson.databind.JsonNode> customValues)implements ImportRow{}
     private record SupplierRow(String code,String name,String email,String contactName,String phone,String addressLine1,String addressLine2,String city,String region,String postalCode,String countryCode,String taxId,int paymentTermsDays,int leadTimeDays,BigDecimal rating,String notes,Map<String,tools.jackson.databind.JsonNode> customValues)implements ImportRow{}
     private record CsvRecords(List<List<String>> records,ImportError error){}
     private record Validation(int totalRows,List<ImportRow> rows,List<ImportError> errors,List<Map<String,String>> sampleRows){

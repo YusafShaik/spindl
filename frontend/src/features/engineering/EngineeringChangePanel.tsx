@@ -1,37 +1,21 @@
-import { useState, useEffect, useMemo, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, type FormEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
-  Activity,
-  AlertCircle,
   AlertTriangle,
   ArrowLeft,
-  ArrowRight,
+  ArrowUpRight,
   Check,
   CheckCircle2,
-  CheckSquare,
-  ChevronRight,
-  Clock,
-  ExternalLink,
   FileCheck,
-  FileDiff,
   FileText,
-  Filter,
   Flame,
-  GitBranch,
   GitCommit,
   GitPullRequest,
-  Layers,
   Plus,
-  RefreshCw,
   RotateCcw,
   Search,
-  Shield,
-  ShieldAlert,
   ShieldCheck,
-  Tag,
-  TrendingUp,
   UserCheck,
-  Users,
-  Wrench,
   X,
   Zap
 } from 'lucide-react';
@@ -41,12 +25,9 @@ import type { ItemSummary } from '../../types/inventory';
 import type {
   EngineeringChangeOrder,
   EcoDetail,
-  EcoSignOff,
   EcoMetrics,
   DepartmentType,
   ChangeSeverity,
-  EcoStatus,
-  BomRedlineComparison,
   ProposedBomLineInput,
   ProposeEcoRequest,
   SubmitSignOffRequest,
@@ -59,10 +40,68 @@ interface EngineeringChangePanelProps {
   notify: (message: string) => void;
 }
 
-type EcoTab = 'ecos' | 'redline' | 'signoffs';
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
+interface TooltipProps {
+  content: ReactNode;
+  children: ReactNode;
+  align?: 'left' | 'center';
+}
+
+function StyledTooltip({ content, children, align = 'center' }: TooltipProps) {
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const targetRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseEnter = () => {
+    if (!targetRef.current) return;
+    const rect = targetRef.current.getBoundingClientRect();
+    setCoords({
+      top: rect.top - 7,
+      left: align === 'left' ? rect.left : rect.left + rect.width / 2,
+    });
+  };
+
+  const handleMouseLeave = () => {
+    setCoords(null);
+  };
+
+  return (
+    <div
+      ref={targetRef}
+      className="sp-tooltip-wrapper"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {children}
+      {coords && content && createPortal(
+        <div
+          className={`sp-styled-tooltip-portal ${align === 'left' ? 'align-left' : ''}`}
+          style={{
+            position: 'fixed',
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            transform: align === 'left' ? 'translateY(-100%)' : 'translate(-50%, -100%)',
+            zIndex: 99999,
+          }}
+        >
+          {content}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
 
 export function EngineeringChangePanel({ items, role, notify }: EngineeringChangePanelProps) {
-  const [activeTab, setActiveTab] = useState<EcoTab>('ecos');
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -71,18 +110,10 @@ export function EngineeringChangePanel({ items, role, notify }: EngineeringChang
   const [metrics, setMetrics] = useState<EcoMetrics | null>(null);
   const [selectedEcoId, setSelectedEcoId] = useState<string | null>(null);
   const [selectedEcoDetail, setSelectedEcoDetail] = useState<EcoDetail | null>(null);
-  const [redlineComparison, setRedlineComparison] = useState<BomRedlineComparison | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
-  const openEcoDrawer = (ecoId: string) => {
-    selectEco(ecoId);
-    setIsDrawerOpen(true);
-  };
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [severityFilter, setSeverityFilter] = useState('ALL');
 
   // Modal Dialogs
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -122,6 +153,13 @@ export function EngineeringChangePanel({ items, role, notify }: EngineeringChang
       if (ecosRes.ok) {
         const ecosData: EngineeringChangeOrder[] = await ecosRes.json();
         setEcos(ecosData);
+        // If an eco was already selected, refresh it
+        if (selectedEcoId) {
+          const detailRes = await apiFetch(`${API}/engineering/ecos/${selectedEcoId}`);
+          if (detailRes.ok) {
+            setSelectedEcoDetail(await detailRes.json());
+          }
+        }
       }
       if (metricsRes.ok) {
         setMetrics(await metricsRes.json());
@@ -138,23 +176,16 @@ export function EngineeringChangePanel({ items, role, notify }: EngineeringChang
     loadData();
   }, []);
 
-  // Select an ECO to load detail and redline diff
+  // Select an ECO to load detail
   const selectEco = async (ecoId: string) => {
     setSelectedEcoId(ecoId);
     try {
-      const [detailRes, diffRes] = await Promise.all([
-        apiFetch(`${API}/engineering/ecos/${ecoId}`),
-        apiFetch(`${API}/engineering/ecos/${ecoId}/redline-diff`)
-      ]);
-
+      const detailRes = await apiFetch(`${API}/engineering/ecos/${ecoId}`);
       if (detailRes.ok) {
         setSelectedEcoDetail(await detailRes.json());
       }
-      if (diffRes.ok) {
-        setRedlineComparison(await diffRes.json());
-      }
     } catch (err) {
-      console.error('Failed to load ECO details/diff:', err);
+      console.error('Failed to load ECO details:', err);
     }
   };
 
@@ -171,11 +202,10 @@ export function EngineeringChangePanel({ items, role, notify }: EngineeringChang
         e.reason.toLowerCase().includes(q);
 
       const matchesStatus = statusFilter === 'ALL' || e.status === statusFilter;
-      const matchesSeverity = severityFilter === 'ALL' || e.changeSeverity === severityFilter;
 
-      return matchesSearch && matchesStatus && matchesSeverity;
+      return matchesSearch && matchesStatus;
     });
-  }, [ecos, searchQuery, statusFilter, severityFilter]);
+  }, [ecos, searchQuery, statusFilter]);
 
   // Handle Propose ECO
   const handleProposeEco = async (e: FormEvent) => {
@@ -239,7 +269,7 @@ export function EngineeringChangePanel({ items, role, notify }: EngineeringChang
         comments: signComments
       };
 
-      const res = await apiFetch(`${API}/engineering/ecos/${selectedEcoId}/sign-offs`, {
+      const res = await apiFetch(`${API}/engineering/ecos/${selectedEcoId}/sign-off`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -315,220 +345,173 @@ export function EngineeringChangePanel({ items, role, notify }: EngineeringChang
 
   return (
     <div className="sales-screen-layout">
-      {/* 1. Linear Executive Telemetry Metric Strip */}
-      <div className="linear-kpi-grid">
-        <div className="linear-kpi-card">
-          <div className="linear-kpi-top">
-            <span className="linear-kpi-title">Active ECO Pipeline</span>
-            <GitPullRequest size={14} className="linear-kpi-icon" />
-          </div>
-          <div className="linear-kpi-value">
-            {metrics?.activeEcos ?? activeEcosCount} Active
-          </div>
-          <div className="linear-kpi-caption">
-            Under review or approved for release
-          </div>
-        </div>
-
-        <div className="linear-kpi-card">
-          <div className="linear-kpi-top">
-            <span className="linear-kpi-title">Pending Sign-Offs</span>
-            <UserCheck size={14} className="linear-kpi-icon" />
-          </div>
-          <div className="linear-kpi-value">
-            {metrics?.pendingSignOffs ?? pendingSignOffsCount} Stage-gates
-          </div>
-          <div className="linear-kpi-caption">
-            Multi-department stakeholder sign-offs
-          </div>
-        </div>
-
-        <div className="linear-kpi-card">
-          <div className="linear-kpi-top">
-            <span className="linear-kpi-title">Approved for Cutover</span>
-            <FileCheck size={14} className="linear-kpi-icon" />
-          </div>
-          <div className="linear-kpi-value">
-            {metrics?.approvedPendingCutover ?? approvedCutoverCount} Approved
-          </div>
-          <div className="linear-kpi-caption">
-            100% signed, ready to increment BOM
-          </div>
-        </div>
-
-        <div className="linear-kpi-card">
-          <div className="linear-kpi-top">
-            <span className="linear-kpi-title">Critical Severity</span>
-            <Flame size={14} className="linear-kpi-icon" />
-          </div>
-          <div className="linear-kpi-value">
-            {metrics?.criticalSeverityCount ?? criticalCount} Critical
-          </div>
-          <div className="linear-kpi-caption">
-            Field warranty or safety redesigns
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Linear Sub-Navigation Tabs */}
-      <div className="sales-subnav-container">
-        <div className="sales-subnav-tabs">
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'ecos' ? 'active' : ''}`}
-            onClick={() => setActiveTab('ecos')}
-          >
-            <FileText size={13} />
-            <span>Change Orders Register</span>
-            <span className="sales-subnav-badge">{ecos.length}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'redline' ? 'active' : ''}`}
-            onClick={() => setActiveTab('redline')}
-          >
-            <FileDiff size={13} />
-            <span>BOM Redline Diff Studio</span>
-            {selectedEcoDetail && (
-              <span className="sales-subnav-badge">{selectedEcoDetail.ecoNumber}</span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'signoffs' ? 'active' : ''}`}
-            onClick={() => setActiveTab('signoffs')}
-          >
-            <CheckSquare size={13} />
-            <span>Department Sign-Off Matrix</span>
-          </button>
-        </div>
-
-        <div className="sales-subnav-actions">
-          <button
-            type="button"
-            className="sales-action-btn secondary"
-            onClick={loadData}
-            disabled={loading || busy}
-            title="Refresh ECO Registers"
-          >
-            <RotateCcw size={12} className={loading || busy ? 'spin' : ''} />
-            <span>Refresh</span>
-          </button>
-
-          <button
-            type="button"
-            className="sales-action-btn primary"
-            onClick={() => setIsCreateModalOpen(true)}
-          >
-            <Plus size={12} />
-            <span>Propose ECO</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 3. TAB 1: CHANGE ORDERS REGISTER */}
-      {activeTab === 'ecos' && (
-        selectedEcoDetail ? (
-          /* =========================================================================
-             AUTHENTIC LINEAR ISSUE DETAIL VIEW (MOBBIN CURATED)
-             ========================================================================= */
-          <div className="linear-detail-container">
-            {/* Top Bar with Breadcrumbs & Actions */}
-            <div className="linear-detail-topbar">
-              <div className="linear-detail-breadcrumbs">
-                <button
-                  type="button"
-                  className="linear-crumb-back"
-                  onClick={() => {
-                    setSelectedEcoDetail(null);
-                    setSelectedEcoId(null);
-                  }}
-                >
-                  <ArrowLeft size={13} />
-                  <span>Engineering Change Orders</span>
-                </button>
-                <span className="linear-crumb-sep">/</span>
-                <span className="linear-crumb-id">{selectedEcoDetail.ecoNumber}</span>
-              </div>
-
-              <div className="linear-detail-top-actions">
-                {selectedEcoDetail.status === 'UNDER_REVIEW' && (
-                  <button
-                    type="button"
-                    className="sales-action-btn primary"
-                    onClick={() => setIsSignOffModalOpen(true)}
-                  >
-                    <UserCheck size={12} />
-                    <span>Sign-Off on ECO</span>
-                  </button>
-                )}
-
-                {selectedEcoDetail.status === 'APPROVED' && (
-                  <button
-                    type="button"
-                    className="sales-action-btn primary"
-                    onClick={() => setIsImplementModalOpen(true)}
-                  >
-                    <Zap size={12} />
-                    <span>Execute Production Cutover</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="sales-action-btn secondary"
-                  onClick={() => setActiveTab('redline')}
-                >
-                  <FileDiff size={12} />
-                  <span>Open Redline Studio</span>
-                </button>
-              </div>
+      {selectedEcoDetail ? (
+        /* =========================================================================
+           AUTHENTIC LINEAR ISSUE DETAIL VIEW
+           Full screen takeover matching MRP shortage detail view
+           ========================================================================= */
+        <div className="linear-detail-container">
+          {/* Top Bar with Breadcrumbs & Actions */}
+          <div className="linear-detail-topbar">
+            <div className="linear-detail-breadcrumbs">
+              <button
+                type="button"
+                className="linear-crumb-back"
+                onClick={() => {
+                  setSelectedEcoDetail(null);
+                  setSelectedEcoId(null);
+                }}
+              >
+                <ArrowLeft size={13} />
+                <span>Engineering (ECO)</span>
+              </button>
+              <span className="linear-crumb-sep">/</span>
+              <span className="linear-crumb-id">{selectedEcoDetail.ecoNumber}</span>
             </div>
 
-            {/* 2-Column Linear Layout */}
-            <div className="linear-detail-grid">
-              {/* Left Column: Title, Narrative, Redline Diff, Sign-offs */}
-              <div className="linear-detail-content">
+            <div className="linear-detail-top-actions">
+              {selectedEcoDetail.status === 'UNDER_REVIEW' && (
+                <button
+                  type="button"
+                  className="sales-action-btn primary"
+                  onClick={() => setIsSignOffModalOpen(true)}
+                  disabled={busy}
+                >
+                  <UserCheck size={12} />
+                  <span>Record Department Sign-Off</span>
+                </button>
+              )}
+
+              {selectedEcoDetail.status === 'APPROVED' && (
+                <button
+                  type="button"
+                  className="sales-action-btn primary"
+                  onClick={() => setIsImplementModalOpen(true)}
+                  disabled={busy}
+                >
+                  <Zap size={12} />
+                  <span>Execute Production Cutover</span>
+                </button>
+              )}
+
+              {selectedEcoDetail.status === 'IMPLEMENTED' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--sp-success)' }}>
+                  <CheckCircle2 size={14} />
+                  <span>Cutover Complete · Revision <strong>{selectedEcoDetail.targetRevision}</strong> Active</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 2-Column Linear Layout */}
+          <div className="linear-detail-grid">
+            {/* Left Column: Narrative & Detailed Data */}
+            <div className="linear-detail-content">
+              {/* Title & Badges */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <span className="order-number-pill">
+                    {selectedEcoDetail.ecoNumber}
+                  </span>
+                  <Status label={selectedEcoDetail.status} />
+                  <span className={`priority-tag priority-${selectedEcoDetail.changeSeverity === 'CRITICAL' ? 'urgent' : selectedEcoDetail.changeSeverity === 'MAJOR' ? 'high' : 'medium'}`}>
+                    {selectedEcoDetail.changeSeverity} Severity
+                  </span>
+                  <span className="sales-warehouse-pill" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                    Revision {selectedEcoDetail.baseRevision} → {selectedEcoDetail.targetRevision}
+                  </span>
+                </div>
+                <h1 className="linear-detail-h1">{selectedEcoDetail.title}</h1>
+                <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: 'var(--sp-text-muted)' }}>
+                  Target Product: <strong style={{ color: 'var(--sp-text)' }}>{selectedEcoDetail.finishedItemName}</strong> · SKU: <strong style={{ color: 'var(--sp-text)' }}>{selectedEcoDetail.finishedSku}</strong>
+                </p>
+              </div>
+
+              {/* Linear Telemetry KPI Grid */}
+              <div style={{ padding: '14px 16px', background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <span className="sales-ref-badge">{selectedEcoDetail.ecoNumber}</span>
-                    <Status label={selectedEcoDetail.status} />
-                    <span className={selectedEcoDetail.changeSeverity === 'CRITICAL' ? 'sales-sub-warning' : 'sales-warehouse-pill'}>
-                      {selectedEcoDetail.changeSeverity} Severity
-                    </span>
+                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Severity Classification</div>
+                  <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--sp-text)', marginTop: '2px' }}>
+                    {selectedEcoDetail.changeSeverity}
                   </div>
-                  <h1 className="linear-detail-h1">{selectedEcoDetail.title}</h1>
+                  <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)', marginTop: '1px' }}>
+                    {selectedEcoDetail.changeSeverity === 'CRITICAL' ? 'Safety / Field warranty' : 'Form, fit, or function change'}
+                  </div>
                 </div>
 
-                {/* Justification & Narrative Card */}
-                <div style={{ background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px', padding: '16px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
-                    Engineering Justification & Problem Description
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>BOM Revision Shift</div>
+                  <div style={{ fontSize: '15px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--sp-brand)', marginTop: '2px' }}>
+                    {selectedEcoDetail.baseRevision} → {selectedEcoDetail.targetRevision}
                   </div>
-                  <p className="linear-detail-desc">{selectedEcoDetail.reason}</p>
+                  <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)', marginTop: '1px' }}>
+                    Target production BOM
+                  </div>
                 </div>
 
-                {/* BOM Redline Delta Lines (Mobbin media_1.webp Sub-issues Style) */}
-                <div className="linear-sublines-card">
-                  <div className="linear-sublines-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <GitBranch size={13} style={{ color: 'var(--sp-brand)' }} />
-                      <span>BOM Component Redline Changes ({selectedEcoDetail.diffLines?.length || 0} Lines)</span>
-                    </div>
-                    <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                      Revision {selectedEcoDetail.baseRevision} → {selectedEcoDetail.targetRevision}
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Effective Cutover</div>
+                  <div style={{ fontSize: '15px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--sp-warning)', marginTop: '2px' }}>
+                    {formatDate(selectedEcoDetail.effectiveCutoverDate)}
+                  </div>
+                  <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)', marginTop: '1px' }}>
+                    Scheduled shop floor release
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Sign-Off Stage-Gates</div>
+                  <div style={{ fontSize: '15px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: selectedEcoDetail.signOffs?.filter(s => s.status === 'APPROVED').length === selectedEcoDetail.signOffs?.length ? 'var(--sp-success)' : 'var(--sp-warning)', marginTop: '2px' }}>
+                    {selectedEcoDetail.signOffs?.filter(s => s.status === 'APPROVED').length || 0} / {selectedEcoDetail.signOffs?.length || 0} Signed
+                  </div>
+                  <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)', marginTop: '1px' }}>
+                    4 cross-functional gates
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 1: Engineering Justification & Problem Description */}
+              <div className="linear-sublines-card">
+                <div className="linear-sublines-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FileText size={13} style={{ color: 'var(--sp-brand)' }} />
+                    <span>Engineering Justification & Problem Description</span>
+                  </div>
+                </div>
+                <div style={{ padding: '14px 16px', fontSize: '13px', lineHeight: 1.6, color: 'var(--sp-text)' }}>
+                  {selectedEcoDetail.reason || 'No engineering justification provided.'}
+                </div>
+              </div>
+
+              {/* Card 2: BOM Component Redline Changes */}
+              <div className="linear-sublines-card">
+                <div className="linear-sublines-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <GitCommit size={13} style={{ color: 'var(--sp-brand)' }} />
+                    <span>BOM Component Redline Changes ({selectedEcoDetail.diffLines?.length || 0} Lines)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="sales-sub-highlight">
+                      +{selectedEcoDetail.diffLines?.filter(l => l.changeType === 'ADD').length || 0} Added
+                    </span>
+                    <span className="sales-sub-warning">
+                      ~{selectedEcoDetail.diffLines?.filter(l => l.changeType === 'QUANTITY_CHANGE').length || 0} Modified
+                    </span>
+                    <span className="sales-sub-warning" style={{ color: 'var(--sp-danger)' }}>
+                      -{selectedEcoDetail.diffLines?.filter(l => l.changeType === 'REMOVE').length || 0} Removed
                     </span>
                   </div>
-                  {(!selectedEcoDetail.diffLines || selectedEcoDetail.diffLines.length === 0) ? (
-                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--sp-text-muted)', fontSize: '12px' }}>
-                      No bill of materials modifications specified.
-                    </div>
-                  ) : (
-                    selectedEcoDetail.diffLines.map((line) => (
+                </div>
+
+                {(!selectedEcoDetail.diffLines || selectedEcoDetail.diffLines.length === 0) ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--sp-text-muted)', fontSize: '12px' }}>
+                    No component redline changes recorded for this change order.
+                  </div>
+                ) : (
+                  <div>
+                    {selectedEcoDetail.diffLines.map((line) => (
                       <div key={line.id} className="linear-subline-item">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span
                             className={
                               line.changeType === 'ADD'
@@ -537,7 +520,7 @@ export function EngineeringChangePanel({ items, role, notify }: EngineeringChang
                                 ? 'sales-sub-warning'
                                 : 'sales-warehouse-pill'
                             }
-                            style={{ fontSize: '10px', padding: '1px 6px' }}
+                            style={{ fontSize: '10px', padding: '1px 6px', fontWeight: 600 }}
                           >
                             {line.changeType}
                           </span>
@@ -545,568 +528,551 @@ export function EngineeringChangePanel({ items, role, notify }: EngineeringChang
                             <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>
                               {line.componentName}
                             </div>
-                            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                              <span className="sales-ref-badge" style={{ fontSize: '10.5px', marginRight: '4px' }}>{line.componentSku}</span>
-                              {line.notes ? `· ${line.notes}` : ''}
+                            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                              <span className="sales-ref-badge" style={{ fontSize: '10.5px' }}>{line.componentSku}</span>
+                              {line.notes && <span>· {line.notes}</span>}
                             </div>
                           </div>
                         </div>
+
                         <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
                           <span style={{ color: line.changeType === 'REMOVE' ? 'var(--sp-danger)' : 'var(--sp-text-muted)', textDecoration: line.changeType === 'REMOVE' ? 'line-through' : undefined }}>
                             {line.oldQuantity} {line.componentUnit}
                           </span>
                           {' → '}
-                          <span style={{ fontWeight: 500, color: line.changeType === 'ADD' ? 'var(--sp-success)' : 'var(--sp-text)' }}>
+                          <span style={{ fontWeight: 600, color: line.changeType === 'ADD' ? 'var(--sp-success)' : 'var(--sp-text)' }}>
                             {line.newQuantity} {line.componentUnit}
                           </span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Department Sign-Off Matrix (Linear Activity Style) */}
-                <div className="linear-sublines-card">
-                  <div className="linear-sublines-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <ShieldCheck size={13} style={{ color: 'var(--sp-brand)' }} />
-                      <span>Departmental Sign-Off Ledger ({selectedEcoDetail.signOffs?.filter(s => s.status === 'APPROVED').length || 0}/{selectedEcoDetail.signOffs?.length || 0} Completed)</span>
-                    </div>
-                  </div>
-                  {(!selectedEcoDetail.signOffs || selectedEcoDetail.signOffs.length === 0) ? (
-                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--sp-text-muted)', fontSize: '12px' }}>
-                      No sign-offs recorded.
-                    </div>
-                  ) : (
-                    selectedEcoDetail.signOffs.map((s) => (
-                      <div key={s.id} className="linear-subline-item">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontWeight: 500, fontSize: '12.5px', minWidth: '110px', textTransform: 'capitalize' }}>
-                            {s.department.toLowerCase()}
-                          </span>
-                          <Status label={s.status} />
-                          <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
-                            {s.approverName ? `by ${s.approverName}` : 'Awaiting reviewer assignment'}
-                            {s.comments ? ` · "${s.comments}"` : ''}
-                          </span>
-                        </div>
-                        {s.approvedAt && (
-                          <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                            {new Date(s.approvedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Right Column: Linear Properties Sidebar */}
-              <div className="linear-properties-sidebar">
-                <div className="linear-properties-card">
-                  <div className="linear-properties-title">Properties</div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Status</span>
-                    <Status label={selectedEcoDetail.status} />
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Severity</span>
-                    <span className={selectedEcoDetail.changeSeverity === 'CRITICAL' ? 'sales-sub-warning' : 'sales-warehouse-pill'}>
-                      {selectedEcoDetail.changeSeverity}
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Target Product</span>
-                    <span className="linear-property-value" title={selectedEcoDetail.finishedItemName}>
-                      {selectedEcoDetail.finishedSku}
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">BOM Revision</span>
-                    <span className="linear-property-value" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {selectedEcoDetail.baseRevision} → {selectedEcoDetail.targetRevision}
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Cutover Target</span>
-                    <span className="linear-property-value" style={{ fontWeight: 500, color: 'var(--sp-warning)' }}>
-                      {new Date(selectedEcoDetail.effectiveCutoverDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Created By</span>
-                    <span className="linear-property-value">{selectedEcoDetail.createdByName}</span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Created Date</span>
-                    <span className="linear-property-value">
-                      {new Date(selectedEcoDetail.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-
-                  {selectedEcoDetail.implementedAt && (
-                    <div className="linear-property-row">
-                      <span className="linear-property-label">Implemented</span>
-                      <span className="linear-property-value" style={{ color: 'var(--sp-success)' }}>
-                        {new Date(selectedEcoDetail.implementedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {/* Toolbar */}
-          <div className="sales-toolbar">
-            <div className="sales-pill-group">
-              <button
-                type="button"
-                className={`sales-pill-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('ALL')}
-              >
-                <span>All</span>
-                <span className="sales-pill-count">{ecos.length}</span>
-              </button>
-              <button
-                type="button"
-                className={`sales-pill-btn ${statusFilter === 'UNDER_REVIEW' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('UNDER_REVIEW')}
-              >
-                <span>Under Review</span>
-                <span className="sales-pill-count">
-                  {ecos.filter((e) => e.status === 'UNDER_REVIEW').length}
-                </span>
-              </button>
-              <button
-                type="button"
-                className={`sales-pill-btn ${statusFilter === 'APPROVED' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('APPROVED')}
-              >
-                <span>Approved</span>
-                <span className="sales-pill-count">
-                  {ecos.filter((e) => e.status === 'APPROVED').length}
-                </span>
-              </button>
-              <button
-                type="button"
-                className={`sales-pill-btn ${statusFilter === 'IMPLEMENTED' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('IMPLEMENTED')}
-              >
-                <span>Implemented</span>
-                <span className="sales-pill-count">
-                  {ecos.filter((e) => e.status === 'IMPLEMENTED').length}
-                </span>
-              </button>
-            </div>
-
-            <div className="sales-search-box">
-              <Search size={13} className="sales-search-icon" />
-              <input
-                type="text"
-                className="sales-search-input"
-                placeholder="Filter by ECO #, title, finished item SKU, or reason…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="sales-search-clear"
-                  onClick={() => setSearchQuery('')}
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* High-Density Table (Zero Horizontal Scroll) */}
-          <div className="sales-table-card">
-            <table className="sales-table" style={{ width: '100%', tableLayout: 'auto' }}>
-              <thead>
-                <tr>
-                  <th style={{ width: '130px' }}>ECO Number</th>
-                  <th style={{ width: '100px' }}>Status</th>
-                  <th>Change Title & Revision</th>
-                  <th>Target Product & Reason</th>
-                  <th style={{ width: '140px' }}>Sign-Offs & Cutover</th>
-                  <th style={{ textAlign: 'right', width: '80px' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEcos.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--sp-text-muted)' }}>
-                      No engineering change orders found.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredEcos.map((eco) => {
-                    const isSelected = eco.id === selectedEcoId;
-                    const formattedCutover = new Date(eco.effectiveCutoverDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-                    return (
-                      <tr
-                        key={eco.id}
-                        className="sales-row"
-                        onClick={() => selectEco(eco.id)}
-                        style={{
-                          cursor: 'pointer',
-                          background: isSelected ? 'var(--sp-brand-soft)' : undefined
-                        }}
-                      >
-                        <td>
-                          <button
-                            type="button"
-                            className="sales-ref-badge interactive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              selectEco(eco.id);
-                            }}
-                            title="Click to view full Linear change order details"
-                          >
-                            {eco.ecoNumber}
-                          </button>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
-                            <span
-                              className={eco.changeSeverity === 'CRITICAL' ? 'sales-sub-warning' : 'sales-warehouse-pill'}
-                            >
-                              {eco.changeSeverity}
-                            </span>
-                          </div>
-                        </td>
-
-                        <td>
-                          <Status label={eco.status} />
-                        </td>
-
-                        <td>
-                          <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>{eco.title}</div>
-                          <div className="sales-sub-ref">
-                            {eco.finishedSku} · {eco.baseRevision} → <strong>{eco.targetRevision}</strong>
-                          </div>
-                        </td>
-
-                        <td>
-                          <div style={{ fontWeight: 500, color: 'var(--sp-text)' }}>{eco.finishedItemName}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px' }}>
-                            {eco.reason}
-                          </div>
-                        </td>
-
-                        <td>
-                          <span
-                            className={
-                              eco.signOffsCompleted === eco.totalSignOffs
-                                ? 'sales-sub-highlight'
-                                : 'sales-sub-warning'
-                            }
-                          >
-                            {eco.signOffsCompleted}/{eco.totalSignOffs} Signed
-                          </span>
-                          <div className="sales-date-cell" style={{ marginTop: '2px' }}>
-                            {formattedCutover}
-                          </div>
-                        </td>
-
-                        <td style={{ textAlign: 'right' }}>
-                          <button
-                            type="button"
-                            className="sales-action-btn secondary"
-                            style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              selectEco(eco.id);
-                            }}
-                          >
-                            <span>Inspect</span>
-                            <ChevronRight size={11} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        )
-      )}
-
-      {/* 4. TAB 2: VISUAL BOM REDLINE DIFF STUDIO */}
-      {activeTab === 'redline' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {redlineComparison ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* Diff Header */}
-              <div
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--sp-border)',
-                  background: 'var(--sp-surface)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '12px'
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="sales-ref-badge">{redlineComparison.ecoNumber}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)' }}>
-                      {redlineComparison.finishedItemName} ({redlineComparison.finishedSku})
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>
-                    Baseline Revision: <strong>{redlineComparison.baseRevision}</strong> → Proposed Target: <strong>{redlineComparison.targetRevision}</strong>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="sales-sub-highlight">+{redlineComparison.addedCount} Added</span>
-                  <span className="sales-sub-warning">~{redlineComparison.modifiedCount} Modified</span>
-                  <span className="sales-sub-warning" style={{ color: 'var(--sp-danger)' }}>-{redlineComparison.removedCount} Removed</span>
-
-                  {selectedEcoDetail?.status === 'APPROVED' && (
-                    <button
-                      type="button"
-                      className="sales-action-btn primary"
-                      onClick={() => setIsImplementModalOpen(true)}
-                    >
-                      <Zap size={12} />
-                      <span>Implement Cutover</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Side-by-Side Comparison */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '14px' }}>
-                {/* Left Column: Baseline BOM */}
-                <div className="sales-table-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--sp-border)' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--sp-text-muted)' }}>
-                      Current Baseline ({redlineComparison.baseRevision})
-                    </div>
-                    <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                      {redlineComparison.baselineLines.length} components
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {redlineComparison.baselineLines.map((line, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          padding: '8px 10px',
-                          borderRadius: '6px',
-                          border: '1px solid var(--sp-border-subtle)',
-                          background: 'var(--sp-surface-subtle)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          fontSize: '12px'
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 500, color: 'var(--sp-text)' }}>{line.name}</div>
-                          <div className="sales-sub-ref">{line.sku}</div>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                            {line.quantity} {line.unit}
-                          </span>
-                          <div style={{ fontSize: '10px', color: 'var(--sp-text-muted)' }}>Scrap: {line.scrapPercent}%</div>
+                          {line.newScrapPercent !== line.oldScrapPercent && (
+                            <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)' }}>
+                              Scrap: {line.oldScrapPercent}% → {line.newScrapPercent}%
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
-
-                {/* Right Column: Proposed Engineering Revision */}
-                <div className="sales-table-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--sp-border)' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', color: 'var(--sp-text)' }}>
-                      Proposed Redline ({redlineComparison.targetRevision})
-                    </div>
-                    <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                      {redlineComparison.proposedLines.length} components
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {redlineComparison.proposedLines.map((line, idx) => {
-                      const isAdded = line.changeStatus === 'ADDED';
-                      const isModified = line.changeStatus === 'MODIFIED';
-                      const isRemoved = line.changeStatus === 'REMOVED';
-
-                      return (
-                        <div
-                          key={idx}
-                          style={{
-                            padding: '8px 10px',
-                            borderRadius: '6px',
-                            border: '1px solid var(--sp-border-subtle)',
-                            background: isAdded
-                              ? 'var(--sp-brand-soft)'
-                              : isModified
-                              ? 'rgba(245, 158, 11, 0.08)'
-                              : isRemoved
-                              ? 'rgba(239, 68, 68, 0.08)'
-                              : 'var(--sp-surface-subtle)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            fontSize: '12px'
-                          }}
-                        >
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontWeight: 500, textDecoration: isRemoved ? 'line-through' : 'none', color: 'var(--sp-text)' }}>
-                                {line.name}
-                              </span>
-                              {isAdded && <span className="sales-sub-highlight">NEW</span>}
-                              {isModified && <span className="sales-sub-warning">MODIFIED</span>}
-                              {isRemoved && <span className="sales-sub-warning" style={{ color: 'var(--sp-danger)' }}>DELETED</span>}
-                            </div>
-                            <div className="sales-sub-ref">{line.sku}</div>
-                            {line.changeNotes && (
-                              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', fontStyle: 'italic', marginTop: '2px' }}>
-                                “{line.changeNotes}”
-                              </div>
-                            )}
-                          </div>
-
-                          <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {isModified ? (
-                              <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
-                                <span style={{ textDecoration: 'line-through', color: 'var(--sp-text-muted)', marginRight: '4px' }}>
-                                  {line.previousQuantity}
-                                </span>
-                                → {line.quantity} {line.unit}
-                              </div>
-                            ) : (
-                              <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
-                                {line.quantity} {line.unit}
-                              </span>
-                            )}
-                            <div style={{ fontSize: '10px', color: 'var(--sp-text-muted)' }}>Scrap: {line.scrapPercent}%</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--sp-text-muted)' }}>
-              Select an ECO from the register to explore its visual BOM redline diff.
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 5. TAB 3: DEPARTMENT SIGN-OFF MATRIX */}
-      {activeTab === 'signoffs' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {selectedEcoDetail ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--sp-border)',
-                  background: 'var(--sp-surface)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '12px'
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)' }}>
-                    Cross-Department Stage-Gate Approvals ({selectedEcoDetail.ecoNumber})
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
-                    Engineering change governance requires formal digital sign-off from all 4 disciplines prior to cutover.
-                  </div>
-                </div>
-
-                {selectedEcoDetail.status === 'UNDER_REVIEW' && (
-                  <button
-                    type="button"
-                    className="sales-action-btn primary"
-                    onClick={() => setIsSignOffModalOpen(true)}
-                  >
-                    <UserCheck size={12} />
-                    <span>Submit Sign-Off Review</span>
-                  </button>
                 )}
               </div>
 
-              {/* 4 Department Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
-                {selectedEcoDetail.signOffs.map((sign) => {
-                  const isApproved = sign.status === 'APPROVED';
+              {/* Card 3: Departmental Sign-Off Ledger */}
+              <div className="linear-sublines-card">
+                <div className="linear-sublines-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ShieldCheck size={13} style={{ color: 'var(--sp-brand)' }} />
+                    <span>Departmental Sign-Off Ledger ({selectedEcoDetail.signOffs?.filter(s => s.status === 'APPROVED').length || 0}/{selectedEcoDetail.signOffs?.length || 0} Completed)</span>
+                  </div>
+                  {selectedEcoDetail.status === 'UNDER_REVIEW' && (
+                    <button
+                      type="button"
+                      className="sales-action-btn primary"
+                      style={{ height: '22px', fontSize: '11px', padding: '0 8px' }}
+                      onClick={() => setIsSignOffModalOpen(true)}
+                    >
+                      <Plus size={11} />
+                      <span>Record Sign-Off</span>
+                    </button>
+                  )}
+                </div>
 
-                  return (
-                    <div key={sign.id} className="sales-metric-card" style={{ gap: '10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                          {sign.department}
-                        </span>
-                        <Status label={sign.status} />
-                      </div>
+                {(!selectedEcoDetail.signOffs || selectedEcoDetail.signOffs.length === 0) ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--sp-text-muted)', fontSize: '12px' }}>
+                    No sign-offs recorded.
+                  </div>
+                ) : (
+                  <div>
+                    {selectedEcoDetail.signOffs.map((s) => (
+                      <div key={s.id} className="linear-subline-item" style={{ alignItems: 'flex-start', padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 600, fontSize: '12.5px', minWidth: '100px', textTransform: 'capitalize' }}>
+                              {s.department.toLowerCase()}
+                            </span>
+                            <Status label={s.status} />
+                            <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
+                              Role: <strong>{s.signOffRole || getDeptRoleDefault(s.department)}</strong>
+                            </span>
+                          </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px' }}>
-                        <div>
-                          <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--sp-text-muted)' }}>Role: </span>
-                          <strong>{sign.signOffRole || getDeptRoleDefault(sign.department)}</strong>
+                          <div style={{ fontSize: '12px', color: 'var(--sp-text-secondary)', marginTop: '2px' }}>
+                            {s.comments ? (
+                              <span style={{ fontStyle: 'italic' }}>“{s.comments}”</span>
+                            ) : (
+                              <span style={{ color: 'var(--sp-text-muted)' }}>
+                                {s.status === 'APPROVED' ? 'Approved without additional conditions.' : 'Awaiting formal departmental review.'}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        {isApproved && (
-                          <>
-                            <div>
-                              <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--sp-text-muted)' }}>Approver: </span>
-                              <span>{sign.approverName || 'Authorized Engineer'}</span>
-                            </div>
-                            {sign.approvedAt && (
-                              <div className="sales-date-cell">
-                                Signed: {new Date(sign.approvedAt).toLocaleDateString()}
-                              </div>
-                            )}
-                            {sign.comments && (
-                              <div style={{ fontSize: '11px', fontStyle: 'italic', color: 'var(--sp-text-muted)' }}>
-                                “{sign.comments}”
-                              </div>
-                            )}
-                          </>
-                        )}
+
+                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                          <span style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--sp-text)' }}>
+                            {s.approverName || '—'}
+                          </span>
+                          {s.approvedAt && (
+                            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                              {formatDate(s.approvedAt)}
+                            </span>
+                          )}
+                          {s.status === 'PENDING' && selectedEcoDetail.status === 'UNDER_REVIEW' && (
+                            <button
+                              type="button"
+                              className="sales-action-btn secondary"
+                              style={{ height: '20px', padding: '0 6px', fontSize: '10.5px', marginTop: '2px' }}
+                              onClick={() => {
+                                setSignDepartment(s.department);
+                                setIsSignOffModalOpen(true);
+                              }}
+                            >
+                              <span>Sign Off</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Card 4: Cutover Execution Details (if implemented) */}
+              {selectedEcoDetail.status === 'IMPLEMENTED' && (
+                <div className="linear-sublines-card">
+                  <div className="linear-sublines-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <CheckCircle2 size={13} style={{ color: 'var(--sp-success)' }} />
+                      <span>Shop Floor Cutover & Active BOM Execution</span>
+                    </div>
+                  </div>
+                  <div style={{ padding: '14px 16px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '12px' }}>
+                    <div>
+                      <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>Cutover Timestamp</div>
+                      <div style={{ fontWeight: 600, marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>
+                        {formatDate(selectedEcoDetail.implementedAt)}
                       </div>
                     </div>
-                  );
-                })}
+                    <div>
+                      <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>Active Production BOM</div>
+                      <div style={{ fontWeight: 600, marginTop: '2px' }}>
+                        Revision {selectedEcoDetail.implementedBomRevision || selectedEcoDetail.targetRevision} (Live)
+                      </div>
+                    </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>Cutover Implementation Notes</div>
+                      <div style={{ marginTop: '2px', color: 'var(--sp-text-secondary)', lineHeight: 1.5 }}>
+                        {selectedEcoDetail.implementationNotes || 'Active BOM revision incremented in production database.'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Properties Sidebar */}
+            <div className="linear-properties-sidebar">
+              <div className="linear-properties-card">
+                <div className="linear-properties-title">Properties</div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Status</span>
+                  <Status label={selectedEcoDetail.status} />
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Severity</span>
+                  <span className={`priority-tag priority-${selectedEcoDetail.changeSeverity === 'CRITICAL' ? 'urgent' : selectedEcoDetail.changeSeverity === 'MAJOR' ? 'high' : 'medium'}`}>
+                    {selectedEcoDetail.changeSeverity}
+                  </span>
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Target Product</span>
+                  <span className="linear-property-value" title={selectedEcoDetail.finishedItemName}>
+                    {selectedEcoDetail.finishedSku}
+                  </span>
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">BOM Revision</span>
+                  <span className="linear-property-value" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {selectedEcoDetail.baseRevision} → {selectedEcoDetail.targetRevision}
+                  </span>
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Cutover Target</span>
+                  <span className="linear-property-value" style={{ fontWeight: 600, color: 'var(--sp-warning)' }}>
+                    {formatDate(selectedEcoDetail.effectiveCutoverDate)}
+                  </span>
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Created By</span>
+                  <span className="linear-property-value">{selectedEcoDetail.createdByName}</span>
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Created Date</span>
+                  <span className="linear-property-value">
+                    {formatDate(selectedEcoDetail.createdAt)}
+                  </span>
+                </div>
+
+                {selectedEcoDetail.implementedAt && (
+                  <div className="linear-property-row">
+                    <span className="linear-property-label">Implemented</span>
+                    <span className="linear-property-value" style={{ color: 'var(--sp-success)' }}>
+                      {formatDate(selectedEcoDetail.implementedAt)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions Card in Sidebar */}
+              {(selectedEcoDetail.status === 'UNDER_REVIEW' || selectedEcoDetail.status === 'APPROVED') && (
+                <div className="linear-properties-card">
+                  <div className="linear-properties-title">Actions</div>
+                  {selectedEcoDetail.status === 'UNDER_REVIEW' && (
+                    <button
+                      type="button"
+                      className="sales-action-btn primary"
+                      style={{ width: '100%', justifyContent: 'center' }}
+                      onClick={() => setIsSignOffModalOpen(true)}
+                    >
+                      <UserCheck size={12} />
+                      <span>Record Sign-Off</span>
+                    </button>
+                  )}
+                  {selectedEcoDetail.status === 'APPROVED' && (
+                    <button
+                      type="button"
+                      className="sales-action-btn primary"
+                      style={{ width: '100%', justifyContent: 'center' }}
+                      onClick={() => setIsImplementModalOpen(true)}
+                    >
+                      <Zap size={12} />
+                      <span>Execute Cutover</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* 1. Linear Executive Telemetry Metric Strip */}
+          <div className="linear-kpi-grid">
+            <div className="linear-kpi-card">
+              <div className="linear-kpi-top">
+                <span className="linear-kpi-title">Active ECO Pipeline</span>
+                <GitPullRequest size={14} className="linear-kpi-icon" />
+              </div>
+              <div className="linear-kpi-value">
+                {metrics?.activeEcos ?? activeEcosCount} Active
+              </div>
+              <div className="linear-kpi-caption">
+                Under review or approved for release
               </div>
             </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--sp-text-muted)' }}>
-              Select an ECO to view its departmental sign-off matrix.
+
+            <div className="linear-kpi-card">
+              <div className="linear-kpi-top">
+                <span className="linear-kpi-title">Pending Sign-Offs</span>
+                <UserCheck size={14} className="linear-kpi-icon" />
+              </div>
+              <div className="linear-kpi-value">
+                {metrics?.pendingSignOffs ?? pendingSignOffsCount} Stage-gates
+              </div>
+              <div className="linear-kpi-caption">
+                Multi-department stakeholder sign-offs
+              </div>
             </div>
-          )}
-        </div>
+
+            <div className="linear-kpi-card">
+              <div className="linear-kpi-top">
+                <span className="linear-kpi-title">Approved for Cutover</span>
+                <FileCheck size={14} className="linear-kpi-icon" />
+              </div>
+              <div className="linear-kpi-value">
+                {metrics?.approvedPendingCutover ?? approvedCutoverCount} Approved
+              </div>
+              <div className="linear-kpi-caption">
+                100% signed, ready to increment BOM
+              </div>
+            </div>
+
+            <div className="linear-kpi-card">
+              <div className="linear-kpi-top">
+                <span className="linear-kpi-title">Critical Severity</span>
+                <Flame size={14} className="linear-kpi-icon" />
+              </div>
+              <div className="linear-kpi-value">
+                {metrics?.criticalSeverityCount ?? criticalCount} Critical
+              </div>
+              <div className="linear-kpi-caption">
+                Field warranty or safety redesigns
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Top Header & Action Strip */}
+          <div className="sales-subnav-container">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FileText size={14} style={{ color: 'var(--sp-brand)' }} />
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>Change Orders Register</span>
+              <span className="sales-subnav-badge">{ecos.length}</span>
+            </div>
+
+            <div className="sales-subnav-actions">
+              <button
+                type="button"
+                className="sales-action-btn secondary"
+                onClick={loadData}
+                disabled={loading || busy}
+                title="Refresh ECO Registers"
+              >
+                <RotateCcw size={12} className={loading || busy ? 'spin' : ''} />
+                <span>Refresh</span>
+              </button>
+
+              <button
+                type="button"
+                className="sales-action-btn primary"
+                onClick={() => setIsCreateModalOpen(true)}
+              >
+                <Plus size={12} />
+                <span>Propose ECO</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 3. Toolbar & High-Density Table */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {/* Toolbar */}
+            <div className="sales-toolbar">
+              <div className="sales-pill-group">
+                <button
+                  type="button"
+                  className={`sales-pill-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setStatusFilter('ALL')}
+                >
+                  <span>All</span>
+                  <span className="sales-pill-count">{ecos.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sales-pill-btn ${statusFilter === 'UNDER_REVIEW' ? 'active' : ''}`}
+                  onClick={() => setStatusFilter('UNDER_REVIEW')}
+                >
+                  <span>Under Review</span>
+                  <span className="sales-pill-count">
+                    {ecos.filter((e) => e.status === 'UNDER_REVIEW').length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`sales-pill-btn ${statusFilter === 'APPROVED' ? 'active' : ''}`}
+                  onClick={() => setStatusFilter('APPROVED')}
+                >
+                  <span>Approved</span>
+                  <span className="sales-pill-count">
+                    {ecos.filter((e) => e.status === 'APPROVED').length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`sales-pill-btn ${statusFilter === 'IMPLEMENTED' ? 'active' : ''}`}
+                  onClick={() => setStatusFilter('IMPLEMENTED')}
+                >
+                  <span>Implemented</span>
+                  <span className="sales-pill-count">
+                    {ecos.filter((e) => e.status === 'IMPLEMENTED').length}
+                  </span>
+                </button>
+              </div>
+
+              <div className="sales-search-box">
+                <Search size={13} className="sales-search-icon" />
+                <input
+                  type="text"
+                  className="sales-search-input"
+                  placeholder="Filter by ECO #, title, SKU, or reason…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="sales-search-clear"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* High-Density Redesigned ECO Table (Zero Overlap, Guaranteed Fit, Styled Body Tooltips) */}
+            <div className="sales-table-card">
+              <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '220px' }}>ECO Ref</th>
+                    <th>Change Title</th>
+                    <th style={{ width: '210px' }}>Target Product</th>
+                    <th style={{ width: '105px' }}>Revision</th>
+                    <th style={{ width: '95px' }}>Cutover</th>
+                    <th style={{ width: '95px' }}>Sign-Offs</th>
+                    <th style={{ width: '105px' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEcos.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--sp-text-muted)' }}>
+                        No engineering change orders found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredEcos.map((eco) => {
+                      const isSelected = eco.id === selectedEcoId;
+                      const formattedCutover = formatDate(eco.effectiveCutoverDate);
+
+                      return (
+                        <tr
+                          key={eco.id}
+                          className="sales-row production-clickable-row"
+                          onClick={() => selectEco(eco.id)}
+                          style={{
+                            cursor: 'pointer',
+                            background: isSelected ? 'var(--sp-brand-soft)' : undefined
+                          }}
+                        >
+                          {/* ECO Ref with interactive pill & priority tag */}
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <StyledTooltip content={`ECO #${eco.ecoNumber} · ${eco.changeSeverity} Severity — Click to inspect details`}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                <button
+                                  type="button"
+                                  className="order-number-pill interactive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    selectEco(eco.id);
+                                  }}
+                                  title={`Inspect ${eco.ecoNumber}`}
+                                >
+                                  <span>{eco.ecoNumber}</span>
+                                  <ArrowUpRight size={11} className="order-link-arrow" />
+                                </button>
+                                <span className={`priority-tag priority-${eco.changeSeverity === 'CRITICAL' ? 'urgent' : eco.changeSeverity === 'MAJOR' ? 'high' : 'medium'}`}>
+                                  {eco.changeSeverity}
+                                </span>
+                              </div>
+                            </StyledTooltip>
+                          </td>
+
+                          {/* Change Title with Styled Tooltip */}
+                          <td style={{ overflow: 'hidden' }}>
+                            <StyledTooltip content={eco.title} align="left">
+                              <span
+                                style={{
+                                  fontWeight: 500,
+                                  color: 'var(--sp-text)',
+                                  fontSize: '12.5px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  display: 'inline-block',
+                                  maxWidth: '100%'
+                                }}
+                              >
+                                {eco.title}
+                              </span>
+                            </StyledTooltip>
+                          </td>
+
+                          {/* Target Product with SKU Badge and Styled Tooltip */}
+                          <td style={{ overflow: 'hidden' }}>
+                            <StyledTooltip
+                              align="left"
+                              content={
+                                <div>
+                                  <div style={{ fontWeight: 600, color: '#fff', marginBottom: '2px' }}>{eco.finishedItemName}</div>
+                                  <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '10.5px' }}>
+                                    SKU: {eco.finishedSku} · Base Revision: {eco.baseRevision}
+                                  </div>
+                                </div>
+                              }
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
+                                <span className="sales-ref-badge" style={{ fontSize: '10.5px', flexShrink: 0 }}>
+                                  {eco.finishedSku}
+                                </span>
+                                <span
+                                  style={{
+                                    fontWeight: 500,
+                                    color: 'var(--sp-text)',
+                                    fontSize: '12px',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {eco.finishedItemName}
+                                </span>
+                              </div>
+                            </StyledTooltip>
+                          </td>
+
+                          {/* Revision Shift */}
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <StyledTooltip content={`BOM revision increments from ${eco.baseRevision} to ${eco.targetRevision} upon cutover`}>
+                              <span className="sales-warehouse-pill" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: '11px', whiteSpace: 'nowrap' }}>
+                                {eco.baseRevision} → {eco.targetRevision}
+                              </span>
+                            </StyledTooltip>
+                          </td>
+
+                          {/* Cutover Target Date */}
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <StyledTooltip content={`Effective shop floor cutover: ${formattedCutover}`}>
+                              <div style={{ fontSize: '12px', color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                {formattedCutover}
+                              </div>
+                            </StyledTooltip>
+                          </td>
+
+                          {/* Department Sign-Offs */}
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <StyledTooltip content={`${eco.signOffsCompleted} of ${eco.totalSignOffs} departmental sign-offs recorded`}>
+                              <span
+                                className={
+                                  eco.signOffsCompleted === eco.totalSignOffs
+                                    ? 'sales-sub-highlight'
+                                    : 'sales-sub-warning'
+                                }
+                                style={{ fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' }}
+                              >
+                                {eco.signOffsCompleted}/{eco.totalSignOffs} Signed
+                              </span>
+                            </StyledTooltip>
+                          </td>
+
+                          {/* Status */}
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <StyledTooltip content={`Current ECO lifecycle state: ${eco.status}`}>
+                              <Status label={eco.status} />
+                            </StyledTooltip>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
 
       {/* MODAL: PROPOSE NEW ECO */}
@@ -1228,9 +1194,9 @@ export function EngineeringChangePanel({ items, role, notify }: EngineeringChang
           <div className="leads-modal-dialog" style={{ maxWidth: '440px' }}>
             <div className="leads-modal-header">
               <div>
-                <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Departmental Sign-Off Review</h3>
+                <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Digital Department Sign-Off</h3>
                 <p style={{ margin: '2px 0 0', fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
-                  Cast a digital stage-gate vote for {selectedEcoDetail?.ecoNumber}.
+                  Record review gate for {selectedEcoDetail?.ecoNumber || 'ECO'}.
                 </p>
               </div>
               <button
@@ -1246,33 +1212,45 @@ export function EngineeringChangePanel({ items, role, notify }: EngineeringChang
             <form onSubmit={handleSubmitSignOff} style={{ display: 'flex', flexDirection: 'column' }}>
               <div className="leads-modal-body">
                 <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11.5px', fontWeight: 500, color: 'var(--sp-text-muted)' }}>
-                  Reviewing Department
+                  Department Discipline
                   <select
                     value={signDepartment}
                     onChange={(e) => setSignDepartment(e.target.value as DepartmentType)}
                     style={{ height: '32px', padding: '0 8px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', fontSize: '12px' }}
                   >
                     <option value="ENGINEERING">ENGINEERING (Design Authority)</option>
-                    <option value="MANUFACTURING">MANUFACTURING (Plant Tooling)</option>
+                    <option value="MANUFACTURING">MANUFACTURING (Tooling & Fixtures)</option>
                     <option value="QUALITY">QUALITY (ISO-9001 Compliance)</option>
-                    <option value="FINANCE">FINANCE (BOM Standard Cost)</option>
+                    <option value="FINANCE">FINANCE (Unit Cost & Margins)</option>
                   </select>
                 </label>
 
                 <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11.5px', fontWeight: 500, color: 'var(--sp-text-muted)' }}>
-                  Stage-Gate Decision
-                  <select
-                    value={signStatus}
-                    onChange={(e) => setSignStatus(e.target.value as 'APPROVED' | 'REJECTED')}
-                    style={{ height: '32px', padding: '0 8px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', fontSize: '12px' }}
-                  >
-                    <option value="APPROVED">APPROVE ECO (Proceed to Cutover)</option>
-                    <option value="REJECTED">REJECT ECO (Send Back to Engineering)</option>
-                  </select>
+                  Review Disposition
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    <button
+                      type="button"
+                      className={`sales-pill-btn ${signStatus === 'APPROVED' ? 'active' : ''}`}
+                      onClick={() => setSignStatus('APPROVED')}
+                      style={{ flex: 1, justifyContent: 'center' }}
+                    >
+                      <Check size={12} />
+                      <span>Approve Change</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`sales-pill-btn ${signStatus === 'REJECTED' ? 'active' : ''}`}
+                      onClick={() => setSignStatus('REJECTED')}
+                      style={{ flex: 1, justifyContent: 'center', color: signStatus === 'REJECTED' ? 'var(--sp-danger)' : undefined }}
+                    >
+                      <X size={12} />
+                      <span>Reject Change</span>
+                    </button>
+                  </div>
                 </label>
 
                 <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11.5px', fontWeight: 500, color: 'var(--sp-text-muted)' }}>
-                  Review Comments / Engineering Feedback
+                  Approver Comments & Engineering Evidence
                   <textarea
                     rows={3}
                     placeholder="Sign-off notes, tooling verification status, or rejection rationale…"

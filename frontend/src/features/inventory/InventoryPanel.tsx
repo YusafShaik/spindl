@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
-  Barcode,
   Boxes,
   ClipboardCheck,
   Download,
@@ -13,12 +12,10 @@ import {
   Package,
   Search,
   SlidersHorizontal,
-  Warehouse,
   X,
 } from 'lucide-react';
 import { Status } from '../../components/ui/Status';
 import { CustomFieldEditor } from '../customers/CustomFieldEditor';
-import { InventoryWarehousePanel } from './InventoryWarehousePanel';
 import { InventoryCycleCountPanel } from './InventoryCycleCountPanel';
 import { API, apiFetch } from '../../lib/api/client';
 import { formatCurrency, formatCompactRupees } from '../../lib/utils/currency';
@@ -28,7 +25,7 @@ import type {
   ItemSummary,
 } from '../../types/inventory';
 
-type InventoryTab = 'stock' | 'movements' | 'warehouses' | 'counts';
+type InventoryTab = 'stock' | 'movements' | 'counts';
 type CategoryFilter = 'ALL' | 'RAW' | 'WIP' | 'FINISHED' | 'LOW_STOCK';
 
 interface MovementPagination {
@@ -82,6 +79,7 @@ export function InventoryPanel({
   const [movementItemId, setMovementItemId] = useState('');
 
   // Top metric calculations
+  const itemUnitMap = useMemo(() => new Map(allItems.map((i) => [i.id, i.unit])), [allItems]);
   const totalUnitsOnHand = useMemo(
     () => allItems.reduce((sum, item) => sum + Number(item.stock || 0), 0),
     [allItems]
@@ -284,14 +282,6 @@ export function InventoryPanel({
           </button>
           <button
             type="button"
-            className={`inventory-subnav-tab ${activeTab === 'warehouses' ? 'active' : ''}`}
-            onClick={() => setActiveTab('warehouses')}
-          >
-            <Warehouse size={15} aria-hidden="true" />
-            Warehouses & transfers
-          </button>
-          <button
-            type="button"
             className={`inventory-subnav-tab ${activeTab === 'counts' ? 'active' : ''}`}
             onClick={() => setActiveTab('counts')}
           >
@@ -306,54 +296,34 @@ export function InventoryPanel({
       {/* TAB A: Stock Overview */}
       {activeTab === 'stock' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* Category & Alert Filter Pills + Search */}
-          <div className="sales-toolbar">
-            <div className="sales-pill-filters" role="tablist">
-              <button
-                type="button"
-                className={`sales-pill-btn ${categoryFilter === 'ALL' ? 'active' : ''}`}
-                onClick={() => setCategoryFilter('ALL')}
-              >
-                All items <span className="sales-pill-count">{categoryCounts.all}</span>
-              </button>
-              <button
-                type="button"
-                className={`sales-pill-btn ${categoryFilter === 'RAW' ? 'active' : ''}`}
-                onClick={() => setCategoryFilter('RAW')}
-              >
-                Raw materials <span className="sales-pill-count">{categoryCounts.raw}</span>
-              </button>
-              <button
-                type="button"
-                className={`sales-pill-btn ${categoryFilter === 'WIP' ? 'active' : ''}`}
-                onClick={() => setCategoryFilter('WIP')}
-              >
-                Work in progress <span className="sales-pill-count">{categoryCounts.wip}</span>
-              </button>
-              <button
-                type="button"
-                className={`sales-pill-btn ${categoryFilter === 'FINISHED' ? 'active' : ''}`}
-                onClick={() => setCategoryFilter('FINISHED')}
-              >
-                Finished goods <span className="sales-pill-count">{categoryCounts.finished}</span>
-              </button>
-              <button
-                type="button"
-                className={`sales-pill-btn ${categoryFilter === 'LOW_STOCK' ? 'active' : ''}`}
-                onClick={() => setCategoryFilter('LOW_STOCK')}
-              >
-                Low stock alerts{' '}
-                <span
-                  className="sales-pill-count"
-                  style={
-                    categoryCounts.lowStock > 0
-                      ? { background: 'rgba(245, 158, 11, 0.15)', color: '#b45309' }
-                      : undefined
-                  }
+          {/* Common Category & Alert Filter + Search */}
+          <div className="sales-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Filter size={14} style={{ color: 'var(--sp-text-muted)', flexShrink: 0 }} aria-hidden="true" />
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
+                  style={{
+                    height: '32px',
+                    padding: '0 28px 0 10px',
+                    fontSize: '12.5px',
+                    fontWeight: 500,
+                    borderRadius: '6px',
+                    border: '1px solid var(--sp-border)',
+                    background: 'var(--sp-surface)',
+                    color: 'var(--sp-text)',
+                    cursor: 'pointer',
+                  }}
+                  aria-label="Filter catalog items by category or stock status"
                 >
-                  {categoryCounts.lowStock}
-                </span>
-              </button>
+                  <option value="ALL">All Items ({categoryCounts.all})</option>
+                  <option value="RAW">Raw Materials ({categoryCounts.raw})</option>
+                  <option value="WIP">Work in Progress ({categoryCounts.wip})</option>
+                  <option value="FINISHED">Finished Goods ({categoryCounts.finished})</option>
+                  <option value="LOW_STOCK">Low Stock Alerts ({categoryCounts.lowStock})</option>
+                </select>
+              </div>
             </div>
 
             <div className="sales-search-box">
@@ -407,13 +377,6 @@ export function InventoryPanel({
                                 {item.name}
                               </strong>
                               <small>Category: {item.category}</small>
-                              {item.barcode && (
-                                <div style={{ marginTop: '2px' }}>
-                                  <span className="product-barcode-chip">
-                                    <Barcode size={10} /> {item.barcode}
-                                  </span>
-                                </div>
-                              )}
                             </div>
                           </div>
                         </td>
@@ -509,211 +472,295 @@ export function InventoryPanel({
 
       {/* TAB B: Movement Ledger */}
       {activeTab === 'movements' && (
-        <section className="panel directory-panel inventory-movement-history">
-          <div className="panel-header directory-top">
-            <div>
-              <h2>
-                Inventory movement history{' '}
-                <span className="record-count">{movementPage.totalElements}</span>
-              </h2>
-              <p>Traceable ledger of all stock additions, deductions, transfers, and corrections.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Movement Toolbar */}
+          <div className="sales-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+              <div className="sales-search-box" style={{ maxWidth: '360px', width: '100%', flexShrink: 0 }}>
+                <Search size={14} className="sales-search-icon" aria-hidden="true" />
+                <input
+                  className="sales-search-input"
+                  placeholder="Filter movements by SKU, item, warehouse, reason..."
+                  value={movementSearch}
+                  onChange={(event) => {
+                    setMovementSearch(event.target.value);
+                    setMovementPage((p) => ({ ...p, page: 0 }));
+                  }}
+                />
+                {movementSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMovementSearch('');
+                      setMovementPage((p) => ({ ...p, page: 0 }));
+                    }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--sp-text-muted)', display: 'flex', alignItems: 'center' }}
+                    aria-label="Clear search"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--sp-text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                <span>From</span>
+                <input
+                  type="date"
+                  value={movementFrom}
+                  onChange={(event) => {
+                    setMovementFrom(event.target.value);
+                    setMovementPage((p) => ({ ...p, page: 0 }));
+                  }}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    fontSize: '12px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--sp-border)',
+                    background: 'var(--sp-surface)',
+                    color: 'var(--sp-text)',
+                  }}
+                />
+                <span>To</span>
+                <input
+                  type="date"
+                  value={movementTo}
+                  onChange={(event) => {
+                    setMovementTo(event.target.value);
+                    setMovementPage((p) => ({ ...p, page: 0 }));
+                  }}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    fontSize: '12px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--sp-border)',
+                    background: 'var(--sp-surface)',
+                    color: 'var(--sp-text)',
+                  }}
+                />
+                {(movementFrom || movementTo) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMovementFrom('');
+                      setMovementTo('');
+                      setMovementPage((p) => ({ ...p, page: 0 }));
+                    }}
+                    className="sales-action-btn secondary"
+                    style={{ height: '32px', padding: '0 8px', fontSize: '11.5px' }}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
+              {selectedItemForLedger && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    background: 'var(--sp-surface-hover)',
+                    border: '1px solid var(--sp-border)',
+                    color: 'var(--sp-text)',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span>
+                    Item: <b>{selectedItemForLedger.sku}</b>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMovementItemId('');
+                      setMovementPage((p) => ({ ...p, page: 0 }));
+                    }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', color: 'var(--sp-text-muted)' }}
+                    aria-label="Clear item filter"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
             </div>
-            <button
-              className="button button-secondary"
-              disabled={movementExporting}
-              onClick={exportLedger}
-            >
-              <Download size={14} aria-hidden="true" />
-              {movementExporting ? 'Exporting…' : 'Export CSV'}
-            </button>
+
+            <div style={{ flexShrink: 0 }}>
+              <button
+                type="button"
+                className="sales-action-btn secondary"
+                disabled={movementExporting}
+                onClick={exportLedger}
+                style={{ height: '32px', padding: '0 12px', gap: '6px', whiteSpace: 'nowrap' }}
+              >
+                <Download size={13} aria-hidden="true" />
+                {movementExporting ? 'Exporting…' : 'Export CSV'}
+              </button>
+            </div>
           </div>
 
-          {/* Movement Filters Bar */}
-          <div className="movement-filters">
-            <div className="search-box">
-              <Search size={14} aria-hidden="true" />
-              <input
-                className="search-input"
-                placeholder="Search SKU, item, warehouse, reason, reference…"
-                value={movementSearch}
-                onChange={(event) => {
-                  setMovementSearch(event.target.value);
-                  setMovementPage((p) => ({ ...p, page: 0 }));
-                }}
-              />
-            </div>
-            <label>
-              From
-              <input
-                type="date"
-                value={movementFrom}
-                onChange={(event) => {
-                  setMovementFrom(event.target.value);
-                  setMovementPage((p) => ({ ...p, page: 0 }));
-                }}
-              />
-            </label>
-            <label>
-              To
-              <input
-                type="date"
-                value={movementTo}
-                onChange={(event) => {
-                  setMovementTo(event.target.value);
-                  setMovementPage((p) => ({ ...p, page: 0 }));
-                }}
-              />
-            </label>
+          {/* Movement Table Card */}
+          <div className="sales-table-card">
+            <div className="sales-table-scroll">
+              <table className="sales-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '160px' }}>DATE & TIME</th>
+                    <th style={{ minWidth: '240px' }}>ITEM & SPECIFICATION</th>
+                    <th style={{ width: '150px' }}>WAREHOUSE</th>
+                    <th style={{ width: '150px' }}>REASON</th>
+                    <th style={{ width: '160px' }}>REFERENCE</th>
+                    <th style={{ width: '130px', textAlign: 'right' }}>QUANTITY CHANGE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movementLoading ? (
+                    <tr>
+                      <td colSpan={6} className="sales-empty-cell">
+                        <div className="sales-empty-state">
+                          <div className="sales-empty-title">Loading movement ledger…</div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : movementRows.length ? (
+                    movementRows.map((movement) => {
+                      const isPositive = movement.quantityDelta > 0;
+                      const itemUnit = itemUnitMap.get(movement.itemId) || '';
 
-            {selectedItemForLedger && (
-              <div className="active-item-filter-chip">
+                      return (
+                        <tr key={movement.id} className="sales-row">
+                          <td style={{ color: 'var(--sp-text-secondary)', fontSize: '12px', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                            {new Date(movement.createdAt).toLocaleString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              <strong style={{ fontSize: '12.5px', color: 'var(--sp-text)' }}>
+                                {movement.itemName}
+                              </strong>
+                              <div>
+                                <span
+                                  className="sales-ref-badge"
+                                  style={{
+                                    fontSize: '11px',
+                                    fontFamily: 'var(--sp-font-mono, monospace)',
+                                    fontVariantNumeric: 'tabular-nums',
+                                  }}
+                                >
+                                  {movement.sku}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '12.5px', color: 'var(--sp-text)' }}>
+                              {movement.warehouseName || movement.warehouseCode || 'Main Warehouse'}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="sales-type-badge">{movement.reason}</span>
+                          </td>
+                          <td>
+                            <span
+                              className="sales-ref-badge"
+                              style={{
+                                fontSize: '11px',
+                                fontFamily: 'var(--sp-font-mono, monospace)',
+                                fontVariantNumeric: 'tabular-nums',
+                              }}
+                            >
+                              {movement.sourceReference}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                fontWeight: 600,
+                                fontSize: '12.5px',
+                                fontVariantNumeric: 'tabular-nums',
+                                color: isPositive ? '#16a34a' : '#dc2626',
+                              }}
+                            >
+                              {isPositive ? `+${movement.quantityDelta.toLocaleString()}` : movement.quantityDelta.toLocaleString()}
+                              {itemUnit && (
+                                <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--sp-text-muted)', marginLeft: '4px' }}>
+                                  {itemUnit}
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="sales-empty-cell">
+                        <div className="sales-empty-state">
+                          <Boxes size={32} className="sales-empty-icon" />
+                          <div className="sales-empty-title">No movement records found</div>
+                          <div className="sales-empty-desc">
+                            No movement records match the current filters.
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="sales-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderTop: '1px solid var(--sp-border)', fontSize: '12px', color: 'var(--sp-text-muted)' }}>
+              <span>
+                Showing{' '}
+                <strong style={{ color: 'var(--sp-text)' }}>
+                  {movementPage.totalElements ? movementPage.page * movementPage.pageSize + 1 : 0}
+                </strong>{' '}
+                –{' '}
+                <strong style={{ color: 'var(--sp-text)' }}>
+                  {Math.min((movementPage.page + 1) * movementPage.pageSize, movementPage.totalElements)}
+                </strong>{' '}
+                of <strong style={{ color: 'var(--sp-text)' }}>{movementPage.totalElements}</strong> movements
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="sales-action-btn secondary"
+                  disabled={movementPage.page <= 0 || movementLoading}
+                  onClick={() => setMovementPage((p) => ({ ...p, page: Math.max(0, p.page - 1) }))}
+                  style={{ height: '28px', padding: '0 10px' }}
+                >
+                  Previous
+                </button>
                 <span>
-                  Filtered by <b>{selectedItemForLedger.sku}</b> ({selectedItemForLedger.name})
+                  Page {movementPage.totalPages ? movementPage.page + 1 : 0} of {movementPage.totalPages || 1}
                 </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setMovementItemId('');
-                    setMovementPage((p) => ({ ...p, page: 0 }));
-                  }}
-                  aria-label="Clear item filter"
+                  className="sales-action-btn secondary"
+                  disabled={!movementPage.totalPages || movementPage.page >= movementPage.totalPages - 1 || movementLoading}
+                  onClick={() => setMovementPage((p) => ({ ...p, page: p.page + 1 }))}
+                  style={{ height: '28px', padding: '0 10px' }}
                 >
-                  <X size={13} />
+                  Next
                 </button>
               </div>
-            )}
-          </div>
-
-          {/* Movement Table */}
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>DATE & TIME</th>
-                  <th>WAREHOUSE</th>
-                  <th>ITEM</th>
-                  <th>REASON</th>
-                  <th>REFERENCE</th>
-                  <th style={{ textAlign: 'right' }}>CHANGE</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movementLoading ? (
-                  <tr>
-                    <td className="empty-cell" colSpan={6}>
-                      Loading movement ledger…
-                    </td>
-                  </tr>
-                ) : movementRows.length ? (
-                  movementRows.map((movement) => {
-                    const isPositive = movement.quantityDelta > 0;
-
-                    return (
-                      <tr key={movement.id}>
-                        <td className="date-cell">
-                          {new Date(movement.createdAt).toLocaleString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-                        <td>
-                          <b>{movement.warehouseName || movement.warehouseCode || 'Main Warehouse'}</b>
-                        </td>
-                        <td>
-                          <div className="party-name">
-                            <b>{movement.itemName}</b>
-                            <small>{movement.sku}</small>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="type-cell">{movement.reason}</span>
-                        </td>
-                        <td>
-                          <span className="sales-ref-badge">{movement.sourceReference}</span>
-                        </td>
-                        <td className="amount-cell" style={{ textAlign: 'right' }}>
-                          <span className={`status ${isPositive ? 'status-green' : 'status-red'}`}>
-                            {isPositive ? (
-                              <ArrowUpRight size={12} aria-hidden="true" />
-                            ) : (
-                              <ArrowDownLeft size={12} aria-hidden="true" />
-                            )}
-                            {isPositive ? '+' : ''}
-                            {movement.quantityDelta}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td className="empty-cell" colSpan={6}>
-                      No movement records match these filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination Controls */}
-          <div className="movement-pagination">
-            <span>
-              Showing{' '}
-              {movementPage.totalElements
-                ? movementPage.page * movementPage.pageSize + 1
-                : 0}
-              –
-              {Math.min(
-                (movementPage.page + 1) * movementPage.pageSize,
-                movementPage.totalElements
-              )}{' '}
-              of {movementPage.totalElements} records
-            </span>
-            <div className="pagination-buttons">
-              <button
-                className="mini-action muted"
-                disabled={movementPage.page <= 0 || movementLoading}
-                onClick={() =>
-                  setMovementPage((p) => ({ ...p, page: Math.max(0, p.page - 1) }))
-                }
-              >
-                Previous
-              </button>
-              <span>
-                Page {movementPage.totalPages ? movementPage.page + 1 : 0} of{' '}
-                {movementPage.totalPages}
-              </span>
-              <button
-                className="mini-action muted"
-                disabled={
-                  !movementPage.totalPages ||
-                  movementPage.page >= movementPage.totalPages - 1 ||
-                  movementLoading
-                }
-                onClick={() => setMovementPage((p) => ({ ...p, page: p.page + 1 }))}
-              >
-                Next
-              </button>
             </div>
           </div>
-        </section>
+        </div>
       )}
 
-      {/* TAB C: Warehouses & Transfers */}
-      {activeTab === 'warehouses' && (
-        <InventoryWarehousePanel
-          items={allItems}
-          role={role}
-          notify={notify}
-          onPosted={onRefresh}
-        />
-      )}
-
-      {/* TAB D: Cycle Counts */}
+      {/* TAB C: Cycle Counts */}
       {activeTab === 'counts' && (
         <InventoryCycleCountPanel role={role} notify={notify} onPosted={onRefresh} />
       )}

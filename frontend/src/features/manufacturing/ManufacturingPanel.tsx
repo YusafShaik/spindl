@@ -4,21 +4,25 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  ArrowUpRight,
   Boxes,
   Calendar,
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   ClipboardList,
   Clock,
   Cpu,
   Download,
+  ExternalLink,
   Factory,
   FileText,
   Filter,
   GitBranch,
   Layers,
+  Lock,
   Package,
   Pause,
   Play,
@@ -299,6 +303,8 @@ export function ManufacturingPanel({
   const [workCenterStatusFilter, setWorkCenterStatusFilter] = useState('ALL');
 
   const [dispatchStationFilter, setDispatchStationFilter] = useState('ALL');
+  const [dispatchStatusFilter, setDispatchStatusFilter] = useState<'ALL' | 'READY' | 'IN_PROGRESS' | 'QUEUED'>('ALL');
+  const [dispatchSearch, setDispatchSearch] = useState('');
 
   // Modal Dialog States
   const [isPlanOrderModalOpen, setIsPlanOrderModalOpen] = useState(false);
@@ -711,19 +717,61 @@ export function ManufacturingPanel({
     return result;
   }, [workCenters, workCenterSearch, workCenterStatusFilter]);
 
-  const shopFloorJobCards = useMemo(() => {
-    const list: Array<{ operation: RoutingOperation; order: WorkOrder }> = [];
+  const allJobCards = useMemo(() => {
+    const list: Array<{ operation: RoutingOperation; order: WorkOrder; prevIncomplete: boolean }> = [];
     workOrders.forEach((wo) => {
       (wo.operations || []).forEach((op) => {
         if (op.status === 'IN_PROGRESS' || op.status === 'PENDING') {
-          if (dispatchStationFilter === 'ALL' || op.workCenterId === dispatchStationFilter) {
-            list.push({ operation: op, order: wo });
-          }
+          const prevIncomplete = (wo.operations || []).some(
+            (prev) => prev.sequence < op.sequence && prev.status !== 'COMPLETED'
+          );
+          list.push({ operation: op, order: wo, prevIncomplete });
         }
       });
     });
     return list;
-  }, [workOrders, dispatchStationFilter]);
+  }, [workOrders]);
+
+  const filteredJobCards = useMemo(() => {
+    let list = allJobCards;
+    if (dispatchStationFilter !== 'ALL') {
+      list = list.filter((item) => item.operation.workCenterId === dispatchStationFilter);
+    }
+    if (dispatchStatusFilter === 'READY') {
+      list = list.filter((item) => item.operation.status === 'PENDING' && !item.prevIncomplete);
+    } else if (dispatchStatusFilter === 'IN_PROGRESS') {
+      list = list.filter((item) => item.operation.status === 'IN_PROGRESS');
+    } else if (dispatchStatusFilter === 'QUEUED') {
+      list = list.filter((item) => item.operation.status === 'PENDING' && item.prevIncomplete);
+    }
+    if (dispatchSearch.trim()) {
+      const q = dispatchSearch.toLowerCase();
+      list = list.filter(
+        (item) =>
+          item.operation.name.toLowerCase().includes(q) ||
+          item.operation.workCenterCode.toLowerCase().includes(q) ||
+          item.operation.workCenterName.toLowerCase().includes(q) ||
+          item.order.orderNumber.toLowerCase().includes(q) ||
+          item.order.finishedSku.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [allJobCards, dispatchStationFilter, dispatchStatusFilter, dispatchSearch]);
+
+  const readyJobCardsCount = useMemo(
+    () => allJobCards.filter((item) => item.operation.status === 'PENDING' && !item.prevIncomplete).length,
+    [allJobCards]
+  );
+  const inProgressJobCardsCount = useMemo(
+    () => allJobCards.filter((item) => item.operation.status === 'IN_PROGRESS').length,
+    [allJobCards]
+  );
+  const queuedJobCardsCount = useMemo(
+    () => allJobCards.filter((item) => item.operation.status === 'PENDING' && item.prevIncomplete).length,
+    [allJobCards]
+  );
+
+  const shopFloorJobCards = filteredJobCards;
 
   // CSV Exporters
   const exportWorkOrdersCsv = () => {
@@ -775,366 +823,176 @@ export function ManufacturingPanel({
     notify('Work centers exported as CSV');
   };
 
+  const isDetailView = Boolean(selectedOrderId && workOrders.some((o) => o.id === selectedOrderId));
+  const activeOrder = isDetailView ? workOrders.find((o) => o.id === selectedOrderId)! : null;
+
   return (
     <div className="reports-screen-layout production-screen-layout">
-      {/* 1. Executive Telemetry Strip — Quiet Monochrome Linear Cards */}
-      <div className="sales-metric-strip">
-        <div className="sales-metric-card">
-          <div className="sales-metric-header">
-            <span className="sales-metric-label">ACTIVE WORK ORDERS</span>
-            <Factory size={13} className="sales-metric-icon" />
-          </div>
-          <div className="sales-metric-val">{openOrders.length} Active</div>
-          <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">{inProgressOrders.length} in production</span> · {releasedOrders.length} released to floor
-          </div>
-        </div>
+      {isDetailView && activeOrder ? (
+        (() => {
+          const order = activeOrder;
+          const completedOps = (order.operations || []).filter((op) => op.status === 'COMPLETED').length;
+          const totalOps = (order.operations || []).length;
+          const pctOps = totalOps > 0 ? Math.round((completedOps / totalOps) * 100) : 0;
+          const pctUnits = order.targetQuantity > 0 ? Math.min(100, Math.round((order.goodQuantity / order.targetQuantity) * 100)) : 0;
+          const isPastDue = order.dueDate && order.dueDate < today && !['COMPLETED', 'CLOSED', 'CANCELLED'].includes(order.status);
+          const hasShortages = order.materials.some((m) => m.shortageQuantity > 0);
+          const allOpsCompleted = totalOps > 0 && completedOps === totalOps;
+          const totalIssuedMaterials = order.materials.filter((m) => m.issuedQuantity >= m.requiredQuantity).length;
 
-        <div className="sales-metric-card">
-          <div className="sales-metric-header">
-            <span className="sales-metric-label">ROUTING PROGRESS</span>
-            <GitBranch size={13} className="sales-metric-icon" />
-          </div>
-          <div className="sales-metric-val">
-            {completedOperations} / {allRoutingOperations.length} Steps
-          </div>
-          <div className="sales-metric-sub">
-            <span className="sales-sub-highlight">{activeOperationsCount} active</span> running across stations
-          </div>
-        </div>
+          return (
+            <div className="production-linear-container">
+              {/* Linear Top Breadcrumbs & Actions Bar */}
+              <div className="production-linear-header">
+                <div className="production-linear-breadcrumbs">
+                  <button
+                    type="button"
+                    className="crumb-link"
+                    onClick={() => setSelectedOrderId(null)}
+                    title="Return to Work Orders register"
+                  >
+                    <ArrowLeft size={13} />
+                    <span>Work Orders</span>
+                  </button>
+                  <span className="crumb-sep">/</span>
+                  <span className="crumb-current">{order.orderNumber}</span>
 
-        <div className="sales-metric-card">
-          <div className="sales-metric-header">
-            <span className="sales-metric-label">SCHEDULE & CRITICALITY</span>
-            <Clock size={13} className="sales-metric-icon" />
-          </div>
-          <div className="sales-metric-val">
-            {lateOrders.length > 0 ? `${lateOrders.length} Past Due` : 'On Schedule'}
-          </div>
-          <div className="sales-metric-sub">
-            {materialBlocked.length > 0 ? (
-              <span className="sales-sub-warning">{materialBlocked.length} component shortages</span>
-            ) : (
-              'All component allocations fulfilled'
-            )}
-          </div>
-        </div>
+                  <select
+                    className="production-order-select"
+                    style={{ height: '26px', fontSize: '11.5px', marginLeft: '4px' }}
+                    value={selectedOrderId || ''}
+                    onChange={(e) => setSelectedOrderId(e.target.value)}
+                    aria-label="Switch active work order"
+                  >
+                    {workOrders.map((wo) => (
+                      <option key={wo.id} value={wo.id}>
+                        {wo.orderNumber} — {wo.finishedSku}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-        <div className="sales-metric-card">
-          <div className="sales-metric-header">
-            <span className="sales-metric-label">BOM & CAPACITY</span>
-            <Layers size={13} className="sales-metric-icon" />
-          </div>
-          <div className="sales-metric-val">{activeBoms.length} Approved BOMs</div>
-          <div className="sales-metric-sub">
-            {activeWorkCenters.length} active stations across shop floor
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Linear Sub-Navigation Tabs */}
-      <div className="sales-subnav-container">
-        <div className="sales-subnav-tabs">
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'work-orders' ? 'active' : ''}`}
-            onClick={() => setActiveTab('work-orders')}
-          >
-            <ClipboardList size={13} />
-            <span>Work Orders</span>
-            <span className="sales-subnav-badge">{workOrders.length}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'boms' ? 'active' : ''}`}
-            onClick={() => setActiveTab('boms')}
-          >
-            <Layers size={13} />
-            <span>Bills of Material</span>
-            <span className="sales-subnav-badge">{boms.length}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'work-centers' ? 'active' : ''}`}
-            onClick={() => setActiveTab('work-centers')}
-          >
-            <Factory size={13} />
-            <span>Work Centers</span>
-            <span className="sales-subnav-badge">{workCenters.length}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'dispatch' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dispatch')}
-          >
-            <Activity size={13} />
-            <span>Shop Floor Dispatch</span>
-            <span className="sales-subnav-badge">{shopFloorJobCards.length}</span>
-          </button>
-        </div>
-
-        <div className="sales-subnav-actions">
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={() => void run('/work-orders')}
-            disabled={loading || saving}
-            title="Refresh manufacturing data"
-            style={{ height: '30px', padding: '0 10px', fontSize: '12px' }}
-          >
-            <RefreshCw size={13} className={loading || saving ? 'spin' : ''} />
-            <span>Refresh</span>
-          </button>
-
-          {canManage && activeTab === 'boms' && (
-            <button
-              type="button"
-              className="button button-primary"
-              onClick={() => {
-                resetBomForm();
-                setIsBomModalOpen(true);
-              }}
-              style={{ height: '30px', fontSize: '12.5px' }}
-            >
-              <Plus size={13} />
-              <span>Create BOM</span>
-            </button>
-          )}
-
-          {canManage && activeTab === 'work-centers' && (
-            <button
-              type="button"
-              className="button button-primary"
-              onClick={() => setIsWorkCenterModalOpen(true)}
-              style={{ height: '30px', fontSize: '12.5px' }}
-            >
-              <Plus size={13} />
-              <span>Add Work Center</span>
-            </button>
-          )}
-
-          {canManage && activeTab === 'work-orders' && (
-            <button
-              type="button"
-              className="button button-primary"
-              onClick={() => setIsPlanOrderModalOpen(true)}
-              disabled={activeBoms.length === 0}
-              title={activeBoms.length === 0 ? 'Approve a BOM revision before planning work orders' : ''}
-              style={{ height: '30px', fontSize: '12.5px' }}
-            >
-              <Plus size={13} />
-              <span>Plan Work Order</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 3. TAB 1: WORK ORDERS */}
-      {activeTab === 'work-orders' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* If an order is selected, show the Linear Work Order Workspace */}
-          {selectedOrderId && workOrders.some((o) => o.id === selectedOrderId) ? (
-            (() => {
-              const order = workOrders.find((o) => o.id === selectedOrderId)!;
-              const completedOps = (order.operations || []).filter((op) => op.status === 'COMPLETED').length;
-              const totalOps = (order.operations || []).length;
-              const pctOps = totalOps > 0 ? Math.round((completedOps / totalOps) * 100) : 0;
-              const pctUnits = order.targetQuantity > 0 ? Math.min(100, Math.round((order.goodQuantity / order.targetQuantity) * 100)) : 0;
-              const isPastDue = order.dueDate && order.dueDate < today && !['COMPLETED', 'CLOSED', 'CANCELLED'].includes(order.status);
-              const hasShortages = order.materials.some((m) => m.shortageQuantity > 0);
-              const allOpsCompleted = totalOps > 0 && completedOps === totalOps;
-              const totalIssuedMaterials = order.materials.filter((m) => m.issuedQuantity >= m.requiredQuantity).length;
-
-              return (
-                <div className="production-workspace-card">
-                  {/* Workspace Top Navigation Bar */}
-                  <div className="production-workspace-nav">
-                    <div className="production-nav-left">
-                      <button
-                        type="button"
-                        className="production-back-btn"
-                        onClick={() => setSelectedOrderId(null)}
-                        title="Return to Work Orders register"
-                      >
-                        <ArrowLeft size={13} />
-                        <span>All Work Orders</span>
-                      </button>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <select
-                          className="production-order-select"
-                          value={selectedOrderId}
-                          onChange={(e) => setSelectedOrderId(e.target.value)}
-                          aria-label="Switch active work order"
-                        >
-                          {workOrders.map((wo) => (
-                            <option key={wo.id} value={wo.id}>
-                              {wo.orderNumber} — {wo.finishedSku}
-                            </option>
-                          ))}
-                        </select>
-                        <span className="revision-tag">Rev {order.bomRevision}</span>
-                        <span className={`priority-tag priority-${order.priority.toLowerCase()}`}>
-                          {order.priority}
-                        </span>
-                        <span className="station-code-pill" style={{ fontSize: '11px' }}>
-                          <WarehouseIcon size={11} style={{ marginRight: '4px', verticalAlign: '-1px' }} />
-                          {order.outputWarehouseName}
-                        </span>
-                        {isPastDue && <span className="past-due-badge">Past Due</span>}
-                        <Status label={formatAuditLabel(order.status)} />
-                      </div>
-                    </div>
-
-                    <div className="production-nav-right">
-                      {order.status === 'DRAFT' && canManage && (
-                        <button
-                          type="button"
-                          className="button button-primary"
-                          disabled={saving || hasShortages}
-                          onClick={() => run(`/work-orders/${order.id}/release`)}
-                          style={{ height: '28px', fontSize: '12px' }}
-                          title={hasShortages ? 'Resolve material shortages before releasing to floor' : ''}
-                        >
-                          Check Stock & Release
-                        </button>
-                      )}
-
-                      {['RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && canManage && (
-                        <button
-                          type="button"
-                          className="button button-primary"
-                          onClick={() => setOutputOrder(order)}
-                          disabled={!allOpsCompleted}
-                          title={!allOpsCompleted ? 'Complete all shop floor routing operations before recording output' : ''}
-                          style={{ height: '28px', fontSize: '12px' }}
-                        >
-                          <Package size={13} />
-                          <span>Record Output</span>
-                        </button>
-                      )}
-
-                      {order.status === 'IN_PROGRESS' && (
-                        <button
-                          type="button"
-                          className="mini-action muted"
-                          onClick={() => run(`/work-orders/${order.id}/pause`)}
-                          style={{ height: '28px', fontSize: '11.5px' }}
-                        >
-                          <Pause size={12} />
-                          <span>Pause</span>
-                        </button>
-                      )}
-
-                      {order.status === 'PAUSED' && (
-                        <button
-                          type="button"
-                          className="mini-action"
-                          onClick={() => run(`/work-orders/${order.id}/resume`)}
-                          style={{ height: '28px', fontSize: '11.5px' }}
-                        >
-                          <Play size={12} />
-                          <span>Resume</span>
-                        </button>
-                      )}
-
-                      {order.status === 'COMPLETED' && canManage && (
-                        <button
-                          type="button"
-                          className="mini-action"
-                          onClick={() => run(`/work-orders/${order.id}/close`)}
-                          style={{ height: '28px', fontSize: '11.5px' }}
-                        >
-                          <Check size={12} />
-                          <span>Close Order</span>
-                        </button>
-                      )}
-
-                      {['DRAFT', 'RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && canManage && (
-                        <button
-                          type="button"
-                          className="mini-action muted"
-                          onClick={() => {
-                            if (window.confirm(`Are you sure you want to cancel work order ${order.orderNumber}?`)) {
-                              run(`/work-orders/${order.id}/cancel`);
-                            }
-                          }}
-                          style={{ height: '28px', fontSize: '11.5px' }}
-                        >
-                          Cancel
-                        </button>
-                      )}
-
-                      <CustomFieldEditor resource="work_orders" recordId={order.id} />
-                    </div>
-                  </div>
-
-                  {/* High-Level Order Execution Banner */}
-                  <div className="production-workspace-banner">
-                    <div className="production-banner-title">
-                      <span className="production-banner-sku">{order.finishedSku}</span>
-                      <span className="production-banner-name">{order.finishedItemName}</span>
-                    </div>
-
-                    <div className="production-banner-metrics">
-                      <div className="production-metric-tile">
-                        <span className="tile-label">Production Output</span>
-                        <div className="tile-value">
-                          <span>{order.goodQuantity} / {order.targetQuantity} units</span>
-                          <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)', fontWeight: 400 }}>({pctUnits}%)</span>
-                        </div>
-                        <div className="production-cell-progress-bar" style={{ width: '140px', marginTop: '2px' }}>
-                          <div className="production-cell-progress-fill" style={{ width: `${pctUnits}%` }} />
-                        </div>
-                      </div>
-
-                      <div className="production-metric-tile">
-                        <span className="tile-label">Routing Steps</span>
-                        <div className="tile-value">
-                          <span>{completedOps} / {totalOps} ops complete</span>
-                          <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)', fontWeight: 400 }}>({pctOps}%)</span>
-                        </div>
-                        <div className="production-cell-progress-bar" style={{ width: '140px', marginTop: '2px' }}>
-                          <div className="production-cell-progress-fill" style={{ width: `${pctOps}%` }} />
-                        </div>
-                      </div>
-
-                      <div className="production-metric-tile">
-                        <span className="tile-label">Target Completion</span>
-                        <div className="tile-value">
-                          <span>{order.dueDate || 'Unscheduled'}</span>
-                          {isPastDue && <span className="past-due-badge" style={{ fontSize: '9px', padding: '1px 4px' }}>Overdue</span>}
-                        </div>
-                        <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                          {isPastDue ? 'Past target due date' : 'On schedule'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Sub-Navigation Tabs inside Workspace */}
-                  <div className="production-workspace-subtabs">
+                <div className="production-linear-actions">
+                  {order.status === 'DRAFT' && canManage && (
                     <button
                       type="button"
-                      className={`production-workspace-tab-btn ${orderSubTab === 'routing' ? 'active' : ''}`}
+                      className="button button-primary"
+                      disabled={saving || hasShortages}
+                      onClick={() => run(`/work-orders/${order.id}/release`)}
+                      style={{ height: '28px', fontSize: '12px' }}
+                      title={hasShortages ? 'Resolve material shortages before releasing to floor' : ''}
+                    >
+                      Check Stock & Release
+                    </button>
+                  )}
+
+                  {['RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && canManage && (
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      onClick={() => setOutputOrder(order)}
+                      disabled={!allOpsCompleted}
+                      title={!allOpsCompleted ? 'Complete all shop floor routing operations before recording output' : ''}
+                      style={{ height: '28px', fontSize: '12px' }}
+                    >
+                      <Package size={13} />
+                      <span>Record Output</span>
+                    </button>
+                  )}
+
+                  {order.status === 'IN_PROGRESS' && (
+                    <button
+                      type="button"
+                      className="mini-action muted"
+                      onClick={() => run(`/work-orders/${order.id}/pause`)}
+                      style={{ height: '28px', fontSize: '11.5px' }}
+                    >
+                      <Pause size={12} />
+                      <span>Pause</span>
+                    </button>
+                  )}
+
+                  {order.status === 'PAUSED' && (
+                    <button
+                      type="button"
+                      className="mini-action"
+                      onClick={() => run(`/work-orders/${order.id}/resume`)}
+                      style={{ height: '28px', fontSize: '11.5px' }}
+                    >
+                      <Play size={12} />
+                      <span>Resume</span>
+                    </button>
+                  )}
+
+                  {order.status === 'COMPLETED' && canManage && (
+                    <button
+                      type="button"
+                      className="mini-action"
+                      onClick={() => run(`/work-orders/${order.id}/close`)}
+                      style={{ height: '28px', fontSize: '11.5px' }}
+                    >
+                      <Check size={12} />
+                      <span>Close Order</span>
+                    </button>
+                  )}
+
+                  {['DRAFT', 'RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && canManage && (
+                    <button
+                      type="button"
+                      className="mini-action muted"
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to cancel work order ${order.orderNumber}?`)) {
+                          run(`/work-orders/${order.id}/cancel`);
+                        }
+                      }}
+                      style={{ height: '28px', fontSize: '11.5px' }}
+                    >
+                      Cancel Order
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 2-Column Linear Split Grid (Main ~70% / Sidebar ~30%) */}
+              <div className="production-linear-grid">
+                {/* Left Main Content */}
+                <div className="production-linear-main">
+                  {/* Title & Description Block */}
+                  <div className="production-linear-title-block">
+                    <div className="production-linear-ref-row">
+                      <span className="order-number-pill" style={{ fontWeight: 600 }}>{order.orderNumber}</span>
+                      <Status label={formatAuditLabel(order.status)} />
+                      <span className={`priority-tag priority-${order.priority.toLowerCase()}`}>
+                        {order.priority}
+                      </span>
+                      <span className="revision-tag">Rev {order.bomRevision}</span>
+                      {isPastDue && <span className="past-due-badge">Past Due</span>}
+                    </div>
+
+                    <h1 className="production-linear-h1">{order.finishedSku}</h1>
+                    <p className="production-linear-desc">{order.finishedItemName}</p>
+                  </div>
+
+                  {/* Linear Sub-Tabs */}
+                  <div className="production-linear-tabs">
+                    <button
+                      type="button"
+                      className={`production-linear-tab ${orderSubTab === 'routing' ? 'active' : ''}`}
                       onClick={() => setOrderSubTab('routing')}
                     >
                       <Wrench size={13} />
                       <span>Shop Floor Routing</span>
-                      <span className="production-tab-count">{totalOps}</span>
+                      <span className="production-linear-tab-count">{totalOps}</span>
                     </button>
 
                     <button
                       type="button"
-                      className={`production-workspace-tab-btn ${orderSubTab === 'materials' ? 'active' : ''}`}
+                      className={`production-linear-tab ${orderSubTab === 'materials' ? 'active' : ''}`}
                       onClick={() => setOrderSubTab('materials')}
                     >
                       <Boxes size={13} />
                       <span>Component Materials</span>
-                      <span className="production-tab-count">
+                      <span className="production-linear-tab-count">
                         {totalIssuedMaterials}/{order.materials.length}
                       </span>
                     </button>
@@ -1142,7 +1000,7 @@ export function ManufacturingPanel({
                     {canViewCosts && (
                       <button
                         type="button"
-                        className={`production-workspace-tab-btn ${orderSubTab === 'cost' ? 'active' : ''}`}
+                        className={`production-linear-tab ${orderSubTab === 'cost' ? 'active' : ''}`}
                         onClick={() => setOrderSubTab('cost')}
                       >
                         <FileText size={13} />
@@ -1151,11 +1009,10 @@ export function ManufacturingPanel({
                     )}
                   </div>
 
-                  {/* Workspace Content Body */}
-                  <div className="production-workspace-body">
-                    {/* SUB-TAB 1: SHOP FLOOR ROUTING PIPELINE */}
-                    {orderSubTab === 'routing' && (
-                      <div className="production-routing-pipeline">
+                  {/* SUB-TAB 1: SHOP FLOOR ROUTING PIPELINE */}
+                  {orderSubTab === 'routing' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div className="linear-routing-list">
                         {order.operations && order.operations.length > 0 ? (
                           order.operations.map((op) => {
                             const isOpPending = op.status === 'PENDING';
@@ -1169,15 +1026,29 @@ export function ManufacturingPanel({
                             return (
                               <div
                                 key={op.id}
-                                className={`production-pipeline-step ${op.status.toLowerCase()}`}
+                                className={`linear-routing-item ${op.status.toLowerCase()}`}
                               >
-                                <div className="production-step-header">
-                                  <div className="production-step-left">
-                                    <span className="sequence-badge">OP {String(op.sequence).padStart(2, '0')}</span>
-                                    <span className="station-code-pill">{op.workCenterCode}</span>
-                                    <div className="production-step-info">
-                                      <span className="production-step-name">{op.name}</span>
-                                      <div className="production-step-meta">
+                                <div className="linear-routing-row">
+                                  <div className="linear-routing-left">
+                                    <div className="linear-routing-status-icon">
+                                      {isOpCompleted ? (
+                                        <CheckCircle2 size={16} color="var(--sp-success)" />
+                                      ) : isOpInProgress ? (
+                                        <Activity size={16} color="var(--sp-brand)" className="spin" />
+                                      ) : prevIncomplete ? (
+                                        <Lock size={13} color="var(--sp-text-muted)" />
+                                      ) : (
+                                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', border: '2px solid var(--sp-border-hover)' }} />
+                                      )}
+                                    </div>
+
+                                    <div className="linear-routing-body">
+                                      <div className="linear-routing-title-line">
+                                        <span className="sequence-badge">OP {String(op.sequence).padStart(2, '0')}</span>
+                                        <span className="station-code-pill">{op.workCenterCode}</span>
+                                        <span className="linear-routing-op-name">{op.name}</span>
+                                      </div>
+                                      <div className="linear-routing-meta-line">
                                         <span>{op.workCenterName}</span>
                                         {op.skillRequirements && (
                                           <>
@@ -1191,34 +1062,37 @@ export function ManufacturingPanel({
                                     </div>
                                   </div>
 
-                                  <div className="production-step-right">
+                                  <div className="linear-routing-right">
                                     <Status label={formatAuditLabel(op.status)} />
 
                                     {isOpPending && ['RELEASED', 'IN_PROGRESS'].includes(order.status) && (
-                                      <button
-                                        type="button"
-                                        className="mini-action"
-                                        disabled={saving || prevIncomplete}
-                                        onClick={() => run(`/work-orders/${order.id}/operations/${op.id}/start`)}
-                                        title={prevIncomplete ? `Complete previous routing operation first` : ''}
-                                        style={{ height: '26px', padding: '0 10px', fontSize: '11.5px' }}
-                                      >
-                                        <Play size={11} style={{ marginRight: '4px' }} />
-                                        <span>Start Job Card</span>
-                                      </button>
+                                      prevIncomplete ? (
+                                        <span
+                                          className="linear-routing-locked-tag"
+                                          title="Complete previous routing operations before starting this station"
+                                        >
+                                          <Lock size={11} />
+                                          <span>Locked</span>
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="button button-primary"
+                                          disabled={saving}
+                                          onClick={() => run(`/work-orders/${order.id}/operations/${op.id}/start`)}
+                                          style={{ height: '26px', padding: '0 10px', fontSize: '11.5px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                                        >
+                                          <Play size={11} />
+                                          <span>Start Job Card</span>
+                                        </button>
+                                      )
                                     )}
                                   </div>
                                 </div>
 
-                                {isOpPending && prevIncomplete && (
-                                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', paddingLeft: '4px' }}>
-                                    Sequence locked: Complete earlier routing operations first before starting this station.
-                                  </div>
-                                )}
-
                                 {/* Operation Active Execution Form */}
                                 {isOpInProgress && (
-                                  <div className="production-op-active-card">
+                                  <div className="production-op-active-card" style={{ margin: '4px 16px 14px 16px' }}>
                                     <div className="production-op-active-header">
                                       <Activity size={13} className="spin" />
                                       <span>Station active · Started {op.startedAt ? new Date(op.startedAt).toLocaleTimeString() : 'recently'} · Log operational output</span>
@@ -1337,9 +1211,9 @@ export function ManufacturingPanel({
 
                                 {/* Operation Completed Summary */}
                                 {isOpCompleted && (
-                                  <div className="production-job-result" style={{ borderTop: 'none', padding: 0 }}>
+                                  <div style={{ padding: '0 16px 12px 50px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--sp-text-muted)' }}>
                                     <CheckCircle2 size={13} color="var(--sp-success)" />
-                                    <span style={{ fontSize: '12px' }}>
+                                    <span>
                                       <b>{op.producedQuantity} units completed</b> · {op.scrapQuantity} scrap · {op.reworkQuantity} rework · {op.actualSetupMinutes ?? 0}m setup · {op.actualRunMinutes ?? 0}m run
                                       {op.downtimeMinutes ? ` · ${op.downtimeMinutes}m downtime (${op.downtimeReason})` : ''}
                                     </span>
@@ -1353,223 +1227,466 @@ export function ManufacturingPanel({
                             No shop floor operations defined for this work order revision.
                           </div>
                         )}
+                      </div>
 
-                        {/* Rework Disposition Bar if rework exists */}
-                        {order.reworkQuantity > 0 && ['RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && (
-                          <div style={{ background: 'var(--sp-warning-soft)', padding: '12px 16px', borderRadius: '6px', border: '1px solid var(--sp-warning)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                            <div style={{ fontSize: '12px', color: 'var(--sp-text)' }}>
-                              <b>{order.reworkQuantity} Units Awaiting Rework Disposition</b>
-                              <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)' }}>Log inspected rework into good units or scrap.</div>
-                            </div>
-
-                            <form
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-                              onSubmit={(e) => {
-                                e.preventDefault();
-                                const form = new FormData(e.currentTarget);
-                                const good = Number(form.get('goodQuantity') || 0);
-                                const scrap = Number(form.get('scrapQuantity') || 0);
-                                if (good + scrap === 0) {
-                                  notify('Enter reworked good or scrap quantity');
-                                  return;
-                                }
-                                run(`/work-orders/${order.id}/rework/disposition`, 'POST', {
-                                  quantity: good + scrap,
-                                  goodQuantity: good,
-                                  scrapQuantity: scrap,
-                                  idempotencyKey: crypto.randomUUID()
-                                });
-                                e.currentTarget.reset();
-                              }}
-                            >
-                              <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                Good:
-                                <input name="goodQuantity" type="number" min="0" max={order.reworkQuantity} defaultValue="0" className="warehouse-count-input" style={{ width: '56px', height: '26px' }} />
-                              </label>
-                              <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                Scrap:
-                                <input name="scrapQuantity" type="number" min="0" max={order.reworkQuantity} defaultValue="0" className="warehouse-count-input" style={{ width: '56px', height: '26px' }} />
-                              </label>
-                              <button className="button button-primary" style={{ height: '26px', fontSize: '11.5px' }} disabled={saving}>
-                                Complete Rework
-                              </button>
-                            </form>
+                      {/* Rework Disposition Bar if rework exists */}
+                      {order.reworkQuantity > 0 && ['RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && (
+                        <div style={{ background: 'var(--sp-warning-soft)', padding: '12px 16px', borderRadius: '6px', border: '1px solid var(--sp-warning)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--sp-text)' }}>
+                            <b>{order.reworkQuantity} Units Awaiting Rework Disposition</b>
+                            <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)' }}>Log inspected rework into good units or scrap.</div>
                           </div>
+
+                          <form
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const form = new FormData(e.currentTarget);
+                              const good = Number(form.get('goodQuantity') || 0);
+                              const scrap = Number(form.get('scrapQuantity') || 0);
+                              if (good + scrap === 0) {
+                                notify('Enter reworked good or scrap quantity');
+                                return;
+                              }
+                              run(`/work-orders/${order.id}/rework/disposition`, 'POST', {
+                                quantity: good + scrap,
+                                goodQuantity: good,
+                                scrapQuantity: scrap,
+                                idempotencyKey: crypto.randomUUID()
+                              });
+                              e.currentTarget.reset();
+                            }}
+                          >
+                            <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              Good:
+                              <input name="goodQuantity" type="number" min="0" max={order.reworkQuantity} defaultValue="0" className="warehouse-count-input" style={{ width: '56px', height: '26px' }} />
+                            </label>
+                            <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              Scrap:
+                              <input name="scrapQuantity" type="number" min="0" max={order.reworkQuantity} defaultValue="0" className="warehouse-count-input" style={{ width: '56px', height: '26px' }} />
+                            </label>
+                            <button className="button button-primary" style={{ height: '26px', fontSize: '11.5px' }} disabled={saving}>
+                              Complete Rework
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* SUB-TAB 2: COMPONENT MATERIALS */}
+                  {orderSubTab === 'materials' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--sp-text-secondary)', fontWeight: 500 }}>
+                          {order.materials.length} components allocated from warehouse inventory
+                        </span>
+
+                        {['RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && canManage && (
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            onClick={() => issueAllAvailableMaterials(order)}
+                            disabled={saving || bulkIssuing || !order.materials.some((m) => m.requiredQuantity > m.issuedQuantity && m.availableQuantity > 0)}
+                            style={{ height: '28px', fontSize: '11.5px' }}
+                            title="Issue all allocated materials that currently have available stock in the source warehouse"
+                          >
+                            <Sparkles size={12} />
+                            <span>{bulkIssuing ? 'Issuing…' : 'Issue All Available Stock'}</span>
+                          </button>
                         )}
                       </div>
-                    )}
 
-                    {/* SUB-TAB 2: COMPONENT MATERIALS */}
-                    {orderSubTab === 'materials' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                          <span style={{ fontSize: '12px', color: 'var(--sp-text-secondary)', fontWeight: 500 }}>
-                            {order.materials.length} components allocated from warehouse inventory
-                          </span>
+                      <div className="sales-table-card">
+                        <div className="sales-table-scroll">
+                          <table className="sales-table">
+                            <thead>
+                              <tr>
+                                <th style={{ width: '28%' }}>COMPONENT ITEM</th>
+                                <th style={{ width: '18%' }}>SOURCE WAREHOUSE</th>
+                                <th style={{ width: '12%', textAlign: 'right' }}>REQUIRED</th>
+                                <th style={{ width: '12%', textAlign: 'right' }}>ISSUED</th>
+                                <th style={{ width: '12%', textAlign: 'right' }}>IN STOCK</th>
+                                <th style={{ width: '10%' }}>ALLOCATION</th>
+                                {['RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && (
+                                  <th style={{ width: '8%', textAlign: 'right' }}>ACTIONS</th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {order.materials.map((material) => {
+                                const pendingIssue = Math.max(0, material.requiredQuantity - material.issuedQuantity);
+                                const isFullyIssued = pendingIssue === 0;
+                                const hasWarehouseStock = material.availableQuantity >= pendingIssue;
+                                const shortageQty = material.shortageQuantity > 0 ? material.shortageQuantity : (!hasWarehouseStock ? pendingIssue - material.availableQuantity : 0);
 
-                          {['RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && canManage && (
-                            <button
-                              type="button"
-                              className="button button-secondary"
-                              onClick={() => issueAllAvailableMaterials(order)}
-                              disabled={saving || bulkIssuing || !order.materials.some((m) => m.requiredQuantity > m.issuedQuantity && m.availableQuantity > 0)}
-                              style={{ height: '28px', fontSize: '11.5px' }}
-                              title="Issue all allocated materials that currently have available stock in the source warehouse"
-                            >
-                              <Sparkles size={12} />
-                              <span>{bulkIssuing ? 'Issuing…' : 'Issue All Available Stock'}</span>
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="sales-table-card">
-                          <div className="sales-table-scroll">
-                            <table className="sales-table">
-                              <thead>
-                                <tr>
-                                  <th style={{ width: '28%' }}>COMPONENT ITEM</th>
-                                  <th style={{ width: '18%' }}>SOURCE WAREHOUSE</th>
-                                  <th style={{ width: '12%', textAlign: 'right' }}>REQUIRED</th>
-                                  <th style={{ width: '12%', textAlign: 'right' }}>ISSUED</th>
-                                  <th style={{ width: '12%', textAlign: 'right' }}>IN STOCK</th>
-                                  <th style={{ width: '10%' }}>ALLOCATION</th>
-                                  {['RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && (
-                                    <th style={{ width: '8%', textAlign: 'right' }}>ACTIONS</th>
-                                  )}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {order.materials.map((material) => {
-                                  const pendingIssue = Math.max(0, material.requiredQuantity - material.issuedQuantity);
-                                  const isFullyIssued = pendingIssue === 0;
-                                  const hasWarehouseStock = material.availableQuantity >= pendingIssue;
-                                  const shortageQty = material.shortageQuantity > 0 ? material.shortageQuantity : (!hasWarehouseStock ? pendingIssue - material.availableQuantity : 0);
-
-                                  return (
-                                    <tr key={material.id} className="sales-row">
-                                      <td style={{ maxWidth: '240px' }}>
-                                        <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>{material.sku}</div>
-                                        <div style={{ color: 'var(--sp-text-secondary)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px' }}>
-                                          {material.itemName}
+                                return (
+                                  <tr key={material.id} className="sales-row">
+                                    <td style={{ maxWidth: '240px' }}>
+                                      <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>{material.sku}</div>
+                                      <div style={{ color: 'var(--sp-text-secondary)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px' }}>
+                                        {material.itemName}
+                                      </div>
+                                    </td>
+                                    <td style={{ color: 'var(--sp-text-secondary)', fontSize: '12px' }}>{material.warehouseName}</td>
+                                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                                      {material.requiredQuantity} {material.unit}
+                                    </td>
+                                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                                      <span style={{ fontWeight: 600, color: isFullyIssued ? 'var(--sp-success)' : 'var(--sp-text)' }}>
+                                        {material.issuedQuantity}
+                                      </span>
+                                      {material.returnedQuantity > 0 && (
+                                        <small style={{ color: 'var(--sp-text-muted)' }}> ({material.returnedQuantity} ret)</small>
+                                      )}
+                                    </td>
+                                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                                      {material.availableQuantity}
+                                    </td>
+                                    <td>
+                                      {isFullyIssued ? (
+                                        <span className="production-mat-status-tag complete">Fully Issued</span>
+                                      ) : shortageQty > 0 ? (
+                                        <span className="production-mat-status-tag shortage">Shortage: {shortageQty}</span>
+                                      ) : (
+                                        <span className="production-mat-status-tag ok">Ready ({pendingIssue})</span>
+                                      )}
+                                    </td>
+                                    {['RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && (
+                                      <td style={{ textAlign: 'right' }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                                          {!isFullyIssued && (
+                                            <button
+                                              type="button"
+                                              className="mini-action"
+                                              disabled={saving || material.availableQuantity === 0}
+                                              onClick={() => setIssuingMaterial({ order, material })}
+                                              style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
+                                              title={material.availableQuantity === 0 ? 'No stock available in warehouse' : 'Issue component'}
+                                            >
+                                              Issue
+                                            </button>
+                                          )}
+                                          {material.issuedQuantity > material.returnedQuantity && (
+                                            <button
+                                              type="button"
+                                              className="mini-action muted"
+                                              disabled={saving}
+                                              onClick={() => setReturningMaterial({ order, material })}
+                                              style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
+                                              title="Return unused components to warehouse"
+                                            >
+                                              Return
+                                            </button>
+                                          )}
                                         </div>
                                       </td>
-                                      <td style={{ color: 'var(--sp-text-secondary)', fontSize: '12px' }}>{material.warehouseName}</td>
-                                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
-                                        {material.requiredQuantity} {material.unit}
-                                      </td>
-                                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
-                                        <span style={{ fontWeight: 600, color: isFullyIssued ? 'var(--sp-success)' : 'var(--sp-text)' }}>
-                                          {material.issuedQuantity}
-                                        </span>
-                                        {material.returnedQuantity > 0 && (
-                                          <small style={{ color: 'var(--sp-text-muted)' }}> ({material.returnedQuantity} ret)</small>
-                                        )}
-                                      </td>
-                                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
-                                        {material.availableQuantity}
-                                      </td>
-                                      <td>
-                                        {isFullyIssued ? (
-                                          <span className="production-mat-status-tag complete">Fully Issued</span>
-                                        ) : shortageQty > 0 ? (
-                                          <span className="production-mat-status-tag shortage">Shortage: {shortageQty}</span>
-                                        ) : (
-                                          <span className="production-mat-status-tag ok">Ready ({pendingIssue})</span>
-                                        )}
-                                      </td>
-                                      {['RELEASED', 'IN_PROGRESS', 'PAUSED'].includes(order.status) && (
-                                        <td style={{ textAlign: 'right' }}>
-                                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                                            {!isFullyIssued && (
-                                              <button
-                                                type="button"
-                                                className="mini-action"
-                                                disabled={saving || material.availableQuantity === 0}
-                                                onClick={() => setIssuingMaterial({ order, material })}
-                                                style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
-                                                title={material.availableQuantity === 0 ? 'No stock available in warehouse' : 'Issue component'}
-                                              >
-                                                Issue
-                                              </button>
-                                            )}
-                                            {material.issuedQuantity > material.returnedQuantity && (
-                                              <button
-                                                type="button"
-                                                className="mini-action muted"
-                                                disabled={saving}
-                                                onClick={() => setReturningMaterial({ order, material })}
-                                                style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
-                                                title="Return unused components to warehouse"
-                                              >
-                                                Return
-                                              </button>
-                                            )}
-                                          </div>
-                                        </td>
-                                      )}
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {/* SUB-TAB 3: COSTING & FINANCIAL TELEMETRY */}
-                    {orderSubTab === 'cost' && canViewCosts && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <div className="production-cost-strip">
-                          <div className="production-cost-item">
-                            <span className="label">EST. MATERIAL</span>
-                            <span className="val">{formatCurrency(order.estimatedMaterialCost)}</span>
-                          </div>
-                          <div className="production-cost-item">
-                            <span className="label">ACTUAL ISSUED</span>
-                            <span className="val">{formatCurrency(order.actualMaterialCost)}</span>
-                          </div>
-                          <div className="production-cost-item">
-                            <span className="label">COST VARIANCE</span>
-                            <span
-                              className="val"
-                              style={{
-                                color: order.materialCostVariance > 0
-                                  ? 'var(--sp-danger)'
-                                  : order.materialCostVariance < 0 && order.actualMaterialCost > 0
-                                  ? 'var(--sp-success)'
-                                  : 'var(--sp-text)'
-                              }}
-                            >
-                              {formatCurrency(order.materialCostVariance)}
-                            </span>
-                          </div>
-                          <div className="production-cost-item">
-                            <span className="label">LABOR (ACTUAL / EST)</span>
-                            <span className="val">
-                              {formatCurrency(order.actualLaborCost)} / {formatCurrency(order.estimatedLaborCost)}
-                            </span>
-                          </div>
-                          <div className="production-cost-item">
-                            <span className="label">OVERHEAD (ACTUAL / EST)</span>
-                            <span className="val">
-                              {formatCurrency(order.actualOverheadCost)} / {formatCurrency(order.estimatedOverheadCost)}
-                            </span>
-                          </div>
+                  {/* SUB-TAB 3: COSTING & FINANCIAL TELEMETRY */}
+                  {orderSubTab === 'cost' && canViewCosts && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div className="production-cost-strip">
+                        <div className="production-cost-item">
+                          <span className="label">EST. MATERIAL</span>
+                          <span className="val">{formatCurrency(order.estimatedMaterialCost)}</span>
                         </div>
-
-                        <div className="reports-note-box" style={{ margin: 0, fontSize: '12px' }}>
-                          Cost telemetry tracks standard BOM item issue valuations, machine hourly rates, and operator labor accumulated across shop floor operations.
+                        <div className="production-cost-item">
+                          <span className="label">ACTUAL ISSUED</span>
+                          <span className="val">{formatCurrency(order.actualMaterialCost)}</span>
+                        </div>
+                        <div className="production-cost-item">
+                          <span className="label">COST VARIANCE</span>
+                          <span
+                            className="val"
+                            style={{
+                              color: order.materialCostVariance > 0
+                                ? 'var(--sp-danger)'
+                                : order.materialCostVariance < 0 && order.actualMaterialCost > 0
+                                ? 'var(--sp-success)'
+                                : 'var(--sp-text)'
+                            }}
+                          >
+                            {formatCurrency(order.materialCostVariance)}
+                          </span>
+                        </div>
+                        <div className="production-cost-item">
+                          <span className="label">LABOR (ACTUAL / EST)</span>
+                          <span className="val">
+                            {formatCurrency(order.actualLaborCost)} / {formatCurrency(order.estimatedLaborCost)}
+                          </span>
+                        </div>
+                        <div className="production-cost-item">
+                          <span className="label">OVERHEAD (ACTUAL / EST)</span>
+                          <span className="val">
+                            {formatCurrency(order.actualOverheadCost)} / {formatCurrency(order.estimatedOverheadCost)}
+                          </span>
                         </div>
                       </div>
-                    )}
+
+                      <div className="reports-note-box" style={{ margin: 0, fontSize: '12px' }}>
+                        Cost telemetry tracks standard BOM item issue valuations, machine hourly rates, and operator labor accumulated across shop floor operations.
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Sidebar: Linear Properties Inspector */}
+                <div className="production-linear-sidebar">
+                  {/* 1. Properties Card */}
+                  <div className="production-sidebar-card">
+                    <span className="production-sidebar-card-title">Properties</span>
+
+                    <div className="production-sidebar-prop-row">
+                      <span className="production-sidebar-prop-label">Status</span>
+                      <span className="production-sidebar-prop-val">
+                        <Status label={formatAuditLabel(order.status)} />
+                      </span>
+                    </div>
+
+                    <div className="production-sidebar-prop-row">
+                      <span className="production-sidebar-prop-label">Priority</span>
+                      <span className="production-sidebar-prop-val">
+                        <span className={`priority-tag priority-${order.priority.toLowerCase()}`}>
+                          {order.priority}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="production-sidebar-prop-row">
+                      <span className="production-sidebar-prop-label">BOM Revision</span>
+                      <span className="production-sidebar-prop-val">
+                        <span className="revision-tag">Rev {order.bomRevision}</span>
+                      </span>
+                    </div>
+
+                    <div className="production-sidebar-prop-row">
+                      <span className="production-sidebar-prop-label">Destination</span>
+                      <span className="production-sidebar-prop-val">
+                        <WarehouseIcon size={12} style={{ color: 'var(--sp-text-muted)' }} />
+                        <span>{order.outputWarehouseName}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 2. Execution Telemetry Card */}
+                  <div className="production-sidebar-card">
+                    <span className="production-sidebar-card-title">Execution Progress</span>
+
+                    <div className="production-sidebar-progress-group">
+                      <div className="production-sidebar-progress-header">
+                        <span>Units Produced ({order.goodQuantity} / {order.targetQuantity})</span>
+                        <span className="val">{pctUnits}%</span>
+                      </div>
+                      <div className="production-cell-progress-bar" style={{ maxWidth: '100%' }}>
+                        <div className="production-cell-progress-fill" style={{ width: `${pctUnits}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="production-sidebar-progress-group">
+                      <div className="production-sidebar-progress-header">
+                        <span>Routing Steps ({completedOps} / {totalOps} ops)</span>
+                        <span className="val">{pctOps}%</span>
+                      </div>
+                      <div className="production-cell-progress-bar" style={{ maxWidth: '100%' }}>
+                        <div className="production-cell-progress-fill" style={{ width: `${pctOps}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="production-sidebar-prop-row" style={{ paddingTop: '4px' }}>
+                      <span className="production-sidebar-prop-label">Target Completion</span>
+                      <span className="production-sidebar-prop-val">
+                        <Calendar size={12} style={{ color: 'var(--sp-text-muted)' }} />
+                        <span>{order.dueDate || 'Unscheduled'}</span>
+                        {isPastDue ? (
+                          <span className="past-due-badge" style={{ fontSize: '9px', padding: '1px 4px' }}>Overdue</span>
+                        ) : (
+                          <span style={{ fontSize: '10.5px', color: 'var(--sp-success)' }}>On Schedule</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 3. Metadata & Attributes Card */}
+                  <div className="production-sidebar-card">
+                    <span className="production-sidebar-card-title">Order Attributes</span>
+                    <CustomFieldEditor resource="work_orders" recordId={order.id} />
                   </div>
                 </div>
-              );
-            })()
-          ) : (
-            /* Master Work Orders Register Table View */
-            <>
+              </div>
+            </div>
+          );
+        })()
+      ) : (
+        <>
+      {/* 1. Executive Telemetry Strip — Quiet Monochrome Linear Cards */}
+      <div className="sales-metric-strip">
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">ACTIVE WORK ORDERS</span>
+            <Factory size={13} className="sales-metric-icon" />
+          </div>
+          <div className="sales-metric-val">{openOrders.length} Active</div>
+          <div className="sales-metric-sub">
+            <span className="sales-sub-highlight">{inProgressOrders.length} in production</span> · {releasedOrders.length} released to floor
+          </div>
+        </div>
+
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">ROUTING PROGRESS</span>
+            <GitBranch size={13} className="sales-metric-icon" />
+          </div>
+          <div className="sales-metric-val">
+            {completedOperations} / {allRoutingOperations.length} Steps
+          </div>
+          <div className="sales-metric-sub">
+            <span className="sales-sub-highlight">{activeOperationsCount} active</span> running across stations
+          </div>
+        </div>
+
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">SCHEDULE & CRITICALITY</span>
+            <Clock size={13} className="sales-metric-icon" />
+          </div>
+          <div className="sales-metric-val">
+            {lateOrders.length > 0 ? `${lateOrders.length} Past Due` : 'On Schedule'}
+          </div>
+          <div className="sales-metric-sub">
+            {materialBlocked.length > 0 ? (
+              <span className="sales-sub-warning">{materialBlocked.length} component shortages</span>
+            ) : (
+              'All component allocations fulfilled'
+            )}
+          </div>
+        </div>
+
+        <div className="sales-metric-card">
+          <div className="sales-metric-header">
+            <span className="sales-metric-label">BOM & CAPACITY</span>
+            <Layers size={13} className="sales-metric-icon" />
+          </div>
+          <div className="sales-metric-val">{activeBoms.length} Approved BOMs</div>
+          <div className="sales-metric-sub">
+            {activeWorkCenters.length} active stations across shop floor
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Linear Sub-Navigation Tabs */}
+      <div className="sales-subnav-container">
+        <div className="sales-subnav-tabs">
+          <button
+            type="button"
+            className={`sales-subnav-tab ${activeTab === 'work-orders' ? 'active' : ''}`}
+            onClick={() => setActiveTab('work-orders')}
+          >
+            <ClipboardList size={13} />
+            <span>Work Orders</span>
+            <span className="sales-subnav-badge">{workOrders.length}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`sales-subnav-tab ${activeTab === 'boms' ? 'active' : ''}`}
+            onClick={() => setActiveTab('boms')}
+          >
+            <Layers size={13} />
+            <span>Bills of Material</span>
+            <span className="sales-subnav-badge">{boms.length}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`sales-subnav-tab ${activeTab === 'work-centers' ? 'active' : ''}`}
+            onClick={() => setActiveTab('work-centers')}
+          >
+            <Factory size={13} />
+            <span>Work Centers</span>
+            <span className="sales-subnav-badge">{workCenters.length}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`sales-subnav-tab ${activeTab === 'dispatch' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dispatch')}
+          >
+            <Activity size={13} />
+            <span>Shop Floor Dispatch</span>
+            <span className="sales-subnav-badge">{allJobCards.length}</span>
+          </button>
+        </div>
+
+        <div className="sales-subnav-actions">
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => void run('/work-orders')}
+            disabled={loading || saving}
+            title="Refresh manufacturing data"
+            style={{ height: '30px', padding: '0 10px', fontSize: '12px' }}
+          >
+            <RefreshCw size={13} className={loading || saving ? 'spin' : ''} />
+            <span>Refresh</span>
+          </button>
+
+          {canManage && activeTab === 'boms' && (
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={() => {
+                resetBomForm();
+                setIsBomModalOpen(true);
+              }}
+              style={{ height: '30px', fontSize: '12.5px' }}
+            >
+              <Plus size={13} />
+              <span>Create BOM</span>
+            </button>
+          )}
+
+          {canManage && activeTab === 'work-centers' && (
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={() => setIsWorkCenterModalOpen(true)}
+              style={{ height: '30px', fontSize: '12.5px' }}
+            >
+              <Plus size={13} />
+              <span>Add Work Center</span>
+            </button>
+          )}
+
+          {canManage && activeTab === 'work-orders' && (
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={() => setIsPlanOrderModalOpen(true)}
+              disabled={activeBoms.length === 0}
+              title={activeBoms.length === 0 ? 'Approve a BOM revision before planning work orders' : ''}
+              style={{ height: '30px', fontSize: '12.5px' }}
+            >
+              <Plus size={13} />
+              <span>Plan Work Order</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 3. TAB 1: WORK ORDERS */}
+      {activeTab === 'work-orders' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Master Work Orders Register Table View */}
               {/* Action Control Bar */}
               <div className="sales-toolbar">
                 <div className="sales-pill-group">
@@ -1675,7 +1792,7 @@ export function ManufacturingPanel({
                       <tr>
                         <th style={{ width: '4%' }}></th>
                         <th style={{ width: '16%' }}>WORK ORDER #</th>
-                        <th style={{ width: '22%' }}>FINISHED PRODUCT</th>
+                        <th style={{ width: '18%' }}>PRODUCT</th>
                         <th style={{ width: '12%' }}>DESTINATION</th>
                         <th style={{ width: '13%' }}>OUTPUT PROGRESS</th>
                         <th style={{ width: '17%' }}>ROUTING STATUS</th>
@@ -1717,18 +1834,26 @@ export function ManufacturingPanel({
                                 </td>
                                 <td>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <span className="order-number-pill">{order.orderNumber}</span>
+                                    <button
+                                      type="button"
+                                      className="order-number-pill interactive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedOrderId(order.id);
+                                      }}
+                                      title={`Open Work Order ${order.orderNumber}`}
+                                    >
+                                      <span>{order.orderNumber}</span>
+                                      <ArrowUpRight size={11} className="order-link-arrow" />
+                                    </button>
                                     <span className="revision-tag">Rev {order.bomRevision}</span>
                                     <span className={`priority-tag priority-${order.priority.toLowerCase()}`}>
                                       {order.priority}
                                     </span>
                                   </div>
                                 </td>
-                                <td style={{ maxWidth: '220px' }}>
+                                <td>
                                   <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>{order.finishedSku}</div>
-                                  <div style={{ color: 'var(--sp-text-secondary)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '210px' }}>
-                                    {order.finishedItemName}
-                                  </div>
                                 </td>
                                 <td style={{ color: 'var(--sp-text-secondary)', fontSize: '12px' }}>
                                   <span className="station-code-pill" style={{ fontSize: '10.5px' }}>
@@ -1746,17 +1871,8 @@ export function ManufacturingPanel({
                                   </div>
                                 </td>
                                 <td>
-                                  <div style={{ fontSize: '11.5px', color: 'var(--sp-text)' }}>
+                                  <div style={{ fontSize: '11.5px', color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
                                     {completedOps} / {totalOps} ops done ({pctOps}%)
-                                  </div>
-                                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>
-                                    {activeOp ? (
-                                      <span style={{ color: 'var(--sp-brand)', fontWeight: 600 }}>Active: OP {activeOp.sequence} ({activeOp.workCenterCode})</span>
-                                    ) : nextPendingOp ? (
-                                      <span>Next: OP {nextPendingOp.sequence} ({nextPendingOp.workCenterCode})</span>
-                                    ) : (
-                                      <span>All routing steps complete</span>
-                                    )}
                                   </div>
                                 </td>
                                 <td style={{ fontSize: '11.5px', color: 'var(--sp-text-secondary)', whiteSpace: 'nowrap' }}>
@@ -1776,9 +1892,11 @@ export function ManufacturingPanel({
                                       e.stopPropagation();
                                       setSelectedOrderId(order.id);
                                     }}
-                                    style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
+                                    style={{ height: '24px', padding: '0 8px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                    title="Open execution workspace"
                                   >
-                                    Manage →
+                                    <ExternalLink size={11} />
+                                    <span>Manage</span>
                                   </button>
                                 </td>
                               </tr>
@@ -1797,9 +1915,10 @@ export function ManufacturingPanel({
                                           type="button"
                                           className="mini-action"
                                           onClick={() => setSelectedOrderId(order.id)}
-                                          style={{ height: '22px', fontSize: '11px' }}
+                                          style={{ height: '24px', padding: '0 8px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                                         >
-                                          Open Workspace
+                                          <ExternalLink size={11} />
+                                          <span>Open Workspace</span>
                                         </button>
                                       </div>
 
@@ -1843,8 +1962,6 @@ export function ManufacturingPanel({
                   </table>
                 </div>
               </div>
-            </>
-          )}
         </div>
       )}
 
@@ -2225,7 +2342,43 @@ export function ManufacturingPanel({
       {/* 6. TAB 4: SHOP FLOOR DISPATCH */}
       {activeTab === 'dispatch' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Dispatch Linear Toolbar */}
           <div className="sales-toolbar">
+            <div className="sales-pill-group">
+              <button
+                type="button"
+                className={`sales-pill-btn ${dispatchStatusFilter === 'ALL' ? 'active' : ''}`}
+                onClick={() => setDispatchStatusFilter('ALL')}
+              >
+                <span>All</span>
+                <span className="sales-pill-count">{allJobCards.length}</span>
+              </button>
+              <button
+                type="button"
+                className={`sales-pill-btn ${dispatchStatusFilter === 'READY' ? 'active' : ''}`}
+                onClick={() => setDispatchStatusFilter('READY')}
+              >
+                <span>Ready to Run</span>
+                <span className="sales-pill-count">{readyJobCardsCount}</span>
+              </button>
+              <button
+                type="button"
+                className={`sales-pill-btn ${dispatchStatusFilter === 'IN_PROGRESS' ? 'active' : ''}`}
+                onClick={() => setDispatchStatusFilter('IN_PROGRESS')}
+              >
+                <span>Active</span>
+                <span className="sales-pill-count">{inProgressJobCardsCount}</span>
+              </button>
+              <button
+                type="button"
+                className={`sales-pill-btn ${dispatchStatusFilter === 'QUEUED' ? 'active' : ''}`}
+                onClick={() => setDispatchStatusFilter('QUEUED')}
+              >
+                <span>Queued</span>
+                <span className="sales-pill-count">{queuedJobCardsCount}</span>
+              </button>
+            </div>
+
             <div className="warehouse-location-picker">
               <label htmlFor="station-filter" className="warehouse-picker-label">
                 <Factory size={13} />
@@ -2238,7 +2391,7 @@ export function ManufacturingPanel({
                 value={dispatchStationFilter}
                 onChange={(e) => setDispatchStationFilter(e.target.value)}
               >
-                <option value="ALL">All Work Stations</option>
+                <option value="ALL">All Stations ({workCenters.length})</option>
                 {workCenters.map((wc) => (
                   <option key={wc.id} value={wc.id}>
                     {wc.code} — {wc.name}
@@ -2247,75 +2400,147 @@ export function ManufacturingPanel({
               </select>
             </div>
 
-            <div>
-              <span style={{ fontSize: '12px', color: 'var(--sp-text-muted)', fontWeight: 500 }}>
-                {shopFloorJobCards.length} Operations Queued / In Progress
-              </span>
+            <div className="sales-search-box">
+              <Search size={13} className="sales-search-icon" />
+              <input
+                type="text"
+                className="sales-search-input"
+                placeholder="Search operation, station, order #..."
+                value={dispatchSearch}
+                onChange={(e) => setDispatchSearch(e.target.value)}
+              />
+              {dispatchSearch && (
+                <button
+                  type="button"
+                  className="sales-search-clear"
+                  onClick={() => setDispatchSearch('')}
+                >
+                  <X size={12} />
+                </button>
+              )}
             </div>
           </div>
 
-          <div>
-            {shopFloorJobCards.length > 0 ? (
-              <div className="production-job-grid">
-                {shopFloorJobCards.map(({ operation: op, order }) => (
-                  <div key={op.id} className={`production-job-card ${op.status.toLowerCase()}`}>
-                    <div className="production-job-top">
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span className="sequence-badge">OP {String(op.sequence).padStart(2, '0')}</span>
-                          <span className="order-number-pill">{order.orderNumber}</span>
-                          <span className={`priority-tag priority-${order.priority.toLowerCase()}`}>
-                            {order.priority}
-                          </span>
-                        </div>
-                        <div style={{ marginTop: '4px' }}>
-                          <b style={{ fontSize: '13px', color: 'var(--sp-text)' }}>{op.name}</b>
-                          <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                            {order.finishedSku} · {order.finishedItemName} (Target: {order.targetQuantity})
-                          </div>
-                        </div>
-                      </div>
-                      <Status label={formatAuditLabel(op.status)} />
-                    </div>
+          {/* Linear Dispatch Queue Table */}
+          <div className="sales-table-card">
+            <div className="sales-table-scroll">
+              <table className="sales-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '8%' }}>OP #</th>
+                    <th style={{ width: '22%' }}>JOB CARD & WORK CENTER</th>
+                    <th style={{ width: '16%' }}>WORK ORDER #</th>
+                    <th style={{ width: '16%' }}>PRODUCT</th>
+                    <th style={{ width: '12%', textAlign: 'right' }}>PLANNED DURATION</th>
+                    <th style={{ width: '8%' }}>PRIORITY</th>
+                    <th style={{ width: '8%' }}>STATUS</th>
+                    <th style={{ width: '10%', textAlign: 'right' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredJobCards.length > 0 ? (
+                    filteredJobCards.map(({ operation: op, order, prevIncomplete }) => {
+                      const plannedRunTime = Math.ceil(Number(op.runMinutesPerUnit) * order.targetQuantity);
+                      const isReadyToStart = op.status === 'PENDING' && !prevIncomplete && ['RELEASED', 'IN_PROGRESS'].includes(order.status);
+                      const isQueued = op.status === 'PENDING' && prevIncomplete;
+                      const isActive = op.status === 'IN_PROGRESS';
 
-                    <div style={{ marginTop: '8px', fontSize: '11.5px', color: 'var(--sp-text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="station-code-pill">{op.workCenterCode}</span>
-                      <span>{op.workCenterName}</span>
-                      <span>·</span>
-                      <span>Planned {op.setupMinutes}m setup + {Math.ceil(Number(op.runMinutesPerUnit) * order.targetQuantity)}m run</span>
-                    </div>
-
-                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                        {op.status === 'IN_PROGRESS' ? (
-                          <span style={{ color: 'var(--sp-brand)', fontWeight: 600 }}>Active at Station</span>
-                        ) : (
-                          <span>Ready for pickup</span>
-                        )}
-                      </div>
-
-                      {op.status === 'PENDING' && (
-                        <button
-                          type="button"
-                          className="mini-action"
-                          disabled={saving}
-                          onClick={() => run(`/work-orders/${order.id}/operations/${op.id}/start`)}
-                        >
-                          <Play size={11} style={{ marginRight: '4px' }} />
-                          Start Operation
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
-                No operations currently awaiting dispatch or running on the shop floor.
-              </div>
-            )}
+                      return (
+                        <tr key={op.id} className="sales-row">
+                          <td>
+                            <span className="sequence-badge">OP {String(op.sequence).padStart(2, '0')}</span>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600, color: 'var(--sp-text)', fontSize: '12.5px' }}>{op.name}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
+                              <span className="station-code-pill" style={{ fontSize: '10px' }}>{op.workCenterCode}</span>
+                              <span>{op.workCenterName}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="order-number-pill interactive"
+                              onClick={() => setSelectedOrderId(order.id)}
+                              title={`Open Work Order ${order.orderNumber}`}
+                            >
+                              <span>{order.orderNumber}</span>
+                              <ArrowUpRight size={11} className="order-link-arrow" />
+                            </button>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>{order.finishedSku}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '1px' }}>Target: {order.targetQuantity} units</div>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <div style={{ fontVariantNumeric: 'tabular-nums', fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)' }}>
+                              {op.setupMinutes + plannedRunTime}m
+                            </div>
+                            <div style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)' }}>
+                              {op.setupMinutes}m setup · {plannedRunTime}m run
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`priority-tag priority-${order.priority.toLowerCase()}`}>
+                              {order.priority}
+                            </span>
+                          </td>
+                          <td>
+                            <Status label={isActive ? 'In Progress' : isQueued ? 'Queued' : 'Ready'} />
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            {isActive ? (
+                              <button
+                                type="button"
+                                className="mini-action primary"
+                                onClick={() => setSelectedOrderId(order.id)}
+                                style={{ height: '24px', padding: '0 8px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                title="Open order workspace to log output and complete operation"
+                              >
+                                <ExternalLink size={10} />
+                                <span>Log Output</span>
+                              </button>
+                            ) : isReadyToStart ? (
+                              <button
+                                type="button"
+                                className="button button-primary"
+                                disabled={saving}
+                                onClick={() => run(`/work-orders/${order.id}/operations/${op.id}/start`)}
+                                style={{ height: '24px', padding: '0 8px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                title="Start job card execution at station"
+                              >
+                                <Play size={10} />
+                                <span>Start Job</span>
+                              </button>
+                            ) : isQueued ? (
+                              <span
+                                className="linear-routing-locked-tag"
+                                title="Sequence locked: complete earlier routing operations before starting this station"
+                              >
+                                <Lock size={10} />
+                                <span>Locked</span>
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={8} className="empty-cell">
+                        No operations currently matching dispatch criteria.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+      )}
+        </>
       )}
 
       {/* 7. MODALS */}

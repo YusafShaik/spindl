@@ -1,8 +1,14 @@
 export function formatAuditLabel(value: unknown): string {
-  return String(value || '')
+  if (!value) return '';
+  const str = String(value)
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .trim();
+  return str
+    .toLowerCase()
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 export function formatAuditValue(value: unknown): string {

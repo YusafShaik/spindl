@@ -14,7 +14,6 @@ export interface ItemSummary {
   available: number;
   lowStockThreshold: number;
   itemType: string;
-  barcode?: string | null;
 }
 
 export interface InventoryMovement {

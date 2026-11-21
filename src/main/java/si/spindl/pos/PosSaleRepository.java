@@ -20,6 +20,7 @@ public interface PosSaleRepository extends JpaRepository<PosSaleEntity,UUID> {
     @Query("select s from PosSaleEntity s where s.tenantId=:tenantId and s.id=:id")
     Optional<PosSaleEntity> findForUpdate(@Param("tenantId") UUID tenantId,@Param("id") UUID id);
     List<PosSaleEntity> findAllByTenantIdAndSessionIdOrderByPostedAtDesc(UUID tenantId,UUID sessionId);
+    List<PosSaleEntity> findAllByTenantIdOrderByPostedAtDesc(UUID tenantId);
     @Query("select coalesce(sum(t.amount),0) from PosSaleTenderEntity t where t.tenantId=:tenantId and t.sale.session.id=:sessionId and t.sale.status<>'VOIDED' and t.method='CASH'")
     BigDecimal cashTenderedForSession(@Param("tenantId") UUID tenantId,@Param("sessionId") UUID sessionId);
     @Query("select coalesce(sum(t.amount),0) from PosRefundTenderEntity t where t.tenantId=:tenantId and t.refund.session.id=:sessionId and t.method='CASH'")

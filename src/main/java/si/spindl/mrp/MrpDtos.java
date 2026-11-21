@@ -103,46 +103,6 @@ public final class MrpDtos {
         }
     }
 
-    public record TimePhasedBucket(
-            String bucketLabel,
-            LocalDate startDate,
-            LocalDate endDate,
-            int grossDemand,
-            int scheduledReceipts,
-            int projectedAvailable,
-            int netRequirements,
-            int plannedOrderReleases
-    ) {}
-
-    public record TimePhasedMatrixRow(
-            UUID itemId,
-            String sku,
-            String itemName,
-            String unit,
-            String itemType,
-            int onHand,
-            int safetyStock,
-            int leadTimeDays,
-            String actionType,
-            List<TimePhasedBucket> buckets
-    ) {}
-
-    public record BomExplosionNode(
-            UUID itemId,
-            String sku,
-            String itemName,
-            int level,
-            String itemType,
-            int quantityPerUnit,
-            BigDecimal scrapPercent,
-            int leadTimeDays,
-            int onHand,
-            int available,
-            int netShortage,
-            String actionType,
-            List<BomExplosionNode> children
-    ) {}
-
     public record MrpMetricsView(
             long totalRuns,
             long openShortagesCount,

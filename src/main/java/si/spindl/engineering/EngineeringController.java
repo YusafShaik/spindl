@@ -44,11 +44,6 @@ public class EngineeringController {
         return service.getEco(tenant.currentTenantId(), id);
     }
 
-    @GetMapping("/ecos/{id}/redline")
-    public EngineeringDtos.BomRedlineComparison getRedline(@PathVariable UUID id) {
-        return service.getRedlineComparison(tenant.currentTenantId(), id);
-    }
-
     // ==========================================
     // CREATE ECO
     // ==========================================

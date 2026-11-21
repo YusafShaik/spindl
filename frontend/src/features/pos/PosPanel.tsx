@@ -294,14 +294,12 @@ function formatDateTime(dateStr?: string | null): string {
 
 export function PosPanel({ items, customers, role, userId, notify }: PosPanelProps) {
   // Navigation & Data States
-  const [activeTab, setActiveTab] = useState<'terminal' | 'shifts' | 'receipts' | 'registers'>('terminal');
+  const [activeTab, setActiveTab] = useState<'terminal' | 'receipts'>('terminal');
   const [registers, setRegisters] = useState<PosRegister[]>([]);
   const [sessions, setSessions] = useState<PosSession[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseSummary[]>([]);
-  const [cashiers, setCashiers] = useState<PosCashier[]>([]);
   const [salesHistory, setSalesHistory] = useState<PosSale[]>([]);
   const [refundKeys, setRefundKeys] = useState<Record<string, string>>({});
-  const [receiptSessionId, setReceiptSessionId] = useState<string>('');
   const [tax, setTax] = useState<PosTax>({ taxCode: 'NONE', taxRate: 0 });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -321,23 +319,11 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
   const [receiptModal, setReceiptModal] = useState<PosReceipt | null>(null);
   const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null);
   const [editingBasketLineId, setEditingBasketLineId] = useState<string | null>(null);
+  const activeRegister = registers.find((r) => r.id === registerId) || registers[0] || null;
 
-  // Search & Filters for Receipts & Registers
+  // Search & Filters for Receipts
   const [receiptSearch, setReceiptSearch] = useState<string>('');
   const [receiptStatusFilter, setReceiptStatusFilter] = useState<'ALL' | 'POSTED' | 'VOIDED' | 'REFUNDED' | 'PARTIAL_REFUND'>('ALL');
-  const [registerSearch, setRegisterSearch] = useState<string>('');
-
-  // Modals States
-  const [isOpenShiftModalOpen, setIsOpenShiftModalOpen] = useState(false);
-  const [openShiftFloat, setOpenShiftFloat] = useState('500.00');
-
-  const [isCloseShiftModalOpen, setIsCloseShiftModalOpen] = useState(false);
-  const [closeShiftSession, setCloseShiftSession] = useState<PosSession | null>(null);
-  const [closeShiftCountedCash, setCloseShiftCountedCash] = useState('0.00');
-
-  const [isNewRegisterModalOpen, setIsNewRegisterModalOpen] = useState(false);
-  const [newRegisterWarehouseId, setNewRegisterWarehouseId] = useState('');
-  const [newRegisterCashierId, setNewRegisterCashierId] = useState('');
 
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [refundTargetSale, setRefundTargetSale] = useState<PosSale | null>(null);
@@ -361,28 +347,10 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
   const searchInputRef = useRef<HTMLInputElement>(null);
   const manager = ['OWNER', 'ADMIN', 'MANAGER'].includes(role ?? '');
 
-  // Cashier list loader
-  const loadCashiers = async (warehouseId: string): Promise<void> => {
-    if (!manager || !warehouseId) {
-      setCashiers([]);
-      return;
-    }
-    try {
-      const response = await apiFetch(`${API}/pos/cashiers?warehouseId=${encodeURIComponent(warehouseId)}`);
-      setCashiers(response.ok ? await response.json() : []);
-    } catch {
-      setCashiers([]);
-    }
-  };
-
   // Sales history loader
-  const loadSales = async (sessionId: string): Promise<void> => {
-    if (!sessionId) {
-      setSalesHistory([]);
-      return;
-    }
+  const loadSales = async (): Promise<void> => {
     try {
-      const response = await apiFetch(`${API}/pos/sessions/${sessionId}/sales`);
+      const response = await apiFetch(`${API}/pos/sales`);
       setSalesHistory(response.ok ? await response.json() : []);
     } catch {
       setSalesHistory([]);
@@ -418,16 +386,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
         : (mine?.registerId || registerRows[0]?.id || '');
       setRegisterId(defaultReg);
 
-      const selectedSession = mine?.id || (sessionRows.some((r) => r.id === receiptSessionId) ? receiptSessionId : sessionRows[0]?.id || '');
-      setReceiptSessionId(selectedSession);
-      if (selectedSession) {
-        await loadSales(selectedSession);
-      }
-
-      if (manager && warehouseRows[0]) {
-        setNewRegisterWarehouseId(warehouseRows[0].id);
-        await loadCashiers(warehouseRows[0].id);
-      }
+      await loadSales();
     } catch {
       notify('Could not load point-of-sale data');
     } finally {
@@ -687,18 +646,32 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
       await postCheckout(pendingCheckout);
       return;
     }
-    if (!currentSession) {
-      notify('You must have an open register shift before posting a sale.');
-      setIsOpenShiftModalOpen(true);
-      return;
-    }
     if (!basket.length) {
       notify('Basket is empty. Add products to post sale.');
       return;
     }
 
+    let activeSessionId = currentSession?.id || (sessions.find(s => s.status === 'OPEN')?.id) || '';
+    if (!activeSessionId && (registerId || registers[0]?.id)) {
+      try {
+        const regToUse = registerId || registers[0]?.id;
+        const res = await apiFetch(`${API}/pos/sessions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registerId: regToUse, openingFloat: 0 })
+        });
+        if (res.ok) {
+          const sess = await res.json();
+          activeSessionId = sess.id;
+          setCurrentSession(sess);
+        }
+      } catch {
+        // backend checkout will auto-resolve session
+      }
+    }
+
     const intent: PendingCheckout = {
-      sessionId: currentSession.id,
+      sessionId: activeSessionId || crypto.randomUUID(),
       idempotencyKey: crypto.randomUUID(),
       createdAt: Date.now(),
       payload: {
@@ -747,103 +720,6 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
     return () => window.removeEventListener('online', retry);
   }, [pendingCheckout]);
 
-  // Open Shift Form Submission
-  const handleOpenShift = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const targetRegId = form.get('registerId') as string;
-    const openingFloatVal = Number(form.get('openingFloat') || 0);
-
-    setBusy(true);
-    try {
-      const response = await apiFetch(`${API}/pos/sessions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          registerId: targetRegId,
-          openingFloat: openingFloatVal
-        })
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail || 'Could not open shift. Check your store assignment and register status.');
-      }
-      const opened = await response.json();
-      setCurrentSession(opened);
-      setIsOpenShiftModalOpen(false);
-      notify(`Register shift opened · Opening float ${formatCurrency(openingFloatVal)}`);
-      await refresh();
-    } catch (error: unknown) {
-      notify(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Close Shift Submission
-  const handleCloseShift = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault();
-    if (!closeShiftSession) return;
-    const form = new FormData(event.currentTarget);
-    const countedCashVal = Number(form.get('countedCash') || 0);
-
-    setBusy(true);
-    try {
-      const response = await apiFetch(`${API}/pos/sessions/${closeShiftSession.id}/close`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ countedCash: countedCashVal })
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail || 'Could not close shift');
-      }
-      const closed = await response.json();
-      notify(`Shift closed · cash variance ${formatCurrency(closed.cashVariance)}`);
-      setIsCloseShiftModalOpen(false);
-      setCloseShiftSession(null);
-      if (currentSession?.id === closeShiftSession.id) {
-        setCurrentSession(null);
-        setBasket([]);
-      }
-      await refresh();
-    } catch (error: unknown) {
-      notify(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Create Register
-  const handleCreateRegister = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setBusy(true);
-    try {
-      const response = await apiFetch(`${API}/pos/registers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: form.get('code'),
-          name: form.get('name'),
-          warehouseId: form.get('warehouseId'),
-          cashierUserId: form.get('cashierUserId')
-        })
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail || 'Could not create register');
-      }
-      setIsNewRegisterModalOpen(false);
-      notify('Register created and cashier assigned');
-      await refresh();
-    } catch (error: unknown) {
-      notify(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   // Void Sale
   const handleVoidSale = async (sale: PosSale): Promise<void> => {
     const reason = window.prompt(
@@ -864,7 +740,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail || 'Could not void this receipt');
       notify(`${body.receiptNumber} voided · cash returned`);
-      await loadSales(sale.sessionId);
+      await loadSales();
       await refresh();
     } catch (error: unknown) {
       notify(errorMessage(error));
@@ -976,7 +852,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
       notify(`${body.refundNumber} recorded · ${formatCurrency(body.total)} refunded`);
       setIsRefundModalOpen(false);
       setRefundTargetSale(null);
-      await loadSales(refundTargetSale.sessionId);
+      await loadSales();
       await refresh();
     } catch (error: unknown) {
       notify(errorMessage(error));
@@ -1040,21 +916,6 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
     return list;
   }, [salesHistory, receiptStatusFilter, receiptSearch, customers]);
 
-  // Registers Filtered List
-  const filteredRegisters = useMemo(() => {
-    if (!registerSearch.trim()) return registers;
-    const q = registerSearch.toLowerCase().trim();
-    return registers.filter((r) => {
-      const cashier = cashiers.find((c) => c.userId === r.assignedCashierUserId);
-      return (
-        r.code.toLowerCase().includes(q) ||
-        r.name.toLowerCase().includes(q) ||
-        r.warehouseName.toLowerCase().includes(q) ||
-        (cashier && cashier.name.toLowerCase().includes(q))
-      );
-    });
-  }, [registers, registerSearch, cashiers]);
-
   // Export Receipts CSV
   const exportReceiptsCsv = (): void => {
     const today = new Date().toISOString().slice(0, 10);
@@ -1079,61 +940,46 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
     notify('POS Receipts exported as CSV');
   };
 
-  // Open Close Shift Dialog
-  const triggerCloseShift = (session: PosSession): void => {
-    setCloseShiftSession(session);
-    // Pre-fill with expected cash
-    const exp = Number(session.openingFloat || 0) + (session.id === currentSession?.id ? shiftCashRevenue : 0);
-    setCloseShiftCountedCash(exp.toFixed(2));
-    setIsCloseShiftModalOpen(true);
-  };
-
   return (
     <div className="sales-screen-layout pos-screen-layout">
       {/* 1. Executive Telemetry Strip — 4 Monochrome Linear Metric Cards */}
       <div className="sales-metric-strip">
         <div className="sales-metric-card">
           <div className="sales-metric-header">
-            <span className="sales-metric-label">REGISTER SHIFT</span>
+            <span className="sales-metric-label">STORE LOCATION</span>
             <Store size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
           <div className="sales-metric-val">
-            {currentSession ? currentSession.registerCode : 'Shift Closed'}
+            {activeRegister?.warehouseName || 'Main Store'}
           </div>
           <div className="sales-metric-sub">
-            {currentSession
-              ? `${currentSession.registerName} · ${currentSession.warehouseName}`
-              : registers.length > 0
-              ? `${registers.length} terminals configured`
-              : 'No register assigned'}
+            Terminal {activeRegister?.code || 'REG-01'} · Inventory synced
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
-            <span className="sales-metric-label">SHIFT REVENUE</span>
+            <span className="sales-metric-label">TOTAL POS SALES</span>
             <DollarSign size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
           <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
             {formatCurrency(shiftSalesRevenue)}
           </div>
           <div className="sales-metric-sub">
-            {salesHistory.length} receipts posted in active shift
+            {salesHistory.length} receipts posted
           </div>
         </div>
 
         <div className="sales-metric-card">
           <div className="sales-metric-header">
-            <span className="sales-metric-label">DRAWER CASH</span>
+            <span className="sales-metric-label">CASH COLLECTED</span>
             <Coins size={13} style={{ color: 'var(--sp-text-muted)' }} />
           </div>
           <div className="sales-metric-val" style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {currentSession ? formatCurrency(currentDrawerCash) : '—'}
+            {formatCurrency(shiftCashRevenue)}
           </div>
           <div className="sales-metric-sub">
-            {currentSession
-              ? `Float ${formatCurrency(currentSession.openingFloat)} · ${formatCurrency(shiftCashRevenue)} cash in`
-              : 'Open shift to initialize drawer'}
+            Electronic: {formatCurrency(shiftElectronicRevenue)}
           </div>
         </div>
 
@@ -1146,7 +992,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
             {tax.taxCode} ({Number(tax.taxRate || 0)}%)
           </div>
           <div className="sales-metric-sub">
-            {sellableProducts.length} sellable SKUs · {openSessionsCount} active open shifts
+            {sellableProducts.length} sellable SKUs in catalog
           </div>
         </div>
       </div>
@@ -1190,16 +1036,6 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
 
           <button
             type="button"
-            className={`sales-subnav-tab ${activeTab === 'shifts' ? 'active' : ''}`}
-            onClick={() => setActiveTab('shifts')}
-          >
-            <Clock size={13} />
-            <span>Shifts & Drawers</span>
-            {openSessionsCount > 0 && <span className="sales-subnav-badge">{openSessionsCount}</span>}
-          </button>
-
-          <button
-            type="button"
             className={`sales-subnav-tab ${activeTab === 'receipts' ? 'active' : ''}`}
             onClick={() => setActiveTab('receipts')}
           >
@@ -1207,18 +1043,6 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
             <span>Receipts & Returns</span>
             {salesHistory.length > 0 && <span className="sales-subnav-badge">{salesHistory.length}</span>}
           </button>
-
-          {manager && (
-            <button
-              type="button"
-              className={`sales-subnav-tab ${activeTab === 'registers' ? 'active' : ''}`}
-              onClick={() => setActiveTab('registers')}
-            >
-              <Sliders size={13} />
-              <span>Register Setup</span>
-              <span className="sales-subnav-badge">{registers.length}</span>
-            </button>
-          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1227,44 +1051,11 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
             className="sales-action-btn secondary"
             onClick={() => void refresh()}
             disabled={loading || busy}
-            title="Refresh POS registers and sessions"
+            title="Refresh POS terminal"
           >
             <RefreshCw size={12} className={loading || busy ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
-
-          {!currentSession && registers.length > 0 && (
-            <button
-              type="button"
-              className="sales-action-btn primary"
-              onClick={() => setIsOpenShiftModalOpen(true)}
-            >
-              <Store size={13} />
-              <span>Open Shift</span>
-            </button>
-          )}
-
-          {currentSession && manager && (
-            <button
-              type="button"
-              className="sales-action-btn secondary"
-              onClick={() => triggerCloseShift(currentSession)}
-            >
-              <Clock size={13} />
-              <span>Close Shift</span>
-            </button>
-          )}
-
-          {manager && activeTab === 'registers' && (
-            <button
-              type="button"
-              className="sales-action-btn primary"
-              onClick={() => setIsNewRegisterModalOpen(true)}
-            >
-              <Plus size={13} />
-              <span>New Register</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -1272,55 +1063,62 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
 
       {/* TAB 1: REGISTER TERMINAL WORKSPACE */}
       {activeTab === 'terminal' && (
-        <div className="pos-terminal-layout">
+        <div className={`pos-terminal-layout ${basket.length > 0 ? 'has-basket' : 'basket-empty'}`}>
           {/* Left Column: Product Catalogue & Scanner */}
           <div className="pos-catalogue-column">
-            {/* Shift Inactive Banner if closed */}
-            {!currentSession && (
-              <div className="pos-shift-warning-banner">
-                <AlertCircle size={15} />
-                <div>
-                  <b>Terminal is offline / shift closed.</b>
-                  <p>Open a register shift to record sales and connect to the cash drawer.</p>
+            {/* Unified Barcode Scanner, Filter & View Controls */}
+            <div className="pos-terminal-toolbar">
+              <div className="pos-terminal-toolbar-left">
+                <div className="pos-terminal-search-box">
+                  <Search size={14} className="sales-search-icon" />
+                  <input
+                    ref={searchInputRef}
+                    className="pos-terminal-search-input"
+                    placeholder="Scan barcode [Enter] or search SKU, name…"
+                    value={productSearch}
+                    disabled={!!pendingCheckout}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    onKeyDown={handleProductScan}
+                  />
+                  {productSearch ? (
+                    <button
+                      type="button"
+                      className="sales-search-clear"
+                      onClick={() => setProductSearch('')}
+                      title="Clear search"
+                    >
+                      <X size={12} />
+                    </button>
+                  ) : (
+                    <kbd className="sales-search-kbd">/</kbd>
+                  )}
                 </div>
+              </div>
+
+              <div className="pos-terminal-toolbar-right">
+                {/* Category Dropdown Filter */}
+                <select
+                  className="linear-select"
+                  value={productCategoryFilter}
+                  onChange={(e) => setProductCategoryFilter(e.target.value)}
+                  style={{ height: '32px', fontSize: '12px', minWidth: '150px' }}
+                >
+                  {availableCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.label} ({cat.count})
+                    </option>
+                  ))}
+                </select>
+
+                {/* In Stock Toggle Pill */}
                 <button
                   type="button"
-                  className="button button-primary"
-                  onClick={() => setIsOpenShiftModalOpen(true)}
-                  style={{ height: '28px', fontSize: '11.5px', padding: '0 10px' }}
+                  className={`pos-toggle-pill ${productInStockOnly ? 'active' : ''}`}
+                  onClick={() => setProductInStockOnly(!productInStockOnly)}
                 >
-                  Open Shift
+                  <span>In stock only</span>
                 </button>
-              </div>
-            )}
 
-            {/* Filter & Barcode Search Bar */}
-            <div className="sales-filter-toolbar" style={{ marginBottom: '8px' }}>
-              <div className="sales-search-box" style={{ flex: 1, minWidth: '240px' }}>
-                <Search size={13} className="sales-search-icon" />
-                <input
-                  ref={searchInputRef}
-                  className="sales-search-input"
-                  placeholder="Scan barcode [Enter] or search SKU / item name…"
-                  value={productSearch}
-                  disabled={!!pendingCheckout}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  onKeyDown={handleProductScan}
-                />
-                {productSearch ? (
-                  <button
-                    type="button"
-                    className="sales-search-clear"
-                    onClick={() => setProductSearch('')}
-                  >
-                    <X size={12} />
-                  </button>
-                ) : (
-                  <kbd className="sales-search-kbd">/</kbd>
-                )}
-              </div>
-
-              <div className="sales-filter-group" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {/* Linear View Mode Switcher */}
                 <div className="pos-view-toggle">
                   <button
@@ -1340,31 +1138,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                     <LayoutList size={13} />
                   </button>
                 </div>
-
-                {/* In Stock Toggle Pill */}
-                <button
-                  type="button"
-                  className={`pos-toggle-pill ${productInStockOnly ? 'active' : ''}`}
-                  onClick={() => setProductInStockOnly(!productInStockOnly)}
-                >
-                  <span>In stock only</span>
-                </button>
               </div>
-            </div>
-
-            {/* Linear Category Filter Pills */}
-            <div className="pos-category-pills">
-              {availableCategories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  className={`pos-category-pill ${productCategoryFilter === cat.id ? 'active' : ''}`}
-                  onClick={() => setProductCategoryFilter(cat.id)}
-                >
-                  <span>{cat.label}</span>
-                  <span className="pos-category-count">{cat.count}</span>
-                </button>
-              ))}
             </div>
 
             {/* Product Catalogue View: Grid or High-Density Table */}
@@ -1548,8 +1322,9 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
             )}
           </div>
 
-          {/* Right Column: Interactive Basket & Checkout */}
-          <div className="pos-basket-column">
+          {/* Right Column: Interactive Basket & Checkout — ONLY VISIBLE WHEN BASKET HAS ITEMS */}
+          {basket.length > 0 && (
+            <div className="pos-basket-column">
             <div className="pos-basket-card">
               {/* Basket Header */}
               <div className="pos-basket-header">
@@ -1845,407 +1620,82 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                 <button
                   type="submit"
                   className="sales-action-btn primary pos-post-sale-btn"
-                  disabled={busy || !basket.length || !currentSession || !!pendingCheckout}
+                  disabled={busy || !basket.length || !!pendingCheckout}
                 >
                   {pendingCheckout
                     ? 'Sale awaiting sync…'
                     : busy
                     ? 'Posting sale…'
-                    : !currentSession
-                    ? 'Shift Closed'
                     : `⚡ Post Sale · ${formatCurrency(totalDue)}`}
                 </button>
               </form>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* TAB 2: SHIFTS & DRAWERS */}
-      {activeTab === 'shifts' && (
-        <div className="pos-shifts-layout">
-          {/* Active Cashier Shift Linear Control Strip */}
-          {currentSession ? (
-            <div
-              className="sales-table-card"
-              style={{
-                padding: '16px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '16px',
-                background: 'var(--sp-surface)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                <span className="sales-ref-badge" style={{ fontSize: '13px', padding: '4px 10px' }}>
-                  {currentSession.registerCode}
-                </span>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--sp-text)' }}>
-                      {currentSession.registerName}
-                    </span>
-                    <span className="sales-warehouse-pill">
-                      {currentSession.warehouseName}
-                    </span>
-                    <Status label="OPEN" />
-                  </div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', marginTop: '3px' }}>
-                    Opened on {formatDate(currentSession.openedAt)} at {formatTime(currentSession.openedAt)}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
-                <div style={{ textAlign: 'right', fontSize: '11.5px' }}>
-                  <div style={{ color: 'var(--sp-text-muted)' }}>Opening Float</div>
-                  <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: 'var(--sp-text)' }}>
-                    {formatCurrency(currentSession.openingFloat)}
-                  </div>
-                </div>
-
-                <div style={{ textAlign: 'right', fontSize: '11.5px' }}>
-                  <div style={{ color: 'var(--sp-text-muted)' }}>Cash Sales</div>
-                  <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: 'var(--sp-success)' }}>
-                    +{formatCurrency(shiftCashRevenue)}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: '6px',
-                    background: 'var(--sp-surface-subtle)',
-                    border: '1px solid var(--sp-border)',
-                    textAlign: 'right'
-                  }}
-                >
-                  <div style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
-                    Expected Drawer Cash
-                  </div>
-                  <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: '15px', color: 'var(--sp-text)' }}>
-                    {formatCurrency(currentDrawerCash)}
-                  </div>
-                </div>
-
-                {manager && (
-                  <button
-                    type="button"
-                    className="sales-action-btn secondary"
-                    onClick={() => triggerCloseShift(currentSession)}
-                    style={{ height: '32px' }}
-                  >
-                    <Clock size={13} />
-                    <span>Close Shift</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div
-              className="sales-table-card"
-              style={{
-                padding: '24px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: 'var(--sp-surface)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Store size={22} style={{ color: 'var(--sp-text-muted)' }} />
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--sp-text)' }}>No Active Register Shift</div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>Open a terminal shift to begin scanning items and managing cash drawers.</div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="sales-action-btn primary"
-                onClick={() => setIsOpenShiftModalOpen(true)}
-              >
-                <Store size={13} />
-                <span>Open Shift</span>
-              </button>
-            </div>
           )}
-
-          {/* All Open Shifts Across Terminals */}
-          <div className="sales-table-card">
-            <div className="sales-card-header">
-              <div>
-                <h3 className="sales-card-title">Active Open Shifts</h3>
-                <p className="sales-card-subtitle">Terminals currently operating on the shop floor</p>
-              </div>
-            </div>
-
-            <div className="sales-table-scroll">
-              <table className="sales-table">
-                <thead>
-                  <tr>
-                    <th>Register</th>
-                    <th>Store Warehouse</th>
-                    <th>Cashier</th>
-                    <th>Opened At</th>
-                    <th style={{ textAlign: 'right' }}>Opening Float</th>
-                    <th style={{ textAlign: 'center' }}>Status</th>
-                    <th style={{ textAlign: 'right' }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sessions
-                    .filter((s) => s.status === 'OPEN')
-                    .map((s) => (
-                      <tr key={s.id} className="sales-row">
-                        <td>
-                          <span className="sales-ref-badge">{s.registerCode}</span>
-                          <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px', marginTop: '2px' }}>
-                            {s.registerName}
-                          </div>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <WarehouseIcon size={12} style={{ color: 'var(--sp-text-muted)' }} />
-                            <span className="sales-warehouse-pill">{s.warehouseName}</span>
-                          </div>
-                        </td>
-                        <td>
-                          {s.cashierUserId === userId ? (
-                            <span className="sales-warehouse-pill" style={{ background: 'var(--sp-brand-soft)', color: 'var(--sp-brand)' }}>
-                              Current User
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: '12px', color: 'var(--sp-text)' }}>
-                              Cashier {s.cashierUserId.slice(0, 6).toUpperCase()}
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="sales-date-cell">
-                            {formatDate(s.openedAt)}
-                            <span style={{ fontSize: '10px', color: 'var(--sp-text-muted)', marginLeft: '4px' }}>
-                              {formatTime(s.openedAt)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
-                          {formatCurrency(s.openingFloat)}
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <Status label={s.status} />
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          {manager && (
-                            <button
-                              type="button"
-                              className="sales-action-btn secondary"
-                              onClick={() => triggerCloseShift(s)}
-                              style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
-                            >
-                              <span>Close Shift</span>
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-
-                  {!sessions.filter((s) => s.status === 'OPEN').length && (
-                    <tr>
-                      <td colSpan={7} className="empty-cell" style={{ padding: '32px 0', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
-                        No active open shifts on any register terminal.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Shift History Ledger */}
-          <div className="sales-table-card">
-            <div className="sales-card-header">
-              <div>
-                <h3 className="sales-card-title">Shift History Ledger</h3>
-                <p className="sales-card-subtitle">Closed register shifts, cash reconciliation, and variance telemetry</p>
-              </div>
-            </div>
-
-            <div className="sales-table-scroll">
-              <table className="sales-table">
-                <thead>
-                  <tr>
-                    <th>Register</th>
-                    <th>Opened</th>
-                    <th>Closed</th>
-                    <th style={{ textAlign: 'right' }}>Opening Float</th>
-                    <th style={{ textAlign: 'right' }}>Expected Cash</th>
-                    <th style={{ textAlign: 'right' }}>Counted Cash</th>
-                    <th style={{ textAlign: 'right' }}>Variance</th>
-                    <th style={{ textAlign: 'center' }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sessions
-                    .filter((s) => s.status === 'CLOSED')
-                    .map((s) => {
-                      const variance = Number(s.cashVariance || 0);
-                      const isBalanced = Math.abs(variance) < 0.01;
-                      return (
-                        <tr key={s.id} className="sales-row">
-                          <td>
-                            <span className="sales-ref-badge">{s.registerCode}</span>
-                            <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px', marginTop: '2px' }}>
-                              {s.warehouseName}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="sales-date-cell">
-                              {formatDate(s.openedAt)}
-                              <span style={{ fontSize: '10px', color: 'var(--sp-text-muted)', marginLeft: '4px' }}>
-                                {formatTime(s.openedAt)}
-                              </span>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="sales-date-cell">
-                              {s.closedAt ? (
-                                <>
-                                  {formatDate(s.closedAt)}
-                                  <span style={{ fontSize: '10px', color: 'var(--sp-text-muted)', marginLeft: '4px' }}>
-                                    {formatTime(s.closedAt)}
-                                  </span>
-                                </>
-                              ) : (
-                                '—'
-                              )}
-                            </div>
-                          </td>
-                          <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
-                            {formatCurrency(s.openingFloat)}
-                          </td>
-                          <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
-                            {s.expectedCash != null ? formatCurrency(s.expectedCash) : '—'}
-                          </td>
-                          <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
-                            {s.countedCash != null ? formatCurrency(s.countedCash) : '—'}
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            {isBalanced ? (
-                              <span className="sales-sub-highlight" style={{ fontSize: '11px' }}>
-                                Balanced (₹0.00)
-                              </span>
-                            ) : variance > 0 ? (
-                              <span className="sales-sub-warning" style={{ fontSize: '11px' }}>
-                                +{formatCurrency(variance)}
-                              </span>
-                            ) : (
-                              <span className="sales-fulfillment-tag pending" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', fontSize: '11px' }}>
-                                {formatCurrency(variance)}
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <Status label={s.status} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-
-                  {!sessions.filter((s) => s.status === 'CLOSED').length && (
-                    <tr>
-                      <td colSpan={8} className="empty-cell" style={{ padding: '32px 0', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
-                        No closed shift records found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       )}
 
-      {/* TAB 3: RECEIPTS & RETURNS */}
+      {/* TAB 2: RECEIPTS & RETURNS */}
+
       {activeTab === 'receipts' && (
         <div className="pos-receipts-layout">
           <div className="sales-table-card">
             <div className="sales-card-header">
               <div>
                 <h2 className="sales-card-title">Receipts & Returns Ledger</h2>
-                <p className="sales-card-subtitle">Transactions posted on register shifts with item-level returns and voiding</p>
+                <p className="sales-card-subtitle">Complete audit ledger of sales receipts, customer refunds, and return credit notes</p>
               </div>
             </div>
 
             {/* Linear Toolbar for Receipts */}
-            <div className="sales-toolbar" style={{ padding: '10px 16px', borderBottom: '1px solid var(--sp-border)' }}>
-              <div className="sales-filter-pills">
+            <div className="pos-receipts-toolbar">
+              <div className="sales-pill-group">
                 <button
                   type="button"
-                  className={`sales-filter-pill ${receiptStatusFilter === 'ALL' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${receiptStatusFilter === 'ALL' ? 'active' : ''}`}
                   onClick={() => setReceiptStatusFilter('ALL')}
                 >
-                  All Receipts
-                  <span className="sales-filter-count">{salesHistory.length}</span>
+                  <span>All Receipts</span>
+                  <span className="sales-pill-count">{salesHistory.length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${receiptStatusFilter === 'POSTED' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${receiptStatusFilter === 'POSTED' ? 'active' : ''}`}
                   onClick={() => setReceiptStatusFilter('POSTED')}
                 >
-                  Posted
-                  <span className="sales-filter-count">
+                  <span>Posted</span>
+                  <span className="sales-pill-count">
                     {salesHistory.filter((s) => s.status === 'POSTED').length}
                   </span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${receiptStatusFilter === 'REFUNDED' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${receiptStatusFilter === 'REFUNDED' ? 'active' : ''}`}
                   onClick={() => setReceiptStatusFilter('REFUNDED')}
                 >
-                  Refunded
-                  <span className="sales-filter-count">
+                  <span>Refunded</span>
+                  <span className="sales-pill-count">
                     {salesHistory.filter((s) => ['REFUNDED', 'PARTIAL_REFUND'].includes(s.status)).length}
                   </span>
                 </button>
                 <button
                   type="button"
-                  className={`sales-filter-pill ${receiptStatusFilter === 'VOIDED' ? 'active' : ''}`}
+                  className={`sales-pill-btn ${receiptStatusFilter === 'VOIDED' ? 'active' : ''}`}
                   onClick={() => setReceiptStatusFilter('VOIDED')}
                 >
-                  Voided
-                  <span className="sales-filter-count">
+                  <span>Voided</span>
+                  <span className="sales-pill-count">
                     {salesHistory.filter((s) => s.status === 'VOIDED').length}
                   </span>
                 </button>
               </div>
 
-              <div className="sales-toolbar-right" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '12px', color: 'var(--sp-text-muted)' }}>Shift:</span>
-                  <select
-                    className="sales-filter-select"
-                    value={receiptSessionId}
-                    onChange={(e) => {
-                      setReceiptSessionId(e.target.value);
-                      void loadSales(e.target.value);
-                    }}
-                    style={{ maxWidth: '240px' }}
-                  >
-                    {sessions.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.registerCode} · {formatDate(s.openedAt)} {formatTime(s.openedAt)} ({s.status})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="sales-search-box" style={{ width: '230px' }}>
+              <div className="pos-receipts-toolbar-right">
+                <div className="pos-receipts-search-box">
                   <Search size={13} className="sales-search-icon" />
                   <input
-                    className="sales-search-input"
-                    placeholder="Search receipt #, customer…"
+                    className="pos-terminal-search-input"
+                    placeholder="Search receipt #, customer, SKU…"
                     value={receiptSearch}
                     onChange={(e) => setReceiptSearch(e.target.value)}
                   />
@@ -2254,6 +1704,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                       type="button"
                       className="sales-search-clear"
                       onClick={() => setReceiptSearch('')}
+                      title="Clear search"
                     >
                       <X size={12} />
                     </button>
@@ -2268,10 +1719,10 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                   onClick={exportReceiptsCsv}
                   disabled={!visibleReceipts.length}
                   title="Export Receipts as CSV"
-                  style={{ height: '30px', fontSize: '12px' }}
+                  style={{ height: '32px', padding: '0 12px', fontSize: '12px' }}
                 >
                   <Download size={13} />
-                  <span>Export</span>
+                  <span>Export CSV</span>
                 </button>
               </div>
             </div>
@@ -2281,16 +1732,16 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
               <table className="sales-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '28px' }}></th>
-                    <th style={{ width: '130px' }}>Receipt #</th>
-                    <th style={{ width: '120px' }}>Posted Date</th>
+                    <th style={{ width: '32px', textAlign: 'center' }}></th>
+                    <th style={{ width: '150px' }}>Receipt #</th>
+                    <th style={{ width: '135px' }}>Posted Date</th>
                     <th>Customer</th>
-                    <th style={{ width: '110px' }}>Tender</th>
-                    <th style={{ width: '45px', textAlign: 'center' }}>Items</th>
-                    <th style={{ width: '90px', textAlign: 'right' }}>Total</th>
-                    <th style={{ width: '80px', textAlign: 'right' }}>Refunded</th>
-                    <th style={{ width: '85px', textAlign: 'center' }}>Status</th>
-                    <th style={{ width: '155px', textAlign: 'right' }}>Actions</th>
+                    <th style={{ width: '120px' }}>Tender</th>
+                    <th style={{ width: '50px', textAlign: 'center' }}>Items</th>
+                    <th style={{ width: '100px', textAlign: 'right' }}>Total</th>
+                    <th style={{ width: '90px', textAlign: 'right' }}>Refunded</th>
+                    <th style={{ width: '95px', textAlign: 'center' }}>Status</th>
+                    <th style={{ width: '185px', textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2302,8 +1753,7 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                       sale.status === 'POSTED' &&
                       sale.refundedTotal === 0 &&
                       sale.tenders.length > 0 &&
-                      sale.tenders.every((t) => t.method === 'CASH') &&
-                      currentSession?.id === sale.sessionId;
+                      sale.tenders.every((t) => t.method === 'CASH');
 
                     const canRefund =
                       manager &&
@@ -2348,25 +1798,27 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                               {cust?.name || 'Walk-in Customer'}
                             </span>
                           </td>
-                          <td>
+                          <td style={{ verticalAlign: 'middle' }}>
                             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                              {(sale.tenders || []).map((t, idx) => (
-                                <span
-                                  key={idx}
-                                  className="station-code-pill"
-                                  style={{
-                                    fontSize: '10px',
-                                    maxWidth: '120px',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                  title={t.reference ? `${t.method} · ${t.reference}` : t.method}
-                                >
-                                  {t.method}
-                                  {t.reference ? ` · ${t.reference}` : ''}
-                                </span>
-                              ))}
+                              {(sale.tenders || []).map((t, idx) => {
+                                const label =
+                                  t.method === 'CASH'
+                                    ? 'Cash'
+                                    : t.method === 'CARD'
+                                    ? (t.reference ? `Card (${t.reference})` : 'Card')
+                                    : t.method === 'UPI'
+                                    ? (t.reference ? `UPI (${t.reference})` : 'UPI')
+                                    : t.method;
+                                return (
+                                  <span
+                                    key={idx}
+                                    className="pos-tender-badge"
+                                    title={t.reference ? `${t.method} · ${t.reference}` : t.method}
+                                  >
+                                    {label}
+                                  </span>
+                                );
+                              })}
                             </div>
                           </td>
                           <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
@@ -2387,11 +1839,11 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                           <td style={{ textAlign: 'center' }}>
                             <Status label={sale.status} />
                           </td>
-                          <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                            <div className="action-row" style={{ justifyContent: 'flex-end', gap: '4px' }}>
+                          <td style={{ textAlign: 'right', verticalAlign: 'middle' }} onClick={(e) => e.stopPropagation()}>
+                            <div className="pos-row-actions">
                               <button
                                 type="button"
-                                className="sales-action-btn secondary"
+                                className="pos-table-action-btn"
                                 onClick={() => {
                                   setReceiptModal({
                                     receiptNumber: sale.receiptNumber,
@@ -2412,7 +1864,6 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                                     tenders: sale.tenders
                                   });
                                 }}
-                                style={{ height: '24px', fontSize: '11px', padding: '0 6px' }}
                                 title="View printable receipt"
                               >
                                 <Printer size={12} />
@@ -2422,9 +1873,9 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                               {canRefund && (
                                 <button
                                   type="button"
-                                  className="sales-action-btn secondary"
+                                  className="pos-table-action-btn"
                                   onClick={() => openRefundModal(sale)}
-                                  style={{ height: '24px', fontSize: '11px', padding: '0 6px' }}
+                                  title="Process refund for this sale"
                                 >
                                   <RotateCcw size={12} />
                                   <span>Refund</span>
@@ -2434,10 +1885,9 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                               {canVoid && (
                                 <button
                                   type="button"
-                                  className="sales-action-btn secondary"
+                                  className="pos-table-action-btn danger"
                                   disabled={busy}
                                   onClick={() => void handleVoidSale(sale)}
-                                  style={{ height: '24px', fontSize: '11px', padding: '0 6px', color: 'var(--sp-danger)' }}
                                   title="Void cash sale and restore stock"
                                 >
                                   <span>Void</span>
@@ -2523,431 +1973,6 @@ export function PosPanel({ items, customers, role, userId, notify }: PosPanelPro
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: REGISTER SETUP (MANAGERS ONLY) */}
-      {activeTab === 'registers' && manager && (
-        <div className="pos-registers-layout">
-          <div className="sales-table-card">
-            <div className="sales-card-header">
-              <div>
-                <h2 className="sales-card-title">Configured POS Terminals</h2>
-                <p className="sales-card-subtitle">Hardware registers mapped to shop warehouses and assigned cashiers</p>
-              </div>
-              <button
-                type="button"
-                className="sales-action-btn primary"
-                onClick={() => setIsNewRegisterModalOpen(true)}
-              >
-                <Plus size={14} />
-                <span>New Register</span>
-              </button>
-            </div>
-
-            {/* Linear Toolbar for Registers */}
-            <div className="sales-toolbar" style={{ padding: '10px 16px', borderBottom: '1px solid var(--sp-border)' }}>
-              <div className="sales-filter-pills">
-                <button
-                  type="button"
-                  className="sales-filter-pill active"
-                >
-                  All Terminals
-                  <span className="sales-filter-count">{registers.length}</span>
-                </button>
-              </div>
-
-              <div className="sales-toolbar-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div className="sales-search-box" style={{ width: '260px' }}>
-                  <Search size={13} className="sales-search-icon" />
-                  <input
-                    className="sales-search-input"
-                    placeholder="Search code, terminal, cashier…"
-                    value={registerSearch}
-                    onChange={(e) => setRegisterSearch(e.target.value)}
-                  />
-                  {registerSearch ? (
-                    <button
-                      type="button"
-                      className="sales-search-clear"
-                      onClick={() => setRegisterSearch('')}
-                    >
-                      <X size={12} />
-                    </button>
-                  ) : (
-                    <kbd className="sales-search-kbd">/</kbd>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="sales-table-scroll">
-              <table className="sales-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '120px' }}>Register Code</th>
-                    <th style={{ width: '260px' }}>Terminal Name</th>
-                    <th style={{ width: '200px' }}>Store Warehouse</th>
-                    <th>Assigned Cashier</th>
-                    <th style={{ width: '100px', textAlign: 'center' }}>Status</th>
-                    <th style={{ width: '110px', textAlign: 'right' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRegisters.map((reg) => {
-                    const assignedCashier = cashiers.find((c) => c.userId === reg.assignedCashierUserId);
-                    const cashierInitials = assignedCashier?.name
-                      ? assignedCashier.name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')
-                          .toUpperCase()
-                          .slice(0, 2)
-                      : 'U';
-
-                    return (
-                      <tr key={reg.id} className="sales-row">
-                        <td>
-                          <span className="sales-ref-badge">{reg.code}</span>
-                        </td>
-                        <td>
-                          <b style={{ color: 'var(--sp-text)', fontSize: '13px' }}>{reg.name}</b>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <WarehouseIcon size={13} style={{ color: 'var(--sp-text-muted)' }} />
-                            <span>{reg.warehouseName}</span>
-                          </div>
-                        </td>
-                        <td>
-                          {assignedCashier ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <div className="sales-customer-avatar">
-                                {cashierInitials}
-                              </div>
-                              <div>
-                                <span style={{ fontWeight: 500, color: 'var(--sp-text)' }}>{assignedCashier.name}</span>
-                                <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                                  {assignedCashier.email} · {assignedCashier.role}
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <span style={{ color: 'var(--sp-text-muted)', fontSize: '12px' }}>
-                              {reg.assignedCashierUserId ? `Cashier ID: ${reg.assignedCashierUserId.slice(0, 8)}…` : 'Unassigned'}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <Status label="ACTIVE" />
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <button
-                            type="button"
-                            className="sales-action-btn secondary"
-                            onClick={() => {
-                              setActiveTab('shifts');
-                            }}
-                            style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
-                          >
-                            View Shifts
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {!filteredRegisters.length && (
-                    <tr>
-                      <td colSpan={6} className="empty-cell" style={{ padding: '32px 0', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
-                        {registerSearch ? 'No registers match your search filter.' : 'No registers configured yet. Click "New Register" above to connect a POS terminal to a warehouse.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 1: OPEN SHIFT MODAL */}
-      {isOpenShiftModalOpen && (
-        <div className="modal-backdrop" onClick={() => setIsOpenShiftModalOpen(false)}>
-          <div className="record-modal" style={{ width: 'min(440px, 100%)' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">
-              <div>
-                <h2>Open Register Shift</h2>
-                <p>Initialize cash drawer float and link terminal to warehouse inventory.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsOpenShiftModalOpen(false)}
-                title="Close"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <form onSubmit={handleOpenShift}>
-              <label>
-                <span>Select Register</span>
-                <select
-                  name="registerId"
-                  value={registerId}
-                  onChange={(e) => setRegisterId(e.target.value)}
-                  required
-                >
-                  {registers.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.code} · {r.name} ({r.warehouseName})
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                <span>Opening Cash Float</span>
-                <input
-                  name="openingFloat"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  defaultValue={openShiftFloat}
-                  required
-                  placeholder="0.00"
-                />
-                <small style={{ color: 'var(--sp-text-muted)', fontSize: '11px', marginTop: '2px' }}>
-                  Physical cash in drawer at start of shift.
-                </small>
-              </label>
-
-              <div className="pos-modal-note">
-                Sales will be recorded against the store warehouse assigned to this register terminal.
-              </div>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={() => setIsOpenShiftModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="button button-primary" disabled={busy || !registers.length}>
-                  {busy ? 'Opening…' : 'Open Shift'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: CLOSE SHIFT MODAL (WITH VARIANCE CALCULATION) */}
-      {isCloseShiftModalOpen && closeShiftSession && (
-        <div className="modal-backdrop" onClick={() => setIsCloseShiftModalOpen(false)}>
-          <div className="record-modal" style={{ width: 'min(480px, 100%)' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">
-              <div>
-                <h2>Close Register Shift</h2>
-                <p>Count cash drawer and reconcile against expected float and sales.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsCloseShiftModalOpen(false)}
-                title="Close"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCloseShift}>
-              <div className="pos-reconcile-card">
-                <div className="pos-reconcile-row">
-                  <span>Register Terminal:</span>
-                  <b>{closeShiftSession.registerCode} · {closeShiftSession.registerName}</b>
-                </div>
-                <div className="pos-reconcile-row">
-                  <span>Store Warehouse:</span>
-                  <span>{closeShiftSession.warehouseName}</span>
-                </div>
-                <div className="pos-reconcile-row">
-                  <span>Opened At:</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {new Date(closeShiftSession.openedAt).toLocaleString()}
-                  </span>
-                </div>
-                <div className="pos-reconcile-row">
-                  <span>Opening Float:</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {formatCurrency(closeShiftSession.openingFloat)}
-                  </span>
-                </div>
-                {closeShiftSession.id === currentSession?.id && (
-                  <div className="pos-reconcile-row">
-                    <span>Shift Cash Sales:</span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      +{formatCurrency(shiftCashRevenue)}
-                    </span>
-                  </div>
-                )}
-                <div className="pos-reconcile-row pos-reconcile-highlight">
-                  <span>Expected Drawer Cash:</span>
-                  <b style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {formatCurrency(
-                      Number(closeShiftSession.openingFloat || 0) +
-                        (closeShiftSession.id === currentSession?.id ? shiftCashRevenue : 0)
-                    )}
-                  </b>
-                </div>
-              </div>
-
-              <label style={{ marginTop: '14px' }}>
-                <span>Counted Cash in Drawer</span>
-                <input
-                  name="countedCash"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={closeShiftCountedCash}
-                  onChange={(e) => setCloseShiftCountedCash(e.target.value)}
-                  required
-                />
-              </label>
-
-              {/* Live Variance Calculation */}
-              {(() => {
-                const exp =
-                  Number(closeShiftSession.openingFloat || 0) +
-                  (closeShiftSession.id === currentSession?.id ? shiftCashRevenue : 0);
-                const counted = Number(closeShiftCountedCash || 0);
-                const variance = Math.round((counted - exp) * 100) / 100;
-                return (
-                  <div
-                    className={`pos-variance-box ${
-                      variance === 0 ? 'balanced' : variance > 0 ? 'surplus' : 'shortage'
-                    }`}
-                  >
-                    <span className="pos-variance-label">Cash Variance:</span>
-                    <b className="pos-variance-amount" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {variance >= 0 ? `+${formatCurrency(variance)}` : formatCurrency(variance)}
-                    </b>
-                    <small>
-                      {variance === 0
-                        ? 'Drawer is perfectly balanced'
-                        : variance > 0
-                        ? 'Surplus in drawer'
-                        : 'Cash shortage detected'}
-                    </small>
-                  </div>
-                );
-              })()}
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={() => setIsCloseShiftModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="button button-primary" disabled={busy}>
-                  {busy ? 'Closing…' : 'Confirm & Close Shift'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: CREATE REGISTER MODAL */}
-      {isNewRegisterModalOpen && manager && (
-        <div className="modal-backdrop" onClick={() => setIsNewRegisterModalOpen(false)}>
-          <div className="record-modal" style={{ width: 'min(480px, 100%)' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">
-              <div>
-                <h2>Add Register Terminal</h2>
-                <p>Connect a physical point-of-sale checkout counter to a store warehouse.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsNewRegisterModalOpen(false)}
-                title="Close"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateRegister}>
-              <label>
-                <span>Register Code</span>
-                <input name="code" required maxLength={32} placeholder="REG-04" />
-              </label>
-
-              <label>
-                <span>Terminal Name</span>
-                <input name="name" required maxLength={120} placeholder="Counter 2 — Trade Desk" />
-              </label>
-
-              <label>
-                <span>Assigned Store Warehouse</span>
-                <select
-                  name="warehouseId"
-                  value={newRegisterWarehouseId}
-                  onChange={(e) => {
-                    setNewRegisterWarehouseId(e.target.value);
-                    void loadCashiers(e.target.value);
-                  }}
-                  required
-                >
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.code} · {w.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                <span>Assigned Cashier</span>
-                <select
-                  name="cashierUserId"
-                  value={newRegisterCashierId}
-                  onChange={(e) => setNewRegisterCashierId(e.target.value)}
-                  required
-                >
-                  <option value="">Select an active cashier</option>
-                  {cashiers.map((c) => (
-                    <option key={c.userId} value={c.userId}>
-                      {c.name} ({c.email}) · {c.role}
-                    </option>
-                  ))}
-                </select>
-                {!cashiers.length && (
-                  <small style={{ color: 'var(--sp-warning)', fontSize: '11px', marginTop: '2px' }}>
-                    No active cashier found with branch access to this warehouse.
-                  </small>
-                )}
-              </label>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={() => setIsNewRegisterModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="button button-primary"
-                  disabled={busy || !warehouses.length || !cashiers.length}
-                >
-                  {busy ? 'Creating…' : 'Create Register'}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

@@ -135,7 +135,7 @@ public class GeneralLedgerService {
         entity.setActive(true);
 
         if (req.parentAccountId() != null) {
-            accountRepository.findById(req.parentAccountId()).ifPresent(entity::setParentAccount);
+            accountRepository.findByTenantIdAndId(tenantId, req.parentAccountId()).ifPresent(entity::setParentAccount);
         }
 
         GlAccountEntity saved = accountRepository.save(entity);
@@ -233,7 +233,7 @@ public class GeneralLedgerService {
         int lineNo = 1;
         List<GlJournalLineEntity> lines = new ArrayList<>();
         for (GlDtos.CreateJournalLineRequest lineReq : req.lines()) {
-            GlAccountEntity account = accountRepository.findById(lineReq.accountId())
+            GlAccountEntity account = accountRepository.findByTenantIdAndId(tenantId, lineReq.accountId())
                     .orElseThrow(() -> new IllegalArgumentException("Account ID not found: " + lineReq.accountId()));
 
             GlJournalLineEntity line = new GlJournalLineEntity();

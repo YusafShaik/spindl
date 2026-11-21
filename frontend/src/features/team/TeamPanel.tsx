@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -9,10 +9,13 @@ import {
   ChevronRight,
   Clock,
   Copy,
+  Database,
   ExternalLink,
+  Eye,
   Filter,
   GitBranch,
   KeyRound,
+  Layers,
   Lock,
   Mail,
   Plus,
@@ -201,6 +204,189 @@ const ROLE_DEFINITIONS: Record<
   }
 };
 
+type PermissionLevel = 'FULL' | 'MANAGE' | 'VIEW' | 'NONE';
+
+interface PermissionCapability {
+  name: string;
+  description: string;
+  roles: {
+    OWNER: PermissionLevel;
+    ADMIN: PermissionLevel;
+    MANAGER: PermissionLevel;
+    OPERATOR: PermissionLevel;
+    VIEWER: PermissionLevel;
+  };
+}
+
+interface PermissionCategory {
+  category: string;
+  icon: typeof Shield;
+  capabilities: PermissionCapability[];
+}
+
+const PERMISSION_MATRIX: PermissionCategory[] = [
+  {
+    category: 'Platform & Governance',
+    icon: Shield,
+    capabilities: [
+      {
+        name: 'Workspace Ownership & Handover',
+        description: 'Initiate or confirm primary fiscal & legal workspace ownership transfers.',
+        roles: { OWNER: 'FULL', ADMIN: 'NONE', MANAGER: 'NONE', OPERATOR: 'NONE', VIEWER: 'NONE' }
+      },
+      {
+        name: 'Billing & Module Entitlements',
+        description: 'Configure subscriptions, payment gateways, and activate modular add-ons.',
+        roles: { OWNER: 'FULL', ADMIN: 'MANAGE', MANAGER: 'VIEW', OPERATOR: 'NONE', VIEWER: 'NONE' }
+      },
+      {
+        name: 'Team Membership & Role Assignments',
+        description: 'Invite members, assign system roles, and revoke account credentials.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'VIEW', OPERATOR: 'NONE', VIEWER: 'NONE' }
+      },
+      {
+        name: 'Operating Branch Creation & Scopes',
+        description: 'Define physical plant branches and assign operator location constraints.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'MANAGE', OPERATOR: 'NONE', VIEWER: 'NONE' }
+      },
+      {
+        name: 'Custom Fields Schema Publishing',
+        description: 'Author and publish dynamic schema fields across customer & item entities.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'VIEW', OPERATOR: 'NONE', VIEWER: 'NONE' }
+      },
+      {
+        name: 'API Keys & Outbound Webhooks',
+        description: 'Provision tenant-level cryptographic tokens and webhook endpoints.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'NONE', OPERATOR: 'NONE', VIEWER: 'NONE' }
+      },
+      {
+        name: 'System Audit Logs & Regulatory Export',
+        description: 'Inspect immutable system event ledgers and download cryptographic audit trails.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'VIEW', OPERATOR: 'NONE', VIEWER: 'VIEW' }
+      }
+    ]
+  },
+  {
+    category: 'Procurement & Inventory',
+    icon: Database,
+    capabilities: [
+      {
+        name: 'Supplier Master Directory',
+        description: 'Create and update approved procurement vendors and tax credentials.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'VIEW', VIEWER: 'VIEW' }
+      },
+      {
+        name: 'Purchase Orders & Requisitions',
+        description: 'Draft purchase requisitions and supplier procurement contracts.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'MANAGE', VIEWER: 'VIEW' }
+      },
+      {
+        name: 'Purchase Order Approval Authority',
+        description: 'Authorize financial commitments exceeding standard department thresholds.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'NONE', VIEWER: 'NONE' }
+      },
+      {
+        name: 'Goods Receipt & Stock Dispatches',
+        description: 'Post physical intake receipts, putaway, and warehouse transfers.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'FULL', VIEWER: 'VIEW' }
+      },
+      {
+        name: 'Inventory Adjustments & Cycle Counts',
+        description: 'Execute physical inventory audits and post variance write-offs.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'MANAGE', VIEWER: 'VIEW' }
+      }
+    ]
+  },
+  {
+    category: 'Manufacturing & Engineering',
+    icon: Layers,
+    capabilities: [
+      {
+        name: 'Bill of Materials (BOM) Specs',
+        description: 'Define multi-level assembly specifications, component scrap & lines.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'VIEW', VIEWER: 'VIEW' }
+      },
+      {
+        name: 'Work Order Execution & Scrap Logging',
+        description: 'Launch shop floor work orders, register good output, and log material scrap.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'FULL', VIEWER: 'VIEW' }
+      },
+      {
+        name: 'Engineering Change Orders (ECO)',
+        description: 'Approve engineering revision diffs, BOM updates, and effective cutoffs.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'NONE', VIEWER: 'VIEW' }
+      },
+      {
+        name: 'Quality Gate Sign-offs & Inspections',
+        description: 'Execute lot sampling, submit test queues, and approve quarantine passes.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'FULL', VIEWER: 'VIEW' }
+      },
+      {
+        name: 'Quality Standards & Deviation Overrides',
+        description: 'Grant managerial waivers for out-of-spec production releases.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'NONE', VIEWER: 'NONE' }
+      }
+    ]
+  },
+  {
+    category: 'Commercial & Accounting',
+    icon: Building2,
+    capabilities: [
+      {
+        name: 'Customer Directory & Credit Terms',
+        description: 'Manage buyer accounts, payment terms, and approved credit limits.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'MANAGE', VIEWER: 'VIEW' }
+      },
+      {
+        name: 'Commercial Quotations & Sales Orders',
+        description: 'Draft pricing quotes, negotiate margins, and confirm customer sales.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'FULL', VIEWER: 'VIEW' }
+      },
+      {
+        name: 'Invoicing, POS Sales & Settlements',
+        description: 'Issue commercial tax invoices, execute counter POS sales, and record receipts.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'MANAGE', VIEWER: 'VIEW' }
+      },
+      {
+        name: 'Credit Notes, Returns & Cash Refunds',
+        description: 'Authorize customer credit notes, debit adjustments, and cash returns.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'NONE', VIEWER: 'NONE' }
+      },
+      {
+        name: 'General Ledger, JVs & Financial Reports',
+        description: 'Sign off manual journal entries, view P&L, balance sheets, and tax filings.',
+        roles: { OWNER: 'FULL', ADMIN: 'FULL', MANAGER: 'FULL', OPERATOR: 'NONE', VIEWER: 'VIEW' }
+      }
+    ]
+  }
+];
+
+function renderPermBadge(level: PermissionLevel) {
+  switch (level) {
+    case 'FULL':
+      return (
+        <span className="matrix-perm-badge full">
+          <CheckCircle2 size={11} /> Full
+        </span>
+      );
+    case 'MANAGE':
+      return (
+        <span className="matrix-perm-badge manage">
+          <Check size={11} /> Manage
+        </span>
+      );
+    case 'VIEW':
+      return (
+        <span className="matrix-perm-badge view">
+          <Eye size={11} /> View
+        </span>
+      );
+    case 'NONE':
+    default:
+      return <span className="matrix-perm-badge none">—</span>;
+  }
+}
+
 export function TeamPanel({
   members,
   invitations,
@@ -224,6 +410,10 @@ export function TeamPanel({
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+
+  // Matrix tab filters
+  const [matrixCategoryFilter, setMatrixCategoryFilter] = useState('ALL');
+  const [matrixSearchQuery, setMatrixSearchQuery] = useState('');
 
   // Modals
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -294,6 +484,27 @@ export function TeamPanel({
   // KPI calculations
   const activeMembers = useMemo(() => members.filter((m) => m.active).length, [members]);
   const pendingInvites = useMemo(() => invitations.filter((i) => !i.accepted).length, [invitations]);
+
+  // Current Owner calculation
+  const currentOwner = useMemo(() => {
+    return members.find((m) => m.role === 'OWNER') || null;
+  }, [members]);
+
+  // Filtered Matrix for Sub-tab 3
+  const filteredMatrix = useMemo(() => {
+    return PERMISSION_MATRIX.map((cat) => {
+      if (matrixCategoryFilter !== 'ALL' && cat.category !== matrixCategoryFilter) {
+        return null;
+      }
+      const matchingCaps = cat.capabilities.filter((cap) => {
+        if (!matrixSearchQuery.trim()) return true;
+        const q = matrixSearchQuery.toLowerCase();
+        return cap.name.toLowerCase().includes(q) || cap.description.toLowerCase().includes(q);
+      });
+      if (matchingCaps.length === 0) return null;
+      return { ...cat, capabilities: matchingCaps };
+    }).filter((cat): cat is NonNullable<typeof cat> => cat !== null);
+  }, [matrixCategoryFilter, matrixSearchQuery]);
 
   // Map of users by userId for manager lookups
   const userMap = useMemo(() => {
@@ -902,52 +1113,195 @@ export function TeamPanel({
       {/* 6. SUB-TAB 3: Roles & Permissions Matrix */}
       {activeTab === 'roles' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div className="team-matrix-grid">
+          {/* 5-Role Executive Summary Strip */}
+          <div className="team-role-summary-strip">
             {Object.entries(ROLE_DEFINITIONS).map(([code, def]) => {
               const count = members.filter((m) => m.role === code).length;
               return (
-                <div key={code} className="team-matrix-card">
-                  <div className="team-matrix-header">
-                    <div>
-                      <span className={`team-role-badge ${def.badgeClass}`}>{def.title}</span>
-                      <h4 style={{ margin: '6px 0 2px', fontSize: '14px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                        {code}
-                      </h4>
-                    </div>
+                <div key={code} className="team-role-summary-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className={`team-role-badge ${def.badgeClass}`}>{code}</span>
                     <span
                       style={{
-                        fontSize: '11.5px',
+                        fontSize: '11px',
                         fontWeight: 600,
                         color: 'var(--sp-text-secondary)',
                         background: 'var(--sp-surface-hover)',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        border: '1px solid var(--sp-border)'
+                        padding: '1.5px 6px',
+                        borderRadius: '10px',
+                        border: '1px solid var(--sp-border)',
+                        fontVariantNumeric: 'tabular-nums'
                       }}
                     >
-                      {count} Assigned {count === 1 ? 'Seat' : 'Seats'}
+                      {count} {count === 1 ? 'Seat' : 'Seats'}
                     </span>
                   </div>
-
-                  <p style={{ fontSize: '12px', color: 'var(--sp-text-secondary)', margin: 0, lineHeight: 1.5 }}>
-                    {def.description}
-                  </p>
-
-                  <div style={{ marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid var(--sp-border)' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
-                      Primary Privileges:
-                    </div>
-                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                      {def.responsibilities.map((resp, i) => (
-                        <span key={i} className="team-matrix-tag">
-                          <Check size={10} style={{ color: '#10b981' }} /> {resp}
-                        </span>
-                      ))}
-                    </div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)', marginTop: '4px' }}>
+                    {def.title}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', lineHeight: '1.4', marginTop: '2px' }}>
+                    {code === 'OWNER' && 'Supreme database, billing, & handover jurisdiction.'}
+                    {code === 'ADMIN' && 'User management, branch scopes, & custom schemas.'}
+                    {code === 'MANAGER' && 'Departmental approvals, sign-offs, & ledger review.'}
+                    {code === 'OPERATOR' && 'Daily warehouse intake, jobs, & quote drafts.'}
+                    {code === 'VIEWER' && 'Read-only inspection without mutation rights.'}
                   </div>
                 </div>
               );
             })}
+          </div>
+
+          {/* Matrix Filter & Search Toolbar */}
+          <div className="sales-toolbar" style={{ marginTop: '2px' }}>
+            <div className="sales-pill-group">
+              <button
+                type="button"
+                className={`sales-pill-btn ${matrixCategoryFilter === 'ALL' ? 'active' : ''}`}
+                onClick={() => setMatrixCategoryFilter('ALL')}
+              >
+                All Capabilities <span className="sales-pill-count">{PERMISSION_MATRIX.reduce((acc, c) => acc + c.capabilities.length, 0)}</span>
+              </button>
+              <button
+                type="button"
+                className={`sales-pill-btn ${matrixCategoryFilter === 'Platform & Governance' ? 'active' : ''}`}
+                onClick={() => setMatrixCategoryFilter('Platform & Governance')}
+              >
+                Platform <span className="sales-pill-count">{PERMISSION_MATRIX[0].capabilities.length}</span>
+              </button>
+              <button
+                type="button"
+                className={`sales-pill-btn ${matrixCategoryFilter === 'Procurement & Inventory' ? 'active' : ''}`}
+                onClick={() => setMatrixCategoryFilter('Procurement & Inventory')}
+              >
+                Procurement <span className="sales-pill-count">{PERMISSION_MATRIX[1].capabilities.length}</span>
+              </button>
+              <button
+                type="button"
+                className={`sales-pill-btn ${matrixCategoryFilter === 'Manufacturing & Engineering' ? 'active' : ''}`}
+                onClick={() => setMatrixCategoryFilter('Manufacturing & Engineering')}
+              >
+                Manufacturing <span className="sales-pill-count">{PERMISSION_MATRIX[2].capabilities.length}</span>
+              </button>
+              <button
+                type="button"
+                className={`sales-pill-btn ${matrixCategoryFilter === 'Commercial & Accounting' ? 'active' : ''}`}
+                onClick={() => setMatrixCategoryFilter('Commercial & Accounting')}
+              >
+                Commercial <span className="sales-pill-count">{PERMISSION_MATRIX[3].capabilities.length}</span>
+              </button>
+            </div>
+
+            <div className="sales-search-box">
+              <Search size={14} className="sales-search-icon" />
+              <input
+                className="sales-search-input"
+                placeholder="Filter permissions or capabilities..."
+                value={matrixSearchQuery}
+                onChange={(e) => setMatrixSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Structured Permissions Matrix Table */}
+          <div className="sales-table-card">
+            <div className="sales-table-scroll">
+              <table className="sales-table">
+                <thead>
+                  <tr>
+                    <th style={{ minWidth: '280px' }}>CAPABILITY & SPECIFICATION</th>
+                    <th style={{ width: '105px', textAlign: 'center' }}>
+                      <span className="team-role-badge owner">OWNER</span>
+                    </th>
+                    <th style={{ width: '105px', textAlign: 'center' }}>
+                      <span className="team-role-badge admin">ADMIN</span>
+                    </th>
+                    <th style={{ width: '105px', textAlign: 'center' }}>
+                      <span className="team-role-badge manager">MANAGER</span>
+                    </th>
+                    <th style={{ width: '105px', textAlign: 'center' }}>
+                      <span className="team-role-badge operator">OPERATOR</span>
+                    </th>
+                    <th style={{ width: '105px', textAlign: 'center' }}>
+                      <span className="team-role-badge viewer">VIEWER</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMatrix.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="sales-empty-cell">
+                        <div className="sales-empty-state">
+                          <Shield size={32} className="sales-empty-icon" />
+                          <div className="sales-empty-title">No capabilities match</div>
+                          <div className="sales-empty-desc">Try clearing your search query.</div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredMatrix.map((group) => {
+                      const GroupIcon = group.icon;
+                      return (
+                        <Fragment key={group.category}>
+                          <tr className="matrix-category-header">
+                            <td colSpan={6}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <GroupIcon size={13} style={{ color: 'var(--sp-brand)' }} />
+                                <span>{group.category}</span>
+                                <span style={{ fontSize: '10.5px', color: 'var(--sp-text-muted)', fontWeight: 400 }}>
+                                  ({group.capabilities.length} capabilities)
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                          {group.capabilities.map((cap) => (
+                            <tr key={cap.name} className="sales-row">
+                              <td>
+                                <strong style={{ fontSize: '12.5px', color: 'var(--sp-text)', display: 'block' }}>
+                                  {cap.name}
+                                </strong>
+                                <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)', display: 'block', marginTop: '1px' }}>
+                                  {cap.description}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: 'center' }}>{renderPermBadge(cap.roles.OWNER)}</td>
+                              <td style={{ textAlign: 'center' }}>{renderPermBadge(cap.roles.ADMIN)}</td>
+                              <td style={{ textAlign: 'center' }}>{renderPermBadge(cap.roles.MANAGER)}</td>
+                              <td style={{ textAlign: 'center' }}>{renderPermBadge(cap.roles.OPERATOR)}</td>
+                              <td style={{ textAlign: 'center' }}>{renderPermBadge(cap.roles.VIEWER)}</td>
+                            </tr>
+                          ))}
+                        </Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Permissions Legend Strip */}
+          <div style={{ padding: '12px 16px', background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
+              Permission Tiers:
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', fontSize: '11.5px', color: 'var(--sp-text-secondary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="matrix-perm-badge full"><CheckCircle2 size={11} /> Full</span>
+                <span>Unrestricted create, edit, approve & delete</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="matrix-perm-badge manage"><Check size={11} /> Manage</span>
+                <span>Operational execution & department actions</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="matrix-perm-badge view"><Eye size={11} /> View</span>
+                <span>Read-only inspection transparency</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="matrix-perm-badge none">—</span>
+                <span>Action restricted & endpoint blocked</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -955,55 +1309,77 @@ export function TeamPanel({
       {/* 7. SUB-TAB 4: Governance & Ownership Transfer */}
       {activeTab === 'governance' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {/* Security Alert Callout */}
-          <div
-            style={{
-              padding: '14px 16px',
-              background: 'rgba(239, 68, 68, 0.05)',
-              border: '1px solid rgba(239, 68, 68, 0.2)',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '12px'
-            }}
-          >
-            <ShieldAlert size={20} style={{ color: '#dc2626', flexShrink: 0, marginTop: '2px' }} />
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#991b1b' }}>
-                High-Security Ownership Handover Protocol
+          {/* Active Workspace Owner Card */}
+          <div style={{ background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px', padding: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--sp-brand-soft)', color: 'var(--sp-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 700 }}>
+                  {currentOwner ? getInitials(currentOwner.name) : 'OW'}
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: 'var(--sp-text)' }}>
+                      {currentOwner ? currentOwner.name : 'Primary Workspace Owner'}
+                    </h3>
+                    <span className="team-role-badge owner">WORKSPACE OWNER</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
+                    {currentOwner?.email || 'owner@spindl.internal'} · Active Legal Signatory & Supreme Authority
+                  </div>
+                </div>
               </div>
-              <p style={{ fontSize: '12px', color: '#7f1d1d', margin: '4px 0 0', lineHeight: 1.5 }}>
-                Workspace ownership grants irrevocable authority over all financial statements, company secrets,
-                subscription payment methods, user access rights, and legal audit registers. Transfer tokens expire in 24 hours.
-              </p>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="customer-risk-chip good">
+                  <CheckCircle2 size={11} /> Active Jurisdiction
+                </span>
+                <span className="sales-ref-badge">SOC-2 / ISO 27001 Protocol</span>
+              </div>
+            </div>
+
+            {/* Governance Principles */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px', marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--sp-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '11.5px', color: 'var(--sp-text-secondary)' }}>
+                <ShieldCheck size={14} color="#10b981" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span><strong>Single-Owner Invariant:</strong> Exclusively one active owner account per tenant workspace.</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '11.5px', color: 'var(--sp-text-secondary)' }}>
+                <KeyRound size={14} color="var(--sp-brand)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span><strong>Mutual Authentication:</strong> Requires password verification from both sender and recipient.</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '11.5px', color: 'var(--sp-text-secondary)' }}>
+                <Clock size={14} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span><strong>24-Hour Expiration:</strong> Handover tokens automatically revoke after 24 hours of issuance.</span>
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '14px' }}>
-            {/* Step 1: Initiate Transfer Request (Owner only) */}
+          {/* 2-Step Handover Console */}
+          <div className="team-transfer-grid">
+            {/* Step 1: Initiate Transfer Request */}
             <div className="team-transfer-box">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div
                   style={{
-                    width: '24px',
-                    height: '24px',
+                    width: '26px',
+                    height: '26px',
                     borderRadius: '50%',
                     background: 'var(--sp-brand)',
                     color: '#fff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '11px',
-                    fontWeight: 600
+                    fontSize: '12px',
+                    fontWeight: 700
                   }}
                 >
                   1
                 </div>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>
+                  <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: 600, color: 'var(--sp-text)' }}>
                     Step 1: Request Ownership Transfer
                   </h4>
-                  <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
                     Authorized exclusively to the active Workspace Owner
                   </span>
                 </div>
@@ -1023,7 +1399,7 @@ export function TeamPanel({
                   style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
                 >
                   <div>
-                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '5px' }}>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '4px' }}>
                       Designate New Owner:
                     </label>
                     <select
@@ -1045,15 +1421,15 @@ export function TeamPanel({
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '5px' }}>
-                      Verify Current Owner Password:
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '4px' }}>
+                      Verify Owner Password:
                     </label>
                     <input
                       type="password"
                       name="password"
                       required
                       autoComplete="current-password"
-                      placeholder="Enter your current password"
+                      placeholder="Confirm your login password"
                       className="sales-filter-select"
                       style={{ width: '100%', height: '34px' }}
                     />
@@ -1061,7 +1437,7 @@ export function TeamPanel({
 
                   <button
                     type="submit"
-                    className="sales-action-btn primary"
+                    className="button button-primary"
                     disabled={saving || !targetMembershipId}
                     style={{ alignSelf: 'flex-start', marginTop: '4px' }}
                   >
@@ -1071,80 +1447,87 @@ export function TeamPanel({
                   {ownershipLink && (
                     <div
                       style={{
-                        marginTop: '10px',
+                        marginTop: '8px',
                         padding: '12px',
-                        background: 'var(--sp-surface-hover)',
-                        border: '1px solid var(--sp-border)',
+                        background: 'rgba(16, 185, 129, 0.05)',
+                        border: '1px solid rgba(16, 185, 129, 0.25)',
                         borderRadius: '6px'
                       }}
                     >
-                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                        Transfer Token Ready for {ownershipLink.email}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '12px', color: '#065f46' }}>
+                          Transfer Token Generated for {ownershipLink.email}
+                        </strong>
+                        <span style={{ fontSize: '10.5px', color: '#059669', fontWeight: 500 }}>
+                          Expires {new Date(ownershipLink.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
-                        Expires {new Date(ownershipLink.expiresAt).toLocaleString()}. Share securely with the recipient.
+                      <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)', margin: '3px 0 6px' }}>
+                        Share this token securely with {ownershipLink.email}. They must use Step 2 to complete the handover.
                       </div>
-                      <code
-                        style={{
-                          display: 'block',
-                          margin: '6px 0',
-                          padding: '6px',
-                          background: 'var(--sp-surface)',
-                          border: '1px solid var(--sp-border)',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          color: 'var(--sp-brand)',
-                          wordBreak: 'break-all'
-                        }}
-                      >
-                        {ownershipLink.transferToken}
-                      </code>
-                      <button
-                        type="button"
-                        className="sales-action-btn secondary"
-                        style={{ fontSize: '11px' }}
-                        onClick={() => {
-                          navigator.clipboard.writeText(ownershipLink.transferToken).then(() => {
-                            onCopy('Transfer token copied to clipboard');
-                          });
-                        }}
-                      >
-                        <Copy size={12} /> Copy Token
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <code
+                          style={{
+                            flex: 1,
+                            padding: '6px 8px',
+                            background: 'var(--sp-surface)',
+                            border: '1px solid var(--sp-border)',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            color: 'var(--sp-brand)',
+                            wordBreak: 'break-all',
+                            fontFamily: 'monospace'
+                          }}
+                        >
+                          {ownershipLink.transferToken}
+                        </code>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          style={{ padding: '6px 10px', fontSize: '11px', flexShrink: 0 }}
+                          onClick={() => {
+                            navigator.clipboard.writeText(ownershipLink.transferToken).then(() => {
+                              onCopy('Transfer token copied to clipboard');
+                            });
+                          }}
+                        >
+                          <Copy size={12} /> Copy
+                        </button>
+                      </div>
                     </div>
                   )}
                 </form>
               ) : (
                 <div style={{ padding: '16px', background: 'var(--sp-surface-hover)', borderRadius: '6px', textAlign: 'center', color: 'var(--sp-text-muted)', fontSize: '12px' }}>
-                  Only the current Workspace Owner can initiate a transfer request.
+                  Only the current Workspace Owner can initiate an ownership handover.
                 </div>
               )}
             </div>
 
             {/* Step 2: Confirm Ownership (Transferee action) */}
             <div className="team-transfer-box">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div
                   style={{
-                    width: '24px',
-                    height: '24px',
+                    width: '26px',
+                    height: '26px',
                     borderRadius: '50%',
                     background: '#10b981',
                     color: '#fff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '11px',
-                    fontWeight: 600
+                    fontSize: '12px',
+                    fontWeight: 700
                   }}
                 >
                   2
                 </div>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                    Step 2: Confirm Transfer to Your Account
+                  <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: 600, color: 'var(--sp-text)' }}>
+                    Step 2: Confirm & Sign Ownership
                   </h4>
-                  <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
                     Executed by the designated recipient
                   </span>
                 </div>
@@ -1163,7 +1546,7 @@ export function TeamPanel({
                 style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
               >
                 <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '5px' }}>
+                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '4px' }}>
                     Paste Received Transfer Token:
                   </label>
                   <input
@@ -1172,12 +1555,12 @@ export function TeamPanel({
                     required
                     placeholder="e.g. 95d605ade32807f6ee02b48cc803a8c1..."
                     className="sales-filter-select"
-                    style={{ width: '100%', height: '34px' }}
+                    style={{ width: '100%', height: '34px', fontFamily: 'monospace', fontSize: '11.5px' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '5px' }}>
+                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '4px' }}>
                     Confirm Your Account Password:
                   </label>
                   <input
@@ -1191,15 +1574,53 @@ export function TeamPanel({
                   />
                 </div>
 
+                <div style={{ padding: '8px 10px', background: 'rgba(245, 158, 11, 0.08)', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.25)', fontSize: '11px', color: '#b45309' }}>
+                  <AlertTriangle size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                  Signing grants you irrevocable jurisdiction over this workspace. The previous owner will be reassigned as Administrator.
+                </div>
+
                 <button
                   type="submit"
-                  className="sales-action-btn primary"
+                  className="button button-primary"
                   disabled={saving}
-                  style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+                  style={{ alignSelf: 'flex-start', marginTop: '2px' }}
                 >
                   <CheckCircle2 size={13} /> {saving ? 'Verifying…' : 'Accept Ownership & Sign'}
                 </button>
               </form>
+            </div>
+          </div>
+
+          {/* Audit Guardrails Strip */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
+            <div style={{ padding: '12px 14px', background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '4px' }}>
+                <ShieldCheck size={14} color="#10b981" />
+                <span>Zero Downtime Transition</span>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', lineHeight: '1.45' }}>
+                Ongoing work orders, POS terminal shifts, and supplier POs continue operating without interruption.
+              </div>
+            </div>
+
+            <div style={{ padding: '12px 14px', background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--sp-brand)' }} >
+                <KeyRound size={14} color="var(--sp-brand)" />
+                <span>Demotion Protection</span>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', lineHeight: '1.45' }}>
+                The outgoing owner is automatically reassigned as Workspace Administrator to prevent accidental lockout.
+              </div>
+            </div>
+
+            <div style={{ padding: '12px 14px', background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', marginBottom: '4px' }}>
+                <CheckCircle2 size={14} color="#10b981" />
+                <span>Immutable Event Logging</span>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', lineHeight: '1.45' }}>
+                Transfer requests and confirmations are cryptographically recorded in the tenant audit log with client IP addresses.
+              </div>
             </div>
           </div>
         </div>

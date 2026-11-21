@@ -74,6 +74,15 @@ public class WorkforceDtos {
             int breakMinutes
     ) {}
 
+    public record UpdateShiftRequest(
+            String shiftCode,
+            String name,
+            LocalTime startTime,
+            LocalTime endTime,
+            int breakMinutes,
+            Boolean isActive
+    ) {}
+
     public record RosterAssignmentDto(
             UUID id,
             UUID tenantId,
@@ -117,6 +126,48 @@ public class WorkforceDtos {
     public record SkillsMatrixResponse(
             List<SkillDto> skills,
             List<SkillsMatrixRowDto> rows
+    ) {}
+
+    public record EmployeeSkillDto(
+            UUID qualificationId,
+            UUID skillId,
+            String skillCode,
+            String skillName,
+            String category,
+            String level, // APPRENTICE, OPERATOR, SPECIALIST, MASTER
+            LocalDate certifiedAt,
+            LocalDate expiresAt,
+            String status,
+            String notes
+    ) {}
+
+    public record EmployeeDto(
+            UUID id, // userId
+            UUID membershipId,
+            String name,
+            String email,
+            String role,
+            boolean active,
+            List<EmployeeSkillDto> skills,
+            Instant joinedAt
+    ) {}
+
+    public record InitialSkillAssignment(
+            UUID skillId,
+            String level
+    ) {}
+
+    public record CreateEmployeeRequest(
+            String name,
+            String email,
+            String role,
+            List<InitialSkillAssignment> skills
+    ) {}
+
+    public record UpdateEmployeeRequest(
+            String name,
+            String role,
+            Boolean active
     ) {}
 
     public record SkillGuardVerificationRequest(

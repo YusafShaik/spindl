@@ -22,7 +22,6 @@ public class ItemEntity {
     @Column(name = "quality_inspection_required", nullable = false) private boolean qualityInspectionRequired;
     @Column(name = "low_stock_threshold", nullable = false) private int lowStockThreshold = 10;
     @Column(nullable = false, length = 24) private String unit;
-    @Column(length=64) private String barcode;
     @Column(name="item_type",nullable=false,length=16) private String itemType="FINISHED";
     @Column(name = "unit_price", nullable = false, precision = 14, scale = 2) private BigDecimal unitPrice;
     @Column(nullable = false) private boolean active = true;
@@ -75,7 +74,5 @@ public class ItemEntity {
         this.name = name; this.category = category; this.unit = unit; this.unitPrice = unitPrice; this.active = active;
     }
     public void updateType(String itemType){this.itemType=itemType;}
-    public void setBarcode(String barcode){this.barcode=barcode==null||barcode.isBlank()?null:barcode.trim().toUpperCase(java.util.Locale.ROOT);}
-    public String getBarcode(){return barcode;}
     public void setLowStockThreshold(int threshold){if(threshold<0)throw new IllegalArgumentException("Low stock threshold cannot be negative");this.lowStockThreshold=threshold;}
 }

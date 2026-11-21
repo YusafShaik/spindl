@@ -1,30 +1,65 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { CreditCard, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Status } from '../../components/ui/Status';
 import { API, apiFetch } from '../../lib/api/client';
 import { formatAuditLabel } from '../../lib/utils/audit-format';
 import { formatBytes } from '../../lib/utils/currency';
 
 interface PlanSummary {
-  planCode: string; version: number; displayName: string; status: string;
-  seatLimit: number; activeSeats: number; pendingInvitations: number;
-  storageLimitMb: number; storageUsedBytes: number; apiCallsPerMonth: number; apiCallsUsed: number;
+  planCode: string;
+  version: number;
+  displayName: string;
+  status: string;
+  seatLimit: number;
+  activeSeats: number;
+  pendingInvitations: number;
+  storageLimitMb: number;
+  storageUsedBytes: number;
+  apiCallsPerMonth: number;
+  apiCallsUsed: number;
 }
 
 interface PlanPreview {
-  currentPlanCode: string; currentVersion: number; targetPlanCode: string; targetVersion: number;
-  targetPlanName: string; targetSeatLimit: number; seatsInUse: number; storageLimitMb: number;
-  storageUsedBytes: number; apiCallsPerMonth: number; apiCallsUsed: number;
-  overages: string[]; blockedModules: string[]; effectiveDate: string; message: string;
+  currentPlanCode: string;
+  currentVersion: number;
+  targetPlanCode: string;
+  targetVersion: number;
+  targetPlanName: string;
+  targetSeatLimit: number;
+  seatsInUse: number;
+  storageLimitMb: number;
+  storageUsedBytes: number;
+  apiCallsPerMonth: number;
+  apiCallsUsed: number;
+  overages: string[];
+  blockedModules: string[];
+  effectiveDate: string;
+  message: string;
 }
 
 interface PlanRequest {
-  id: string; currentPlanCode: string; targetPlanCode: string; effectiveDate: string;
-  status: string; requestedAt: string; reviewNote: string | null; appliedAt: string | null;
+  id: string;
+  currentPlanCode: string;
+  targetPlanCode: string;
+  effectiveDate: string;
+  status: string;
+  requestedAt: string;
+  reviewNote: string | null;
+  appliedAt: string | null;
 }
 
-interface PlatformPlanRequest extends PlanRequest { tenantName: string; }
-interface PlanSettingsPanelsProps { role?: string; notify: (message: string) => void; }
+interface PlatformPlanRequest extends PlanRequest {
+  tenantName: string;
+}
 
-function messageFrom(error: unknown): string { return error instanceof Error ? error.message : String(error); }
+interface PlanSettingsPanelsProps {
+  role?: string;
+  notify: (message: string) => void;
+}
+
+function messageFrom(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 async function responseError(response: Response, fallback: string): Promise<Error> {
   const body = await response.json().catch(() => ({}));
@@ -42,10 +77,19 @@ export function PlanUsagePanel({ role, notify }: PlanSettingsPanelsProps) {
   useEffect(() => {
     let active = true;
     apiFetch(`${API}/tenant/settings/plan`)
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Could not load workspace plan')))
-      .then((value: PlanSummary) => { if (active) { setPlan(value); setChoice(value.planCode); } })
+      .then((response) =>
+        response.ok ? response.json() : Promise.reject(new Error('Could not load workspace plan'))
+      )
+      .then((value: PlanSummary) => {
+        if (active) {
+          setPlan(value);
+          setChoice(value.planCode);
+        }
+      })
       .catch((error: unknown) => notify(messageFrom(error)));
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   const loadRequests = async (): Promise<void> => {
@@ -55,120 +99,247 @@ export function PlanUsagePanel({ role, notify }: PlanSettingsPanelsProps) {
     const data: PlanRequest[] = await response.json();
     setRequests(data);
   };
-  useEffect(() => { void loadRequests().catch((error: unknown) => notify(messageFrom(error))); }, [role]);
+
+  useEffect(() => {
+    void loadRequests().catch((error: unknown) => notify(messageFrom(error)));
+  }, [role]);
 
   const showPreview = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setSaving(true);
     try {
-      const response = await apiFetch(`${API}/tenant/settings/plan-preview`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planCode: choice }) });
+      const response = await apiFetch(`${API}/tenant/settings/plan-preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planCode: choice })
+      });
       if (!response.ok) throw await responseError(response, 'Could not preview plan');
       setPreview(await response.json());
-    } catch (error) { notify(messageFrom(error)); }
-    finally { setSaving(false); }
+    } catch (error) {
+      notify(messageFrom(error));
+    } finally {
+      setSaving(false);
+    }
   };
+
   const requestPlan = async (): Promise<void> => {
     setSaving(true);
     try {
-      const response = await apiFetch(`${API}/tenant/settings/plan-requests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planCode: choice }) });
+      const response = await apiFetch(`${API}/tenant/settings/plan-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planCode: choice })
+      });
       if (!response.ok) throw await responseError(response, 'Could not submit plan request');
       await response.json();
       await loadRequests();
       notify('Plan change request sent for commercial review');
-    } catch (error) { notify(messageFrom(error)); }
-    finally { setSaving(false); }
+    } catch (error) {
+      notify(messageFrom(error));
+    } finally {
+      setSaving(false);
+    }
   };
+
   const cancelPlanRequest = async (id: string): Promise<void> => {
     setSaving(true);
     try {
-      const response = await apiFetch(`${API}/tenant/settings/plan-requests/${id}`, { method: 'DELETE' });
+      const response = await apiFetch(`${API}/tenant/settings/plan-requests/${id}`, {
+        method: 'DELETE'
+      });
       if (!response.ok) throw await responseError(response, 'Could not cancel plan request');
       await response.json();
       await loadRequests();
       notify('Plan change request cancelled');
-    } catch (error) { notify(messageFrom(error)); }
-    finally { setSaving(false); }
+    } catch (error) {
+      notify(messageFrom(error));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <section className="sales-table-card tenant-settings-panel">
-      <div className="sales-card-header">
+    <div className="reports-workbench-card">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-border)', paddingBottom: '12px' }}>
         <div>
-          <h2 className="sales-card-title">Plan and usage</h2>
-          <p className="sales-card-subtitle">{plan ? `${plan.displayName} · version ${plan.version} · ${formatAuditLabel(plan.status)}` : 'Loading plan…'}</p>
+          <h3 style={{ margin: 0, fontSize: '14.5px', fontWeight: 600, color: 'var(--sp-text)' }}>
+            Enterprise Subscription & Usage
+          </h3>
+          <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: 'var(--sp-text-muted)' }}>
+            {plan ? `${plan.displayName} (v${plan.version}) · Current Billing Tier` : 'Loading plan…'}
+          </p>
         </div>
+        {plan && <Status label={plan.status} />}
       </div>
+
       {plan && (
-        <>
-          <div className="tenant-settings-meta">
-            <div>
-              <small>SEATS</small>
-              <b>{plan.activeSeats} active · {plan.pendingInvitations} invited · {plan.seatLimit} limit</b>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Telemetry Metric Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+            <div className="reports-saved-card" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
+                SEATS CONSUMPTION
+              </span>
+              <b style={{ fontSize: '15px', color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                {plan.activeSeats} / {plan.seatLimit} Seats
+              </b>
+              <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+                {plan.pendingInvitations} invited pending
+              </span>
             </div>
-            <div>
-              <small>STORAGE USED</small>
-              <b>{formatBytes(plan.storageUsedBytes)} / {plan.storageLimitMb.toLocaleString()} MB</b>
+
+            <div className="reports-saved-card" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
+                STORAGE UTILIZATION
+              </span>
+              <b style={{ fontSize: '15px', color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                {formatBytes(plan.storageUsedBytes)} / {plan.storageLimitMb.toLocaleString()} MB
+              </b>
+              <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+                Files, documents & attachments
+              </span>
             </div>
-            <div>
-              <small>API USAGE THIS MONTH</small>
-              <b>{Number(plan.apiCallsUsed || 0).toLocaleString()} / {plan.apiCallsPerMonth.toLocaleString()} calls</b>
+
+            <div className="reports-saved-card" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
+                API DISPATCH VOLUME
+              </span>
+              <b style={{ fontSize: '15px', color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                {Number(plan.apiCallsUsed || 0).toLocaleString()} / {plan.apiCallsPerMonth.toLocaleString()}
+              </b>
+              <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+                Monthly webhook & token calls
+              </span>
             </div>
           </div>
-          <form className="team-invite-form" onSubmit={(event) => void showPreview(event)}>
-            <label>
-              Compare a plan
-              <select value={choice} onChange={(event) => { setChoice(event.target.value); setPreview(null); }}>
-                {[['TRIAL', 'Trial'], ['STARTER_CRM', 'Starter CRM'], ['INVENTORY_LITE', 'Inventory Lite'], ['COMMERCE_OPS', 'Commerce Ops'], ['MANUFACTURING', 'Manufacturing']].map(([code, name]) => (
-                  <option key={code} value={code}>{name}</option>
+
+          {/* Plan Comparison & Request */}
+          <form
+            onSubmit={(event) => void showPreview(event)}
+            style={{
+              background: 'var(--sp-surface-subtle)',
+              border: '1px solid var(--sp-border)',
+              borderRadius: '6px',
+              padding: '12px 14px',
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: '12px'
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <label className="settings-field-label">Evaluate or change subscription tier</label>
+              <select
+                value={choice}
+                onChange={(event) => {
+                  setChoice(event.target.value);
+                  setPreview(null);
+                }}
+                className="sales-select-input"
+                style={{ width: '100%' }}
+              >
+                {[
+                  ['TRIAL', 'Trial Tier'],
+                  ['STARTER_CRM', 'Starter CRM'],
+                  ['INVENTORY_LITE', 'Inventory Lite'],
+                  ['COMMERCE_OPS', 'Commerce Ops'],
+                  ['MANUFACTURING', 'Manufacturing Standard']
+                ].map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {name}
+                  </option>
                 ))}
               </select>
-            </label>
-            <button className="sales-action-btn secondary" disabled={saving || !canEdit}>
-              {saving ? 'Calculating…' : 'Preview plan change'}
+            </div>
+            <button
+              type="submit"
+              className="sales-action-btn secondary"
+              disabled={saving || !canEdit}
+              style={{ height: '32px' }}
+            >
+              {saving ? 'Calculating…' : 'Preview Tier Impact'}
             </button>
           </form>
+
           {preview && (
-            <div className="team-invite-link">
-              <div>
-                <b>{preview.targetPlanName} · effective {preview.effectiveDate}</b>
-                <small>
-                  {preview.message} Target limits: {preview.targetSeatLimit} seats, {preview.storageLimitMb.toLocaleString()} MB storage, {preview.apiCallsPerMonth.toLocaleString()} API calls/month. Current usage: {preview.seatsInUse} seats, {formatBytes(preview.storageUsedBytes)} storage, {Number(preview.apiCallsUsed || 0).toLocaleString()} API calls this month.
-                  {preview.overages.length ? ` Overages: ${preview.overages.join('; ')}.` : ' No seat, storage, or API overages.'}
-                  {preview.blockedModules?.length ? ` Modules to disable: ${preview.blockedModules.join(', ')}.` : ''}
-                </small>
+            <div
+              className="reports-saved-card"
+              style={{
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                background: 'var(--sp-surface-subtle)',
+                borderLeft: '3px solid var(--sp-brand)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <b style={{ fontSize: '13px', color: 'var(--sp-text)' }}>
+                  Target: {preview.targetPlanName} · Effective {preview.effectiveDate}
+                </b>
+                <span className="sales-status-pill blue">Simulation Ready</span>
               </div>
+              <p style={{ margin: '4px 0 0 0', fontSize: '11.5px', color: 'var(--sp-text-secondary)', lineHeight: '1.45' }}>
+                {preview.message} Target limits: {preview.targetSeatLimit} seats, {preview.storageLimitMb.toLocaleString()} MB storage, {preview.apiCallsPerMonth.toLocaleString()} calls/mo.
+                {preview.overages.length ? ` Overages: ${preview.overages.join('; ')}.` : ' No quota overages.'}
+                {preview.blockedModules?.length ? ` Modules to disable: ${preview.blockedModules.join(', ')}.` : ''}
+              </p>
               {canEdit && (
-                <button
-                  type="button"
-                  className="sales-action-btn primary"
-                  disabled={saving || requests.some((request) => ['REQUESTED', 'APPROVED'].includes(request.status)) || (preview.targetPlanCode === preview.currentPlanCode && preview.targetVersion === preview.currentVersion)}
-                  onClick={() => void requestPlan()}
-                >
-                  {requests.some((request) => ['REQUESTED', 'APPROVED'].includes(request.status)) ? 'Request pending or scheduled' : 'Request plan change'}
-                </button>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    className="sales-action-btn primary"
+                    disabled={
+                      saving ||
+                      requests.some((r) => ['REQUESTED', 'APPROVED'].includes(r.status)) ||
+                      (preview.targetPlanCode === preview.currentPlanCode &&
+                        preview.targetVersion === preview.currentVersion)
+                    }
+                    onClick={() => void requestPlan()}
+                  >
+                    {requests.some((r) => ['REQUESTED', 'APPROVED'].includes(r.status))
+                      ? 'Request Pending Commercial Review'
+                      : 'Submit Upgrade / Change Request'}
+                  </button>
+                </div>
               )}
             </div>
           )}
-          {requests.map((request) => (
-            <div className="team-invite-link" key={request.id}>
-              <div>
-                <b>{request.targetPlanCode.replaceAll('_', ' ')} · {formatAuditLabel(request.status)}</b>
-                <small>
-                  {request.currentPlanCode.replaceAll('_', ' ')} → {request.targetPlanCode.replaceAll('_', ' ')} · effective {request.effectiveDate} · submitted {new Date(request.requestedAt).toLocaleDateString()}
-                  {request.status === 'REQUESTED' ? ' · Awaiting commercial review' : request.status === 'APPROVED' ? ` · Approved, applies ${request.effectiveDate}` : request.status === 'APPLIED' ? ` · Applied ${request.appliedAt ? new Date(request.appliedAt).toLocaleDateString() : ''}` : request.status === 'REJECTED' ? ` · ${request.reviewNote || 'Rejected'}` : ''}
-                </small>
-              </div>
-              {request.status === 'REQUESTED' && canEdit && (
-                <button type="button" className="sales-action-btn secondary" disabled={saving} onClick={() => void cancelPlanRequest(request.id)}>
-                  Cancel request
-                </button>
-              )}
+
+          {/* Pending Plan Change Requests */}
+          {requests.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span className="settings-field-label" style={{ margin: 0, fontWeight: 600 }}>
+                Submitted plan requests
+              </span>
+              {requests.map((request) => (
+                <div key={request.id} className="reports-saved-card">
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <b style={{ fontSize: '12.5px', color: 'var(--sp-text)' }}>
+                        {request.targetPlanCode.replaceAll('_', ' ')}
+                      </b>
+                      <Status label={request.status} />
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
+                      {request.currentPlanCode.replaceAll('_', ' ')} → {request.targetPlanCode.replaceAll('_', ' ')} · effective {request.effectiveDate} · submitted {new Date(request.requestedAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  {request.status === 'REQUESTED' && canEdit && (
+                    <button
+                      type="button"
+                      className="sales-action-btn secondary danger"
+                      disabled={saving}
+                      onClick={() => void cancelPlanRequest(request.id)}
+                      style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
+                    >
+                      Cancel Request
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-          {!canEdit && <p className="form-note">Only workspace owners and admins can preview plan changes.</p>}
-        </>
+          )}
+        </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -177,57 +348,108 @@ export function PlatformPlanReviewPanel({ notify }: Omit<PlanSettingsPanelsProps
   const [requests, setRequests] = useState<PlatformPlanRequest[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+
   const load = async (): Promise<void> => {
     const response = await apiFetch(`${API}/platform/plan-requests`);
-    if (response.status === 403) { setAllowed(false); return; }
+    if (response.status === 403) {
+      setAllowed(false);
+      return;
+    }
     if (!response.ok) throw new Error('Could not load platform plan review queue');
     const data: PlatformPlanRequest[] = await response.json();
     setRequests(data);
     setAllowed(true);
   };
-  useEffect(() => { void load().catch((error: unknown) => notify(messageFrom(error))); }, []);
+
+  useEffect(() => {
+    void load().catch((error: unknown) => notify(messageFrom(error)));
+  }, []);
+
   const review = async (id: string, action: 'approve' | 'reject'): Promise<void> => {
     setBusy(true);
     try {
-      const response = await apiFetch(`${API}/platform/plan-requests/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: notes[id] || null }) });
+      const response = await apiFetch(`${API}/platform/plan-requests/${id}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: notes[id] || null })
+      });
       if (!response.ok) throw await responseError(response, `Could not ${action} request`);
       const body: { status: string } = await response.json();
       await load();
-      notify(action === 'approve' ? (body.status === 'APPLIED' ? 'Plan approved and applied' : 'Plan approved and scheduled') : 'Plan request rejected');
-    } catch (error) { notify(messageFrom(error)); }
-    finally { setBusy(false); }
+      notify(
+        action === 'approve'
+          ? body.status === 'APPLIED'
+            ? 'Plan approved and applied'
+            : 'Plan approved and scheduled'
+          : 'Plan request rejected'
+      );
+    } catch (error) {
+      notify(messageFrom(error));
+    } finally {
+      setBusy(false);
+    }
   };
-  if (!allowed) return null;
+
+  if (!allowed || !requests.length) return null;
+
   return (
-    <section className="sales-table-card tenant-settings-panel">
-      <div className="sales-card-header">
+    <div className="reports-workbench-card">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-border)', paddingBottom: '10px' }}>
         <div>
-          <h2 className="sales-card-title">Platform plan review</h2>
-          <p className="sales-card-subtitle">Commercial reviewers can approve upgrades, schedule downgrades, or reject requests with a reason. Decisions are audited in the affected workspace.</p>
+          <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: 600, color: 'var(--sp-text)' }}>
+            Platform Commercial Review Queue
+          </h4>
+          <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
+            Review and adjudicate tier change requests across workspaces.
+          </p>
         </div>
       </div>
-      {requests.length ? (
-        requests.map((request) => (
-          <div className="team-invite-link" key={request.id}>
-            <div>
-              <b>{request.tenantName} · {request.currentPlanCode} → {request.targetPlanCode}</b>
-              <small>
-                {request.status} · effective {request.effectiveDate} · requested {new Date(request.requestedAt).toLocaleString()}
-                {request.reviewNote ? ` · ${request.reviewNote}` : ''}
-              </small>
-              <input value={notes[request.id] || ''} onChange={(event) => setNotes((current) => ({ ...current, [request.id]: event.target.value }))} maxLength={500} placeholder="Review note (required for rejection)" />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {requests.map((request) => (
+          <div key={request.id} className="reports-saved-card" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <b style={{ fontSize: '12.5px', color: 'var(--sp-text)' }}>
+                {request.tenantName} · {request.currentPlanCode} → {request.targetPlanCode}
+              </b>
+              <Status label={request.status} />
             </div>
+            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+              Effective {request.effectiveDate} · Requested {new Date(request.requestedAt).toLocaleString()}
+            </span>
             {request.status === 'REQUESTED' && (
-              <div className="import-actions" style={{ display: 'flex', gap: '6px' }}>
-                <button className="sales-action-btn primary" disabled={busy} onClick={() => void review(request.id, 'approve')}>Approve</button>
-                <button className="sales-action-btn secondary" disabled={busy || !notes[request.id]?.trim()} onClick={() => void review(request.id, 'reject')}>Reject</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <input
+                  value={notes[request.id] || ''}
+                  onChange={(e) => setNotes((curr) => ({ ...curr, [request.id]: e.target.value }))}
+                  maxLength={500}
+                  className="sales-text-input"
+                  style={{ flex: 1, height: '28px', fontSize: '11.5px' }}
+                  placeholder="Review note (required for rejection)"
+                />
+                <button
+                  type="button"
+                  className="sales-action-btn primary"
+                  disabled={busy}
+                  onClick={() => void review(request.id, 'approve')}
+                  style={{ height: '28px', fontSize: '11.5px' }}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  className="sales-action-btn secondary danger"
+                  disabled={busy}
+                  onClick={() => void review(request.id, 'reject')}
+                  style={{ height: '28px', fontSize: '11.5px' }}
+                >
+                  Reject
+                </button>
               </div>
             )}
           </div>
-        ))
-      ) : (
-        <p className="empty-cell">No plan requests are awaiting review or scheduled.</p>
-      )}
-    </section>
+        ))}
+      </div>
+    </div>
   );
 }

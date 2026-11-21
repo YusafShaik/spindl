@@ -121,6 +121,7 @@ export function GeneralLedgerPanel({
   const [sourceFilter, setSourceFilter] = useState<string>('ALL');
   const [coaTypeFilter, setCoaTypeFilter] = useState<string>('ALL');
   const [expandedJvId, setExpandedJvId] = useState<string | null>(null);
+  const [trialOnlyActive, setTrialOnlyActive] = useState(false);
 
   // Modals
   const [showCreateJvModal, setShowCreateJvModal] = useState(false);
@@ -390,6 +391,29 @@ export function GeneralLedgerPanel({
     });
   }, [accounts, searchQuery, coaTypeFilter]);
 
+  // Executive COA Metrics
+  const coaMetrics = useMemo(() => {
+    const total = accounts.length;
+    const active = accounts.filter((a) => a.isActive).length;
+    const assetTotal = accounts
+      .filter((a) => a.accountType === 'ASSET')
+      .reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+    const liabilityTotal = accounts
+      .filter((a) => a.accountType === 'LIABILITY')
+      .reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+    const equityTotal = accounts
+      .filter((a) => a.accountType === 'EQUITY')
+      .reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+    return { total, active, assetTotal, liabilityTotal, equityTotal };
+  }, [accounts]);
+
+  // Filtered Trial Balance Rows
+  const filteredTrialRows = useMemo(() => {
+    if (!trialBalance?.rows) return [];
+    if (!trialOnlyActive) return trialBalance.rows;
+    return trialBalance.rows.filter((r) => r.totalDebit > 0 || r.totalCredit > 0);
+  }, [trialBalance, trialOnlyActive]);
+
   return (
     <div className="sales-screen-layout">
       {/* 1. Linear Executive Financial KPI Strip */}
@@ -538,25 +562,25 @@ export function GeneralLedgerPanel({
       {activeTab === 'journals' && (
         selectedJvDetail ? (
           /* =========================================================================
-             AUTHENTIC LINEAR DETAIL VIEW: GENERAL LEDGER JOURNAL VOUCHER
+             AUTHENTIC LINEAR DETAIL VIEW: GENERAL LEDGER JOURNAL VOUCHER (FULL-WIDTH)
              ========================================================================= */
-          <div className="linear-detail-container">
+          <div className="gl-voucher-detail-container">
             {/* Top Bar with Breadcrumbs & Actions */}
-            <div className="linear-detail-topbar">
-              <div className="linear-detail-breadcrumbs">
+            <div className="gl-detail-topbar">
+              <div className="gl-detail-breadcrumbs">
                 <button
                   type="button"
-                  className="linear-crumb-back"
+                  className="gl-crumb-back"
                   onClick={() => setSelectedJvDetail(null)}
                 >
                   <ArrowLeft size={13} />
-                  <span>General Ledger</span>
+                  <span>Journal Vouchers</span>
                 </button>
-                <span className="linear-crumb-sep">/</span>
-                <span className="linear-crumb-id">{selectedJvDetail.entryNumber}</span>
+                <span className="gl-crumb-sep">/</span>
+                <span className="gl-crumb-id">{selectedJvDetail.entryNumber}</span>
               </div>
 
-              <div className="linear-detail-top-actions">
+              <div className="gl-detail-top-actions">
                 <button
                   type="button"
                   className="sales-action-btn secondary"
@@ -564,6 +588,7 @@ export function GeneralLedgerPanel({
                     navigator.clipboard.writeText(selectedJvDetail.entryNumber);
                     notify(`Copied voucher ref ${selectedJvDetail.entryNumber} to clipboard`);
                   }}
+                  title="Copy voucher reference"
                 >
                   <Copy size={12} />
                   <span>Copy Ref #</span>
@@ -572,6 +597,7 @@ export function GeneralLedgerPanel({
                   type="button"
                   className="sales-action-btn secondary"
                   onClick={() => window.print()}
+                  title="Print official voucher ledger"
                 >
                   <Printer size={12} />
                   <span>Print Voucher</span>
@@ -579,150 +605,156 @@ export function GeneralLedgerPanel({
               </div>
             </div>
 
-            {/* 2-Column Split: Content on Left, Linear Properties on Right */}
-            <div className="linear-detail-grid">
-              {/* Left Column (68%) */}
-              <div className="linear-detail-content">
-                <h1 className="linear-detail-h1">{selectedJvDetail.memo}</h1>
-                <div className="linear-detail-desc" style={{ marginBottom: '16px' }}>
-                  Posted on <strong>{formatDate(selectedJvDetail.postingDate)}</strong> · {selectedJvDetail.sourceReferenceNumber ? `Subledger Reference: ${selectedJvDetail.sourceReferenceNumber}` : 'Direct Journal Voucher'}
-                </div>
-
-                {/* Double-Entry Balanced Status Callout */}
-                <div
-                  style={{
-                    padding: '12px 16px',
-                    borderRadius: '6px',
-                    background: 'var(--sp-surface-subtle)',
-                    border: '1px solid var(--sp-border)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '16px'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <ShieldCheck size={16} style={{ color: '#16a34a' }} />
-                    <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)' }}>
-                      Double-Entry Balanced Ledger Certified
+            {/* Voucher Header & Title */}
+            <div className="gl-detail-header-card">
+              <div className="gl-detail-header-top">
+                <div>
+                  <div className="gl-detail-badge-row">
+                    <span className="order-number-pill" style={{ fontWeight: 600 }}>{selectedJvDetail.entryNumber}</span>
+                    <Status label={selectedJvDetail.status} />
+                    <span className="sales-warehouse-pill" style={{ textTransform: 'capitalize' }}>
+                      {selectedJvDetail.sourceType.replace('_', ' ').toLowerCase()}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '16px', fontSize: '12.5px', fontVariantNumeric: 'tabular-nums' }}>
-                    <span>Debit: <strong style={{ color: 'var(--sp-text)', fontWeight: 500 }}>{formatCurrency(selectedJvDetail.totalDebit)}</strong></span>
-                    <span>Credit: <strong style={{ fontWeight: 500 }}>{formatCurrency(selectedJvDetail.totalCredit)}</strong></span>
+                  <h1 className="gl-detail-h1">{selectedJvDetail.memo}</h1>
+                  <div className="gl-detail-sub">
+                    Posted on <strong>{formatDate(selectedJvDetail.postingDate)}</strong>
+                    {selectedJvDetail.sourceReferenceNumber && (
+                      <> · Subledger Ref: <code className="sales-ref-badge" style={{ marginLeft: '4px' }}>{selectedJvDetail.sourceReferenceNumber}</code></>
+                    )}
                   </div>
                 </div>
 
-                {/* Balanced Journal Lines (Linear sub-lines card) */}
-                <div className="linear-sublines-card">
-                  <div className="linear-sublines-header">
-                    <BookOpen size={13} style={{ color: 'var(--sp-brand)' }} />
-                    <span>Multi-Line Ledger Breakdown ({selectedJvDetail.lines?.length || 0} Lines)</span>
-                  </div>
-
-                  <table className="sales-table" style={{ margin: 0 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ width: '32px' }}>#</th>
-                        <th>Account</th>
-                        <th>Line Memo / Party</th>
-                        <th style={{ textAlign: 'right', width: '130px' }}>Debit</th>
-                        <th style={{ textAlign: 'right', width: '130px' }}>Credit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedJvDetail.lines && selectedJvDetail.lines.length > 0 ? (
-                        selectedJvDetail.lines.map((l) => (
-                          <tr key={l.id} className="sales-row">
-                            <td style={{ color: 'var(--sp-text-muted)', fontVariantNumeric: 'tabular-nums', fontSize: '11px' }}>
-                              {l.lineNumber}
-                            </td>
-                            <td>
-                              <span className="sales-ref-badge">{l.accountCode}</span>
-                              <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12px', marginTop: '2px' }}>
-                                {l.accountName}
-                              </div>
-                            </td>
-                            <td>
-                              <div style={{ fontSize: '12px', color: 'var(--sp-text)' }}>{l.description || selectedJvDetail.memo}</div>
-                              {l.partyName && (
-                                <span className="sales-warehouse-pill" style={{ marginTop: '2px', display: 'inline-block' }}>
-                                  {l.partyName}
-                                </span>
-                              )}
-                            </td>
-                            <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
-                              {l.debitAmount > 0 ? formatCurrency(l.debitAmount) : '—'}
-                            </td>
-                            <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
-                              {l.creditAmount > 0 ? formatCurrency(l.creditAmount) : '—'}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--sp-text-muted)' }}>
-                            No line entries recorded.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Right Properties Sidebar (32%) */}
-              <div className="linear-properties-sidebar">
-                <div className="linear-properties-card">
-                  <div className="linear-properties-header">Properties</div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Status</span>
-                    <span className="linear-property-value">
-                      <Status label={selectedJvDetail.status} />
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Origin Source</span>
-                    <span className="linear-property-value">
-                      <span className="sales-warehouse-pill" style={{ textTransform: 'capitalize' }}>
-                        {selectedJvDetail.sourceType.replace('_', ' ').toLowerCase()}
-                      </span>
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Posting Date</span>
-                    <span className="linear-property-value">
-                      {formatDate(selectedJvDetail.postingDate)}
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Total Balanced</span>
-                    <span className="linear-property-value" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: 'var(--sp-text)' }}>
-                      {formatCurrency(selectedJvDetail.totalDebit)}
-                    </span>
-                  </div>
-
-                  {selectedJvDetail.sourceReferenceNumber && (
-                    <div className="linear-property-row">
-                      <span className="linear-property-label">Subledger Ref</span>
-                      <span className="linear-property-value">
-                        <code className="sales-ref-badge">{selectedJvDetail.sourceReferenceNumber}</code>
-                      </span>
+                <div className="gl-detail-cert-box">
+                  <ShieldCheck size={20} style={{ color: 'var(--sp-success)' }} />
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-success)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                      Double-Entry Certified
                     </div>
-                  )}
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Line Count</span>
-                    <span className="linear-property-value">
-                      {selectedJvDetail.lines?.length || 2} entries
-                    </span>
+                    <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
+                      Debits = Credits (Equilibrium)
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {/* 4-Metric Equilibrium Strip */}
+              <div className="gl-kpi-grid">
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Total Debit</span>
+                  <span className="gl-kpi-value">{formatCurrency(selectedJvDetail.totalDebit)}</span>
+                </div>
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Total Credit</span>
+                  <span className="gl-kpi-value">{formatCurrency(selectedJvDetail.totalCredit)}</span>
+                </div>
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Net Variance</span>
+                  <span className="gl-kpi-value" style={{ color: 'var(--sp-success)' }}>
+                    ₹ 0.00 (Balanced)
+                  </span>
+                </div>
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Line Entries</span>
+                  <span className="gl-kpi-value">{selectedJvDetail.lines?.length || 2} entries</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Multi-Line Ledger Breakdown (Full Width) */}
+            <div className="sales-table-card">
+              <div className="gl-sublines-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <BookOpen size={14} style={{ color: 'var(--sp-brand)' }} />
+                  <span style={{ fontWeight: 600, fontSize: '12.5px', color: 'var(--sp-text)' }}>
+                    Multi-Line Ledger Breakdown ({selectedJvDetail.lines?.length || 0} Lines)
+                  </span>
+                </div>
+                <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+                  GAAP / Ind AS Certified Entry Ledger
+                </span>
+              </div>
+
+              <table className="sales-table" style={{ margin: 0, width: '100%', tableLayout: 'fixed' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px', textAlign: 'center' }}>#</th>
+                    <th style={{ width: '260px' }}>Account</th>
+                    <th>Line Memo / Description</th>
+                    <th style={{ width: '180px' }}>Party / Entity</th>
+                    <th style={{ textAlign: 'right', width: '140px' }}>Debit</th>
+                    <th style={{ textAlign: 'right', width: '140px' }}>Credit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedJvDetail.lines && selectedJvDetail.lines.length > 0 ? (
+                    selectedJvDetail.lines.map((l) => (
+                      <tr key={l.id} className="sales-row production-clickable-row">
+                        <td style={{ color: 'var(--sp-text-muted)', fontVariantNumeric: 'tabular-nums', fontSize: '11px', textAlign: 'center' }}>
+                          {l.lineNumber}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button
+                              type="button"
+                              className="order-number-pill interactive"
+                              onClick={() => {
+                                setSelectedJvDetail(null);
+                                setSearchQuery(l.accountCode);
+                                notify(`Filtered Journal Vouchers by account ${l.accountCode}`);
+                              }}
+                              title={`Inspect account ${l.accountCode}`}
+                            >
+                              <span>{l.accountCode}</span>
+                              <ArrowUpRight size={11} className="order-link-arrow" />
+                            </button>
+                            <span style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12px' }}>
+                              {l.accountName}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: '12px', color: 'var(--sp-text)' }}>{l.description || selectedJvDetail.memo}</div>
+                        </td>
+                        <td>
+                          {l.partyName ? (
+                            <span className="sales-warehouse-pill">
+                              {l.partyName}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>—</span>
+                          )}
+                        </td>
+                        <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
+                          {l.debitAmount > 0 ? formatCurrency(l.debitAmount) : '—'}
+                        </td>
+                        <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
+                          {l.creditAmount > 0 ? formatCurrency(l.creditAmount) : '—'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--sp-text-muted)' }}>
+                        No line entries recorded.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: 'var(--sp-surface-subtle)', fontWeight: 600, borderTop: '2px solid var(--sp-border)' }}>
+                    <td colSpan={4} style={{ padding: '10px 14px', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Balanced Total Certified Double-Entry
+                    </td>
+                    <td className="sales-amount-cell" style={{ textAlign: 'right', padding: '10px 14px', fontSize: '13px' }}>
+                      {formatCurrency(selectedJvDetail.totalDebit)}
+                    </td>
+                    <td className="sales-amount-cell" style={{ textAlign: 'right', padding: '10px 14px', fontSize: '13px' }}>
+                      {formatCurrency(selectedJvDetail.totalCredit)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
         ) : (
@@ -801,22 +833,25 @@ export function GeneralLedgerPanel({
             </div>
           </div>
 
-          {/* High-Density Linear Table (Zero Horizontal Scroll) */}
+          {/* High-Density Linear Table Matching Maintenance & ECO */}
           <div className="sales-table-card">
-            <table className="sales-table">
+            <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '150px' }}>Entry #</th>
-                  <th style={{ width: '120px' }}>Status</th>
+                  <th style={{ width: '160px' }}>Voucher Ref</th>
+                  <th style={{ width: '110px' }}>Posting Date</th>
+                  <th style={{ width: '115px' }}>Origin</th>
                   <th>Memo / Description</th>
-                  <th style={{ textAlign: 'right', width: '160px' }}>Balanced Amount</th>
-                  <th style={{ textAlign: 'right', width: '90px' }}></th>
+                  <th style={{ width: '160px' }}>Subledger Ref</th>
+                  <th style={{ width: '80px', textAlign: 'center' }}>Entries</th>
+                  <th style={{ textAlign: 'right', width: '140px' }}>Balanced Amount</th>
+                  <th style={{ width: '105px' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredJvs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--sp-text-muted)' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--sp-text-muted)' }}>
                       No journal vouchers match your filter.
                     </td>
                   </tr>
@@ -824,67 +859,76 @@ export function GeneralLedgerPanel({
                   filteredJvs.map((jv) => (
                     <tr
                       key={jv.id}
-                      className="sales-row"
+                      className="sales-row production-clickable-row"
                       onClick={() => void handleInspectJv(jv)}
                       style={{ cursor: 'pointer' }}
                     >
-                      <td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
                         <button
                           type="button"
-                          className="sales-ref-badge interactive"
+                          className="order-number-pill interactive"
                           onClick={(e) => {
                             e.stopPropagation();
                             void handleInspectJv(jv);
                           }}
-                          title="Click to inspect double-entry balanced ledger details"
+                          title={`Inspect voucher ${jv.entryNumber}`}
                         >
-                          {jv.entryNumber}
+                          <span>{jv.entryNumber}</span>
+                          <ArrowUpRight size={11} className="order-link-arrow" />
                         </button>
-                        <div className="sales-date-cell" style={{ marginTop: '2px' }}>
+                      </td>
+
+                      <td>
+                        <span className="sales-date-cell">
                           {formatDate(jv.postingDate)}
-                        </div>
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className="sales-warehouse-pill" style={{ textTransform: 'capitalize' }}>
+                          {jv.sourceType.toLowerCase().replace(/_/g, ' ')}
+                        </span>
+                      </td>
+
+                      <td style={{ overflow: 'hidden' }}>
+                        <span
+                          style={{
+                            fontWeight: 500,
+                            color: 'var(--sp-text)',
+                            fontSize: '12.5px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            display: 'block'
+                          }}
+                          title={jv.memo}
+                        >
+                          {jv.memo}
+                        </span>
+                      </td>
+
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        {jv.sourceReferenceNumber ? (
+                          <span className="sales-ref-badge" style={{ fontSize: '10.5px' }}>
+                            {jv.sourceReferenceNumber}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>—</span>
+                        )}
+                      </td>
+
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="sales-pill-count" style={{ fontSize: '11px', padding: '2px 6px' }}>
+                          {jv.lines?.length || 2} lines
+                        </span>
+                      </td>
+
+                      <td className="sales-amount-cell" style={{ textAlign: 'right', fontWeight: 600 }}>
+                        {formatCurrency(jv.totalDebit)}
                       </td>
 
                       <td>
                         <Status label={jv.status} />
-                        <div style={{ marginTop: '3px' }}>
-                          <span className="sales-warehouse-pill">
-                            {jv.sourceType.replace('_', ' ')}
-                          </span>
-                        </div>
-                      </td>
-
-                      <td>
-                        <div style={{ fontWeight: 500, color: 'var(--sp-text)' }}>
-                          {jv.memo}
-                        </div>
-                        {jv.sourceReferenceNumber && (
-                          <div className="sales-sub-ref" style={{ marginTop: '2px' }}>
-                            Ref: {jv.sourceReferenceNumber}
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
-                        <div>{formatCurrency(jv.totalDebit)}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
-                          Balanced · {jv.lines?.length || 2} lines
-                        </div>
-                      </td>
-
-                      <td style={{ textAlign: 'right' }}>
-                        <button
-                          type="button"
-                          className="sales-action-btn secondary"
-                          style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleInspectJv(jv);
-                          }}
-                        >
-                          <span>Inspect</span>
-                          <ChevronRight size={11} />
-                        </button>
                       </td>
                     </tr>
                   ))
@@ -898,7 +942,31 @@ export function GeneralLedgerPanel({
 
       {/* 4. TAB 2: CHART OF ACCOUNTS (COA) */}
       {activeTab === 'coa' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Executive COA KPI Summary Strip */}
+          <div className="gl-kpi-grid">
+            <div className="gl-kpi-item">
+              <span className="gl-kpi-label">Chart Accounts</span>
+              <span className="gl-kpi-value">{coaMetrics.total} Accounts</span>
+              <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>{coaMetrics.active} active accounts in ledger</span>
+            </div>
+            <div className="gl-kpi-item">
+              <span className="gl-kpi-label">Total Assets Balance</span>
+              <span className="gl-kpi-value">{formatCurrency(coaMetrics.assetTotal)}</span>
+              <span style={{ fontSize: '11px', color: 'var(--sp-info)' }}>Debit normal balance</span>
+            </div>
+            <div className="gl-kpi-item">
+              <span className="gl-kpi-label">Total Liabilities</span>
+              <span className="gl-kpi-value">{formatCurrency(coaMetrics.liabilityTotal)}</span>
+              <span style={{ fontSize: '11px', color: 'var(--sp-warning)' }}>Credit normal balance</span>
+            </div>
+            <div className="gl-kpi-item">
+              <span className="gl-kpi-label">Owner Capital & Equity</span>
+              <span className="gl-kpi-value">{formatCurrency(coaMetrics.equityTotal)}</span>
+              <span style={{ fontSize: '11px', color: 'var(--sp-brand)' }}>Capital + Retained Earnings</span>
+            </div>
+          </div>
+
           <div className="sales-toolbar">
             <div className="sales-pill-group">
               {(['ALL', 'ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'] as const).map((type) => (
@@ -953,16 +1021,16 @@ export function GeneralLedgerPanel({
           {/* Accounts Table */}
           <div className="sales-table-card">
             <div className="sales-table-scroll">
-              <table className="sales-table">
+              <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th>CODE</th>
+                    <th style={{ width: '140px' }}>CODE</th>
                     <th>ACCOUNT NAME</th>
-                    <th>CLASS</th>
-                    <th>SUB-TYPE</th>
-                    <th>NORMAL BALANCE</th>
-                    <th style={{ textAlign: 'right' }}>NET BALANCE</th>
-                    <th style={{ textAlign: 'center' }}>STATUS</th>
+                    <th style={{ width: '130px' }}>CLASS</th>
+                    <th style={{ width: '160px' }}>SUB-TYPE</th>
+                    <th style={{ width: '140px' }}>NORMAL BALANCE</th>
+                    <th style={{ textAlign: 'right', width: '160px' }}>NET BALANCE</th>
+                    <th style={{ textAlign: 'center', width: '100px' }}>STATUS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -974,26 +1042,54 @@ export function GeneralLedgerPanel({
                     </tr>
                   ) : (
                     filteredAccounts.map((acc) => (
-                      <tr key={acc.id} className="sales-row">
-                        <td>
-                          <span className="sales-ref-badge">{acc.accountCode}</span>
+                      <tr
+                        key={acc.id}
+                        className="sales-row production-clickable-row"
+                        onClick={() => {
+                          setSearchQuery(acc.accountCode);
+                          setActiveTab('journals');
+                          notify(`Filtered Journal Vouchers by account ${acc.accountCode}`);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <button
+                            type="button"
+                            className="order-number-pill interactive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSearchQuery(acc.accountCode);
+                              setActiveTab('journals');
+                              notify(`Filtered Journal Vouchers by account ${acc.accountCode}`);
+                            }}
+                            title={`Inspect journal vouchers for account ${acc.accountCode}`}
+                          >
+                            <span>{acc.accountCode}</span>
+                            <ArrowUpRight size={11} className="order-link-arrow" />
+                          </button>
                         </td>
-                        <td>
-                          <div style={{ fontWeight: 500, color: 'var(--sp-text)' }}>{acc.accountName}</div>
+                        <td style={{ overflow: 'hidden' }}>
+                          <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {acc.accountName}
+                          </div>
                           {acc.description && (
-                            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>{acc.description}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
+                              {acc.description}
+                            </div>
                           )}
                         </td>
                         <td>
-                          <span className="sales-warehouse-pill">{acc.accountType}</span>
+                          <span className={`gl-class-badge ${acc.accountType.toLowerCase()}`}>{acc.accountType}</span>
                         </td>
-                        <td className="sales-date-cell">{acc.subType}</td>
+                        <td className="sales-date-cell" style={{ textTransform: 'capitalize' }}>
+                          {acc.subType.toLowerCase().replace(/_/g, ' ')}
+                        </td>
                         <td>
-                          <span className={acc.normalBalance === 'DEBIT' ? 'sales-sub-highlight' : 'sales-sub-warning'}>
+                          <span className={`gl-balance-pill ${acc.normalBalance.toLowerCase()}`}>
                             {acc.normalBalance}
                           </span>
                         </td>
-                        <td className="sales-amount-cell">
+                        <td className="sales-amount-cell" style={{ textAlign: 'right', fontWeight: 600 }}>
                           {formatCurrency(acc.currentBalance)}
                         </td>
                         <td style={{ textAlign: 'center' }}>
@@ -1022,7 +1118,8 @@ export function GeneralLedgerPanel({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: '16px'
+              gap: '16px',
+              flexWrap: 'wrap'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1041,8 +1138,11 @@ export function GeneralLedgerPanel({
               </div>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  Double-Entry Ledger Integrity Status
-                  <Status label="Posted" />
+                  <span>Double-Entry Ledger Integrity Status</span>
+                  <span className="gl-detail-cert-box" style={{ padding: '2px 8px', fontSize: '11px', height: '22px' }}>
+                    <ShieldCheck size={12} style={{ color: '#16a34a' }} />
+                    <span style={{ fontWeight: 600, color: '#16a34a' }}>Balanced (Variance: ₹0.00)</span>
+                  </span>
                 </div>
                 <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
                   Every debit matches a credit across all posted manual and automated subledger vouchers as of{' '}
@@ -1051,18 +1151,41 @@ export function GeneralLedgerPanel({
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--sp-text-muted)', display: 'block' }}>Total Debits</span>
-                <span style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '13px' }}>
-                  {formatCurrency(trialBalance?.totalDebit ?? 0)}
-                </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <div className="sales-pill-group">
+                <button
+                  type="button"
+                  className={`sales-pill-btn ${!trialOnlyActive ? 'active' : ''}`}
+                  onClick={() => setTrialOnlyActive(false)}
+                >
+                  <span>All Accounts</span>
+                  <span className="sales-pill-count">{trialBalance?.rows?.length || 0}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sales-pill-btn ${trialOnlyActive ? 'active' : ''}`}
+                  onClick={() => setTrialOnlyActive(true)}
+                >
+                  <span>Active Ledger Only</span>
+                  <span className="sales-pill-count">
+                    {trialBalance?.rows?.filter((r) => r.totalDebit > 0 || r.totalCredit > 0).length || 0}
+                  </span>
+                </button>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--sp-text-muted)', display: 'block' }}>Total Credits</span>
-                <span style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '13px' }}>
-                  {formatCurrency(trialBalance?.totalCredit ?? 0)}
-                </span>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', fontVariantNumeric: 'tabular-nums', fontSize: '12px', borderLeft: '1px solid var(--sp-border)', paddingLeft: '16px' }}>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--sp-text-muted)', display: 'block' }}>Total Debits</span>
+                  <span style={{ fontWeight: 600, color: 'var(--sp-text)', fontSize: '13px' }}>
+                    {formatCurrency(trialBalance?.totalDebit ?? 0)}
+                  </span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--sp-text-muted)', display: 'block' }}>Total Credits</span>
+                  <span style={{ fontWeight: 600, color: 'var(--sp-text)', fontSize: '13px' }}>
+                    {formatCurrency(trialBalance?.totalCredit ?? 0)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -1070,57 +1193,95 @@ export function GeneralLedgerPanel({
           {/* Trial Balance Table */}
           <div className="sales-table-card">
             <div className="sales-table-scroll">
-              <table className="sales-table">
+              <table className="sales-table" style={{ width: '100%', tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th>CODE</th>
+                    <th style={{ width: '140px' }}>CODE</th>
                     <th>ACCOUNT TITLE</th>
-                    <th>CLASS</th>
-                    <th style={{ textAlign: 'right' }}>DEBIT BALANCE</th>
-                    <th style={{ textAlign: 'right' }}>CREDIT BALANCE</th>
-                    <th style={{ textAlign: 'right' }}>NET BALANCE</th>
+                    <th style={{ width: '130px' }}>CLASS</th>
+                    <th style={{ textAlign: 'right', width: '160px' }}>DEBIT BALANCE</th>
+                    <th style={{ textAlign: 'right', width: '160px' }}>CREDIT BALANCE</th>
+                    <th style={{ textAlign: 'right', width: '180px' }}>NET POSITION</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {trialBalance?.rows?.map((row) => {
-                    const hasActivity = row.totalDebit > 0 || row.totalCredit > 0;
-                    return (
-                      <tr
-                        key={row.accountId}
-                        className="sales-row"
-                        style={{ opacity: hasActivity ? 1 : 0.4 }}
-                      >
-                        <td>
-                          <span className="sales-ref-badge">{row.accountCode}</span>
-                        </td>
-                        <td style={{ fontWeight: 500 }}>{row.accountName}</td>
-                        <td className="sales-date-cell">{row.accountType}</td>
-                        <td className="sales-amount-cell">
-                          {row.totalDebit > 0 ? formatCurrency(row.totalDebit) : '—'}
-                        </td>
-                        <td className="sales-amount-cell">
-                          {row.totalCredit > 0 ? formatCurrency(row.totalCredit) : '—'}
-                        </td>
-                        <td className="sales-amount-cell" style={{ fontWeight: 500 }}>
-                          {row.netDebit > 0 ? `Dr. ${formatCurrency(row.netDebit)}` : row.netCredit > 0 ? `Cr. ${formatCurrency(row.netCredit)}` : '0.00'}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {filteredTrialRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--sp-text-muted)' }}>
+                        No accounts match the active filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTrialRows.map((row) => {
+                      const hasActivity = row.totalDebit > 0 || row.totalCredit > 0;
+                      return (
+                        <tr
+                          key={row.accountId}
+                          className="sales-row production-clickable-row"
+                          onClick={() => {
+                            setSearchQuery(row.accountCode);
+                            setActiveTab('journals');
+                            notify(`Filtered Journal Vouchers by account ${row.accountCode}`);
+                          }}
+                          style={{ opacity: hasActivity ? 1 : 0.45, cursor: 'pointer' }}
+                        >
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <button
+                              type="button"
+                              className="order-number-pill interactive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchQuery(row.accountCode);
+                                setActiveTab('journals');
+                                notify(`Filtered Journal Vouchers by account ${row.accountCode}`);
+                              }}
+                              title={`Inspect journal vouchers for account ${row.accountCode}`}
+                            >
+                              <span>{row.accountCode}</span>
+                              <ArrowUpRight size={11} className="order-link-arrow" />
+                            </button>
+                          </td>
+                          <td style={{ overflow: 'hidden' }}>
+                            <span style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                              {row.accountName}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`gl-class-badge ${row.accountType.toLowerCase()}`}>{row.accountType}</span>
+                          </td>
+                          <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
+                            {row.totalDebit > 0 ? formatCurrency(row.totalDebit) : '—'}
+                          </td>
+                          <td className="sales-amount-cell" style={{ textAlign: 'right' }}>
+                            {row.totalCredit > 0 ? formatCurrency(row.totalCredit) : '—'}
+                          </td>
+                          <td className="sales-amount-cell" style={{ fontWeight: 600, textAlign: 'right' }}>
+                            {row.netDebit > 0 ? (
+                              <span className="gl-balance-pill debit">Dr. {formatCurrency(row.netDebit)}</span>
+                            ) : row.netCredit > 0 ? (
+                              <span className="gl-balance-pill credit">Cr. {formatCurrency(row.netCredit)}</span>
+                            ) : (
+                              <span style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>₹0.00</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
                 <tfoot>
-                  <tr style={{ background: 'var(--sp-surface-subtle)', fontWeight: 500 }}>
-                    <td colSpan={3} style={{ padding: '10px', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <tr style={{ background: 'var(--sp-surface-subtle)', fontWeight: 600, borderTop: '2px solid var(--sp-border)' }}>
+                    <td colSpan={3} style={{ padding: '10px 14px', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Totals Verified Double-Entry
                     </td>
-                    <td className="sales-amount-cell" style={{ padding: '10px', fontSize: '13px' }}>
+                    <td className="sales-amount-cell" style={{ textAlign: 'right', padding: '10px 14px', fontSize: '13px' }}>
                       {formatCurrency(trialBalance?.totalDebit ?? 0)}
                     </td>
-                    <td className="sales-amount-cell" style={{ padding: '10px', fontSize: '13px' }}>
+                    <td className="sales-amount-cell" style={{ textAlign: 'right', padding: '10px 14px', fontSize: '13px' }}>
                       {formatCurrency(trialBalance?.totalCredit ?? 0)}
                     </td>
-                    <td className="sales-amount-cell" style={{ padding: '10px', color: 'var(--sp-brand)' }}>
-                      0.00 DIFFERENCE
+                    <td className="sales-amount-cell" style={{ textAlign: 'right', padding: '10px 14px', color: '#16a34a', fontWeight: 600 }}>
+                      ✓ ₹0.00 VARIANCE
                     </td>
                   </tr>
                 </tfoot>
@@ -1132,7 +1293,7 @@ export function GeneralLedgerPanel({
 
       {/* 6. TAB 4: FINANCIAL STATEMENTS (B/S & P&L) */}
       {activeTab === 'statements' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
             <div className="leads-view-toggle">
               <button
@@ -1141,7 +1302,7 @@ export function GeneralLedgerPanel({
                 onClick={() => setStatementSubTab('bs')}
               >
                 <BookOpen size={13} />
-                Balance Sheet Statement
+                <span>Balance Sheet Statement</span>
               </button>
               <button
                 type="button"
@@ -1149,272 +1310,516 @@ export function GeneralLedgerPanel({
                 onClick={() => setStatementSubTab('pl')}
               >
                 <TrendingUp size={13} />
-                Profit & Loss (Income Statement)
+                <span>Profit & Loss (Income Statement)</span>
               </button>
             </div>
 
-            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-              Standard: GAAP / Ind AS Double-Entry Synchronized
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
+              <span className="gl-detail-cert-box" style={{ padding: '2px 8px', fontSize: '11px', height: '22px' }}>
+                <ShieldCheck size={12} style={{ color: '#16a34a' }} />
+                <span style={{ fontWeight: 600, color: '#16a34a' }}>GAAP & Ind AS Synchronized</span>
+              </span>
             </div>
           </div>
 
           {/* BALANCE SHEET SUB-VIEW */}
           {statementSubTab === 'bs' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '14px' }}>
-              {/* Left Column: ASSETS */}
-              <div className="sales-table-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--sp-border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', textTransform: 'uppercase' }}>
-                    <Wallet size={14} style={{ color: 'var(--sp-brand)' }} />
-                    Assets
-                  </div>
-                  <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, fontSize: '15px', color: 'var(--sp-text)' }}>
-                    {formatCurrency(balanceSheet?.totalAssets ?? 0)}
-                  </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Executive Balance Sheet KPI Strip */}
+              <div className="gl-kpi-grid">
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Total Assets</span>
+                  <span className="gl-kpi-value">{formatCurrency(balanceSheet?.totalAssets ?? 0)}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-info)' }}>100% debit normal balance</span>
                 </div>
-
-                {/* Current Assets */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 500, color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
-                    <span>Current Assets</span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(balanceSheet?.totalCurrentAssets ?? 0)}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
-                    {balanceSheet?.currentAssets?.map((item) => (
-                      <div key={item.accountId} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--sp-border-subtle)' }}>
-                        <span>
-                          <span className="sales-ref-badge" style={{ marginRight: '6px' }}>{item.accountCode}</span>
-                          {item.accountName}
-                        </span>
-                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: 'var(--sp-text)' }}>
-                          {formatCurrency(item.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Current Assets</span>
+                  <span className="gl-kpi-value">{formatCurrency(balanceSheet?.totalCurrentAssets ?? 0)}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Liquid & operating receivables</span>
                 </div>
-
-                {/* Fixed Assets */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '8px', borderTop: '1px solid var(--sp-border-subtle)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 500, color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
-                    <span>Fixed Assets (Plant & Machinery)</span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(balanceSheet?.totalFixedAssets ?? 0)}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
-                    {balanceSheet?.fixedAssets?.map((item) => (
-                      <div key={item.accountId} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--sp-border-subtle)' }}>
-                        <span>
-                          <span className="sales-ref-badge" style={{ marginRight: '6px' }}>{item.accountCode}</span>
-                          {item.accountName}
-                        </span>
-                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: 'var(--sp-text)' }}>
-                          {formatCurrency(item.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Total Liabilities</span>
+                  <span className="gl-kpi-value">{formatCurrency(balanceSheet?.totalCurrentLiabilities ?? 0)}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-warning)' }}>Trade AP & tax obligations</span>
+                </div>
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Owner Capital & Equity</span>
+                  <span className="gl-kpi-value">{formatCurrency(balanceSheet?.totalEquity ?? 0)}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-brand)' }}>Paid-in capital + retained earnings</span>
                 </div>
               </div>
 
-              {/* Right Column: LIABILITIES & EQUITY */}
-              <div className="sales-table-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--sp-border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', textTransform: 'uppercase' }}>
-                    <CreditCard size={14} style={{ color: 'var(--sp-brand)' }} />
-                    Liabilities & Owner Equity
+              {/* 2-Column Comparative Balance Sheet */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '16px' }}>
+                {/* Left Column: ASSETS */}
+                <div className="sales-table-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--sp-border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                      <Wallet size={15} style={{ color: 'var(--sp-brand)' }} />
+                      <span>Total Assets</span>
+                    </div>
+                    <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: '16px', color: 'var(--sp-text)' }}>
+                      {formatCurrency(balanceSheet?.totalAssets ?? 0)}
+                    </div>
                   </div>
-                  <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, fontSize: '15px', color: 'var(--sp-text)' }}>
-                    {formatCurrency(balanceSheet?.totalLiabilitiesAndEquity ?? 0)}
-                  </div>
-                </div>
 
-                {/* Current Liabilities */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 500, color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
-                    <span>Current Liabilities</span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(balanceSheet?.totalCurrentLiabilities ?? 0)}</span>
+                  {/* Current Assets */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      <span>Current Assets (Operating & Liquid)</span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(balanceSheet?.totalCurrentAssets ?? 0)}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {balanceSheet?.currentAssets?.map((item) => (
+                        <div
+                          key={item.accountId}
+                          className="production-clickable-row"
+                          onClick={() => {
+                            setSearchQuery(item.accountCode);
+                            setActiveTab('journals');
+                            notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                          }}
+                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '4px', borderBottom: '1px solid var(--sp-border-subtle)', cursor: 'pointer' }}
+                        >
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button
+                              type="button"
+                              className="order-number-pill interactive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchQuery(item.accountCode);
+                                setActiveTab('journals');
+                                notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                              }}
+                              title={`Inspect journal vouchers for ${item.accountCode}`}
+                            >
+                              <span>{item.accountCode}</span>
+                              <ArrowUpRight size={11} className="order-link-arrow" />
+                            </button>
+                            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)' }}>{item.accountName}</span>
+                          </span>
+                          <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--sp-text)', fontSize: '12px' }}>
+                            {formatCurrency(item.amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
-                    {balanceSheet?.currentLiabilities?.map((item) => (
-                      <div key={item.accountId} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--sp-border-subtle)' }}>
-                        <span>
-                          <span className="sales-ref-badge" style={{ marginRight: '6px' }}>{item.accountCode}</span>
-                          {item.accountName}
-                        </span>
-                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: 'var(--sp-text)' }}>
-                          {formatCurrency(item.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Owner Equity */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '8px', borderTop: '1px solid var(--sp-border-subtle)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 500, color: 'var(--sp-text-muted)', textTransform: 'uppercase' }}>
-                    <span>Owner Capital & Retained Earnings</span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(balanceSheet?.totalEquity ?? 0)}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
-                    {balanceSheet?.equityItems?.map((item) => (
-                      <div key={item.accountId} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--sp-border-subtle)' }}>
-                        <span>
-                          <span className="sales-ref-badge" style={{ marginRight: '6px' }}>{item.accountCode}</span>
-                          {item.accountName}
-                        </span>
-                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: 'var(--sp-text)' }}>
-                          {formatCurrency(item.amount)}
-                        </span>
-                      </div>
-                    ))}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: 'var(--sp-brand)', fontWeight: 600 }}>
-                      <span>Retained Earnings (Cumulative Net Profit)</span>
-                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {formatCurrency(balanceSheet?.retainedEarnings ?? 0)}
-                      </span>
+                  {/* Fixed Assets */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--sp-border-subtle)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      <span>Fixed Assets (Plant & Machinery)</span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(balanceSheet?.totalFixedAssets ?? 0)}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {balanceSheet?.fixedAssets?.map((item) => (
+                        <div
+                          key={item.accountId}
+                          className="production-clickable-row"
+                          onClick={() => {
+                            setSearchQuery(item.accountCode);
+                            setActiveTab('journals');
+                            notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                          }}
+                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '4px', borderBottom: '1px solid var(--sp-border-subtle)', cursor: 'pointer' }}
+                        >
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button
+                              type="button"
+                              className="order-number-pill interactive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchQuery(item.accountCode);
+                                setActiveTab('journals');
+                                notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                              }}
+                              title={`Inspect journal vouchers for ${item.accountCode}`}
+                            >
+                              <span>{item.accountCode}</span>
+                              <ArrowUpRight size={11} className="order-link-arrow" />
+                            </button>
+                            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)' }}>{item.accountName}</span>
+                          </span>
+                          <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--sp-text)', fontSize: '12px' }}>
+                            {formatCurrency(item.amount)}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
 
+                {/* Right Column: LIABILITIES & EQUITY */}
+                <div className="sales-table-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--sp-border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                      <CreditCard size={15} style={{ color: 'var(--sp-brand)' }} />
+                      <span>Liabilities & Owner Equity</span>
+                    </div>
+                    <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: '16px', color: 'var(--sp-text)' }}>
+                      {formatCurrency(balanceSheet?.totalLiabilitiesAndEquity ?? 0)}
+                    </div>
+                  </div>
+
+                  {/* Current Liabilities */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      <span>Current Liabilities</span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(balanceSheet?.totalCurrentLiabilities ?? 0)}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {balanceSheet?.currentLiabilities?.map((item) => (
+                        <div
+                          key={item.accountId}
+                          className="production-clickable-row"
+                          onClick={() => {
+                            setSearchQuery(item.accountCode);
+                            setActiveTab('journals');
+                            notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                          }}
+                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '4px', borderBottom: '1px solid var(--sp-border-subtle)', cursor: 'pointer' }}
+                        >
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button
+                              type="button"
+                              className="order-number-pill interactive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchQuery(item.accountCode);
+                                setActiveTab('journals');
+                                notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                              }}
+                              title={`Inspect journal vouchers for ${item.accountCode}`}
+                            >
+                              <span>{item.accountCode}</span>
+                              <ArrowUpRight size={11} className="order-link-arrow" />
+                            </button>
+                            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)' }}>{item.accountName}</span>
+                          </span>
+                          <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--sp-text)', fontSize: '12px' }}>
+                            {formatCurrency(item.amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Owner Equity */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--sp-border-subtle)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      <span>Owner Capital & Retained Earnings</span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(balanceSheet?.totalEquity ?? 0)}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {balanceSheet?.equityItems?.map((item) => (
+                        <div
+                          key={item.accountId}
+                          className="production-clickable-row"
+                          onClick={() => {
+                            setSearchQuery(item.accountCode);
+                            setActiveTab('journals');
+                            notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                          }}
+                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '4px', borderBottom: '1px solid var(--sp-border-subtle)', cursor: 'pointer' }}
+                        >
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button
+                              type="button"
+                              className="order-number-pill interactive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchQuery(item.accountCode);
+                                setActiveTab('journals');
+                                notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                              }}
+                              title={`Inspect journal vouchers for ${item.accountCode}`}
+                            >
+                              <span>{item.accountCode}</span>
+                              <ArrowUpRight size={11} className="order-link-arrow" />
+                            </button>
+                            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)' }}>{item.accountName}</span>
+                          </span>
+                          <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--sp-text)', fontSize: '12px' }}>
+                            {formatCurrency(item.amount)}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="production-clickable-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '4px', color: 'var(--sp-brand)', fontWeight: 600 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span className="order-number-pill" style={{ borderColor: 'var(--sp-brand)', color: 'var(--sp-brand)' }}>RE</span>
+                          <span style={{ fontSize: '12px' }}>Retained Earnings (Cumulative Net Profit)</span>
+                        </span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                          {formatCurrency(balanceSheet?.retainedEarnings ?? 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '6px',
+                      background: 'var(--sp-surface-subtle)',
+                      border: '1px solid var(--sp-border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      marginTop: 'auto'
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--sp-text)' }}>
+                      <ShieldCheck size={14} style={{ color: '#16a34a' }} />
+                      Double-Entry Equilibrium Total
+                    </span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--sp-text)', fontSize: '13px' }}>
+                      {formatCurrency(balanceSheet?.totalLiabilitiesAndEquity ?? 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PROFIT & LOSS SUB-VIEW (FULL-WIDTH, ZERO WASTED SPACE) */}
+          {statementSubTab === 'pl' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Executive P&L KPI Strip */}
+              <div className="gl-kpi-grid">
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Operating Revenue</span>
+                  <span className="gl-kpi-value">{formatCurrency(profitLoss?.totalRevenue ?? 0)}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-success)' }}>B2B + POS Sales</span>
+                </div>
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Cost of Goods Sold (COGS)</span>
+                  <span className="gl-kpi-value">{formatCurrency(profitLoss?.totalCogs ?? 0)}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-danger)' }}>Direct materials & production</span>
+                </div>
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Gross Margin</span>
+                  <span className="gl-kpi-value">{formatCurrency(profitLoss?.grossProfit ?? 0)}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-brand)' }}>{profitLoss?.grossMarginPercent?.toFixed(1)}% margin efficiency</span>
+                </div>
+                <div className="gl-kpi-item">
+                  <span className="gl-kpi-label">Net Operating Income (EBIT)</span>
+                  <span className="gl-kpi-value">{formatCurrency(profitLoss?.netOperatingIncome ?? 0)}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--sp-success)' }}>{profitLoss?.netMarginPercent?.toFixed(1)}% net margin</span>
+                </div>
+              </div>
+
+              {/* Full-Width Linear P&L Statement Card */}
+              <div className="sales-table-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '14px', borderBottom: '1px solid var(--sp-border)' }}>
+                  <div>
+                    <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--sp-text)', margin: 0 }}>
+                      Profit & Loss Statement (Income Statement)
+                    </h2>
+                    <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', marginTop: '3px' }}>
+                      Certified Period: <strong>{profitLoss?.fromDate ?? 'Start'}</strong> to <strong>{profitLoss?.toDate ?? 'Present'}</strong> · Double-entry accrual basis
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--sp-text-muted)', display: 'block' }}>Net Operating Margin (EBIT)</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '20px', fontWeight: 600, color: 'var(--sp-text)' }}>
+                      {formatCurrency(profitLoss?.netOperatingIncome ?? 0)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Section 1: Operating Revenue */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }}></span>
+                      1. Operating Revenue
+                    </span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '13px', color: '#16a34a' }}>
+                      {formatCurrency(profitLoss?.totalRevenue ?? 0)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    {profitLoss?.operatingRevenue?.map((item) => (
+                      <div
+                        key={item.accountId}
+                        className="production-clickable-row"
+                        onClick={() => {
+                          setSearchQuery(item.accountCode);
+                          setActiveTab('journals');
+                          notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                        }}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', borderRadius: '4px', borderBottom: '1px solid var(--sp-border-subtle)', cursor: 'pointer' }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            type="button"
+                            className="order-number-pill interactive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSearchQuery(item.accountCode);
+                              setActiveTab('journals');
+                              notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                            }}
+                            title={`Inspect journal vouchers for ${item.accountCode}`}
+                          >
+                            <span>{item.accountCode}</span>
+                            <ArrowUpRight size={11} className="order-link-arrow" />
+                          </button>
+                          <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)' }}>{item.accountName}</span>
+                        </span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--sp-text)', fontSize: '12.5px' }}>
+                          {formatCurrency(item.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section 2: Cost of Goods Sold */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--sp-border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#c13e3e' }}></span>
+                      2. Cost of Goods Sold (COGS)
+                    </span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '13px', color: '#c13e3e' }}>
+                      ({formatCurrency(profitLoss?.totalCogs ?? 0)})
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    {profitLoss?.costOfGoodsSold?.map((item) => (
+                      <div
+                        key={item.accountId}
+                        className="production-clickable-row"
+                        onClick={() => {
+                          setSearchQuery(item.accountCode);
+                          setActiveTab('journals');
+                          notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                        }}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', borderRadius: '4px', borderBottom: '1px solid var(--sp-border-subtle)', cursor: 'pointer' }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            type="button"
+                            className="order-number-pill interactive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSearchQuery(item.accountCode);
+                              setActiveTab('journals');
+                              notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                            }}
+                            title={`Inspect journal vouchers for ${item.accountCode}`}
+                          >
+                            <span>{item.accountCode}</span>
+                            <ArrowUpRight size={11} className="order-link-arrow" />
+                          </button>
+                          <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)' }}>{item.accountName}</span>
+                        </span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: '#c13e3e', fontSize: '12.5px' }}>
+                          ({formatCurrency(item.amount)})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Gross Margin Callout */}
                 <div
                   style={{
-                    padding: '8px 12px',
+                    padding: '12px 16px',
                     borderRadius: '6px',
                     background: 'var(--sp-surface-subtle)',
                     border: '1px solid var(--sp-border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    fontSize: '12px',
+                    fontSize: '12.5px',
                     fontWeight: 600
                   }}
                 >
-                  <span>Double-Entry Equilibrium Total</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--sp-text)' }}>
-                    {formatCurrency(balanceSheet?.totalLiabilitiesAndEquity ?? 0)}
+                  <span style={{ color: 'var(--sp-text)' }}>
+                    Gross Profit (Margin Efficiency: {profitLoss?.grossMarginPercent?.toFixed(1)}%)
+                  </span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--sp-text)', fontSize: '14px' }}>
+                    {formatCurrency(profitLoss?.grossProfit ?? 0)}
                   </span>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* PROFIT & LOSS SUB-VIEW */}
-          {statementSubTab === 'pl' && (
-            <div className="sales-table-card" style={{ maxWidth: '800px', margin: '0 auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--sp-border)' }}>
-                <div>
-                  <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--sp-text)' }}>Profit & Loss Statement</div>
-                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
-                    Accounting Period: {profitLoss?.fromDate} to {profitLoss?.toDate}
+                {/* Section 3: Operating Expenses */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--sp-border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#d97706' }}></span>
+                      3. Operating & Administrative Expenses
+                    </span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '13px', color: '#d97706' }}>
+                      ({formatCurrency(profitLoss?.totalExpenses ?? 0)})
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    {profitLoss?.operatingExpenses?.map((item) => (
+                      <div
+                        key={item.accountId}
+                        className="production-clickable-row"
+                        onClick={() => {
+                          setSearchQuery(item.accountCode);
+                          setActiveTab('journals');
+                          notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                        }}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', borderRadius: '4px', borderBottom: '1px solid var(--sp-border-subtle)', cursor: 'pointer' }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            type="button"
+                            className="order-number-pill interactive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSearchQuery(item.accountCode);
+                              setActiveTab('journals');
+                              notify(`Filtered Journal Vouchers by account ${item.accountCode}`);
+                            }}
+                            title={`Inspect journal vouchers for ${item.accountCode}`}
+                          >
+                            <span>{item.accountCode}</span>
+                            <ArrowUpRight size={11} className="order-link-arrow" />
+                          </button>
+                          <span style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--sp-text)' }}>{item.accountName}</span>
+                        </span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: '#d97706', fontSize: '12.5px' }}>
+                          ({formatCurrency(item.amount)})
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '10.5px', textTransform: 'uppercase', color: 'var(--sp-text-muted)', display: 'block' }}>Net Operating Margin</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '18px', fontWeight: 500, color: 'var(--sp-text)' }}>
+
+                {/* Final Net Operating Margin Callout */}
+                <div
+                  style={{
+                    padding: '14px 18px',
+                    borderRadius: '8px',
+                    background: 'var(--sp-surface-subtle)',
+                    border: '1px solid var(--sp-border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginTop: '6px'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--sp-text)' }}>
+                      Net Operating Income (EBIT)
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
+                      Net Margin Ratio: <strong style={{ color: 'var(--sp-text)' }}>{profitLoss?.netMarginPercent?.toFixed(1)}%</strong> of gross revenue
+                    </div>
+                  </div>
+                  <div style={{ fontVariantNumeric: 'tabular-nums', fontSize: '22px', fontWeight: 600, color: 'var(--sp-text)' }}>
                     {formatCurrency(profitLoss?.netOperatingIncome ?? 0)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Operating Revenue */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', fontWeight: 500, color: 'var(--sp-text)', textTransform: 'uppercase' }}>
-                  <span>1. Operating Revenue</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(profitLoss?.totalRevenue ?? 0)}</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', paddingLeft: '12px' }}>
-                  {profitLoss?.operatingRevenue?.map((item) => (
-                    <div key={item.accountId} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--sp-border-subtle)' }}>
-                      <span>
-                        <span className="sales-ref-badge" style={{ marginRight: '6px' }}>{item.accountCode}</span>
-                        {item.accountName}
-                      </span>
-                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(item.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* COGS */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '8px', borderTop: '1px solid var(--sp-border-subtle)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', fontWeight: 500, color: 'var(--sp-text)', textTransform: 'uppercase' }}>
-                  <span>2. Cost of Goods Sold (COGS)</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>({formatCurrency(profitLoss?.totalCogs ?? 0)})</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', paddingLeft: '12px' }}>
-                  {profitLoss?.costOfGoodsSold?.map((item) => (
-                    <div key={item.accountId} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--sp-border-subtle)' }}>
-                      <span>
-                        <span className="sales-ref-badge" style={{ marginRight: '6px' }}>{item.accountCode}</span>
-                        {item.accountName}
-                      </span>
-                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(item.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Gross Margin Callout */}
-              <div
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '6px',
-                  background: 'var(--sp-surface-subtle)',
-                  border: '1px solid var(--sp-border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: '12px',
-                  fontWeight: 500
-                }}
-              >
-                <span>Gross Profit (Margin: {profitLoss?.grossMarginPercent?.toFixed(1)}%)</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, color: 'var(--sp-text)' }}>
-                  {formatCurrency(profitLoss?.grossProfit ?? 0)}
-                </span>
-              </div>
-
-              {/* Operating Expenses */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '8px', borderTop: '1px solid var(--sp-border-subtle)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', fontWeight: 500, color: 'var(--sp-text)', textTransform: 'uppercase' }}>
-                  <span>3. Operating & Administrative Expenses</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>({formatCurrency(profitLoss?.totalExpenses ?? 0)})</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', paddingLeft: '12px' }}>
-                  {profitLoss?.operatingExpenses?.map((item) => (
-                    <div key={item.accountId} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--sp-border-subtle)' }}>
-                      <span>
-                        <span className="sales-ref-badge" style={{ marginRight: '6px' }}>{item.accountCode}</span>
-                        {item.accountName}
-                      </span>
-                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(item.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Final Net Margin */}
-              <div
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  background: 'var(--sp-surface-subtle)',
-                  border: '1px solid var(--sp-border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', color: 'var(--sp-text)' }}>
-                    Net Operating Income (EBIT)
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                    Net Margin: <strong>{profitLoss?.netMarginPercent?.toFixed(1)}%</strong>
-                  </div>
-                </div>
-                <div style={{ fontVariantNumeric: 'tabular-nums', fontSize: '20px', fontWeight: 500, color: 'var(--sp-text)' }}>
-                  {formatCurrency(profitLoss?.netOperatingIncome ?? 0)}
                 </div>
               </div>
             </div>

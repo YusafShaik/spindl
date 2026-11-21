@@ -3,7 +3,6 @@ import {
   AlertCircle,
   AlertTriangle,
   Archive,
-  ArrowRight,
   Award,
   Boxes,
   Check,
@@ -17,7 +16,6 @@ import {
   Filter,
   History,
   Info,
-  Lock,
   MinusCircle,
   Plus,
   RotateCcw,
@@ -25,7 +23,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
-  TrendingUp,
   Truck,
   Warehouse,
   X,
@@ -35,7 +32,7 @@ import { Status } from '../../components/ui/Status';
 import { API, apiFetch } from '../../lib/api/client';
 import type { QualityItem, QualityLot } from '../../types/quality';
 
-type QualityTab = 'queue' | 'rules' | 'history' | 'standards';
+type QualityTab = 'queue' | 'rules' | 'history';
 type QueueFilter = 'ALL' | 'PURCHASE_RECEIPT' | 'WORK_ORDER_OUTPUT' | 'OPENING_STOCK' | 'CUSTOMER_RETURN';
 type RulesFilter = 'ALL' | 'REQUIRED' | 'STANDARD';
 type HistoryFilter = 'ALL' | 'RELEASED' | 'MIXED' | 'REJECTED';
@@ -425,15 +422,6 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
             <span>Completed History</span>
             <span className="sales-subnav-badge">{completedLots.length}</span>
           </button>
-
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'standards' ? 'active' : ''}`}
-            onClick={() => setActiveTab('standards')}
-          >
-            <Award size={13} />
-            <span>Standards & Gates</span>
-          </button>
         </div>
 
         <div className="sales-subnav-actions">
@@ -452,8 +440,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
       </div>
 
       {/* 3. Standardized Linear Toolbar */}
-      {activeTab !== 'standards' && (
-        <div className="sales-toolbar">
+      <div className="sales-toolbar">
           <div className="sales-pill-group">
             {activeTab === 'queue' && (
               <>
@@ -600,7 +587,6 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
             </button>
           </div>
         </div>
-      )}
 
       {/* 4. Active Sub-Tab Registers */}
 
@@ -683,14 +669,14 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                               {remainingPercent > 0 && <div className="quality-progress-seg remaining" style={{ width: `${remainingPercent}%` }} />}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
-                              <span style={{ fontWeight: 500, color: '#d97706' }}>
+                              <span style={{ fontWeight: 500, color: 'var(--sp-warning)' }}>
                                 {lot.remainingQuantity.toLocaleString()} awaiting
                               </span>
                               {lot.passedQuantity > 0 && (
-                                <span style={{ color: '#059669' }}>· {lot.passedQuantity} passed</span>
+                                <span style={{ color: 'var(--sp-text-secondary)' }}>· {lot.passedQuantity} passed</span>
                               )}
                               {lot.rejectedQuantity > 0 && (
-                                <span style={{ color: '#dc2626' }}>· {lot.rejectedQuantity} rejected</span>
+                                <span style={{ color: 'var(--sp-danger)' }}>· {lot.rejectedQuantity} rejected</span>
                               )}
                             </div>
                           </div>
@@ -727,7 +713,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                   <tr>
                     <td colSpan={6} className="sales-empty-cell">
                       <div className="sales-empty-state">
-                        <CheckCircle2 size={32} style={{ color: '#10b981', margin: '0 auto 8px', opacity: 0.8 }} />
+                        <CheckCircle2 size={32} style={{ color: 'var(--sp-text-muted)', margin: '0 auto 8px', opacity: 0.8 }} />
                         <div className="sales-empty-title">Inspection queue empty</div>
                         <div className="sales-empty-desc">
                           {searchQuery
@@ -796,7 +782,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
 
                         <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
                           {hasHold ? (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 500, color: '#d97706', background: 'rgba(245, 158, 11, 0.1)', padding: '2px 7px', borderRadius: '4px', fontSize: '11px' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 500, color: 'var(--sp-warning)', background: 'var(--sp-warning-soft)', padding: '2px 7px', borderRadius: '4px', fontSize: '11px' }}>
                               <ShieldAlert size={11} />
                               {item.heldQuantity.toLocaleString()} {item.unit}
                             </span>
@@ -923,13 +909,13 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                       </td>
 
                       <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
-                        <span style={{ color: '#059669' }}>+{lot.passedQuantity.toLocaleString()}</span>
+                        <span style={{ color: 'var(--sp-text)', fontWeight: 500 }}>{lot.passedQuantity.toLocaleString()}</span>
                       </td>
 
                       <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
                         {lot.rejectedQuantity > 0 ? (
-                          <span style={{ color: '#dc2626' }}>
-                            -{lot.rejectedQuantity.toLocaleString()}
+                          <span style={{ color: 'var(--sp-danger)', fontWeight: 500 }}>
+                            {lot.rejectedQuantity.toLocaleString()}
                           </span>
                         ) : (
                           <span className="sales-sub-ref">—</span>
@@ -963,141 +949,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
         </div>
       )}
 
-      {/* SUB-TAB 4: Quality Standards & ISO Gates */}
-      {activeTab === 'standards' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-          <div className="sales-table-card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <ShieldCheck size={18} style={{ color: 'var(--sp-brand)' }} />
-              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                Incoming Receipt Quarantine (Inbound Gate)
-              </h3>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--sp-text-muted)', lineHeight: 1.5, margin: 0 }}>
-              Items with mandatory quality inspection hold all incoming goods receipts in a quarantine balance. Units cannot be reserved, dispatched, or consumed in manufacturing work orders until a formal quality disposition is approved.
-            </p>
-            <div style={{ marginTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <span className="sales-item-tag">Strict Inventory Lock</span>
-              <span className="sales-item-tag">Zero Sales Allocation</span>
-              <span className="sales-item-tag">ISO 9001 §8.6 Compliant</span>
-            </div>
-          </div>
-
-          <div className="sales-table-card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <TrendingUp size={18} style={{ color: '#10b981' }} />
-              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                Dual-Ledger Disposition Protocol
-              </h3>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--sp-text-muted)', lineHeight: 1.5, margin: 0 }}>
-              <b>Pass decisions</b> immediately release stock into available inventory for immediate shipment or BOM assembly. <b>Fail decisions</b> irrevocably decrement on-hand quantity and post a permanent negative inventory ledger movement with immutable traceability.
-            </p>
-            <div style={{ marginTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <span className="sales-item-tag">Immutable Ledger Audit</span>
-              <span className="sales-item-tag">Automated Scrap Posting</span>
-              <span className="sales-item-tag">Idempotent Disposition</span>
-            </div>
-          </div>
-
-          <div className="sales-table-card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <Boxes size={18} style={{ color: '#06b6d4' }} />
-              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                Work Order & Production Gates (In-Process)
-              </h3>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--sp-text-muted)', lineHeight: 1.5, margin: 0 }}>
-              Finished goods produced by assembly work orders undergo final end-of-line verification. Sub-assemblies failing dimensional CMM tolerances can be rejected without affecting healthy parent lots.
-            </p>
-            <div style={{ marginTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <span className="sales-item-tag">Partial Lot Sampling</span>
-              <span className="sales-item-tag">CMM Report Archival</span>
-              <span className="sales-item-tag">AS9100 Standard</span>
-            </div>
-          </div>
-
-          <div className="sales-table-card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <Lock size={18} style={{ color: '#f59e0b' }} />
-              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                Non-Destructive Integrity Guards
-              </h3>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--sp-text-muted)', lineHeight: 1.5, margin: 0 }}>
-              Mandatory inspection cannot be deactivated while uninspected stock sits in quality hold. Likewise, inspection cannot be activated on items with active customer or manufacturing reservations until allocations are cleared.
-            </p>
-            <div style={{ marginTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <span className="sales-item-tag">Conflict Prevention</span>
-              <span className="sales-item-tag">Reservation Safety</span>
-              <span className="sales-item-tag">Cryptographic Hash JTI</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. ERP Quality & Invariants Lifecycle Standard */}
-      <div className="sales-pipeline-banner">
-        <div className="sales-pipeline-header">
-          <div className="sales-pipeline-title">
-            <span className="sales-pipeline-dot"></span>
-            ERP Quality Assurance & Quarantine Lifecycle Standard
-          </div>
-          <div className="sales-pipeline-tag">Strict ISO 9001 & Double-Entry Invariants</div>
-        </div>
-
-        <div className="sales-pipeline-stages">
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">01</div>
-            <div className="sales-step-content">
-              <b>Inbound / Output</b>
-              <span>PO goods receipt or finished work order output recorded</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">02</div>
-            <div className="sales-step-content">
-              <b>Quarantine Hold</b>
-              <span>Automated hold locks units from sales & assembly</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">03</div>
-            <div className="sales-step-content">
-              <b>Sampling & QC</b>
-              <span>Inspector performs dimensional & metallurgical checks</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">04</div>
-            <div className="sales-step-content">
-              <b>Release to Stock</b>
-              <span>Passed units enter available warehouse balance</span>
-            </div>
-          </div>
-
-          <ArrowRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">05</div>
-            <div className="sales-step-content">
-              <b>Scrap / Write-off</b>
-              <span>Failed units post negative ledger adjustment</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 6. Focused Linear Quality Inspection Modal */}
+      {/* 5. Focused Linear Quality Inspection Modal */}
       {inspectingLot && (
         <div className="leads-modal-overlay" onClick={closeInspectModal}>
           <div className="leads-modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
@@ -1130,7 +982,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                   </div>
                   <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--sp-border)', display: 'flex', justifyContent: 'space-between', fontSize: '11.5px' }}>
                     <span style={{ color: 'var(--sp-text-muted)' }}>Awaiting disposition:</span>
-                    <span style={{ fontWeight: 500, color: '#d97706' }}>
+                    <span style={{ fontWeight: 500, color: 'var(--sp-warning)' }}>
                       {inspectingLot.remainingQuantity} of {inspectingLot.quantity} units
                     </span>
                   </div>
@@ -1148,7 +1000,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                       onClick={() => setModalOutcome('PASS')}
                     >
                       <div className="quality-decision-title">
-                        <CheckCircle2 size={15} style={{ color: '#10b981' }} />
+                        <CheckCircle2 size={15} style={{ color: 'var(--sp-brand)' }} />
                         <span>Pass & Release</span>
                       </div>
                       <div className="quality-decision-desc">
@@ -1162,7 +1014,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                       onClick={() => setModalOutcome('FAIL')}
                     >
                       <div className="quality-decision-title">
-                        <XCircle size={15} style={{ color: '#ef4444' }} />
+                        <XCircle size={15} style={{ color: 'var(--sp-danger)' }} />
                         <span>Fail & Scrap</span>
                       </div>
                       <div className="quality-decision-desc">
@@ -1262,7 +1114,7 @@ export function QualityPanel({ role, notify, onRefresh }: QualityPanelProps) {
                   type="submit"
                   className={`sales-action-btn ${modalOutcome === 'PASS' ? 'primary' : ''}`}
                   disabled={saving || modalQuantity <= 0}
-                  style={modalOutcome === 'FAIL' ? { background: '#dc2626', color: '#fff', borderColor: '#b91c1c' } : {}}
+                  style={modalOutcome === 'FAIL' ? { background: 'var(--sp-danger)', color: '#fff', borderColor: 'var(--sp-danger)' } : {}}
                 >
                   {saving ? (
                     'Recording…'

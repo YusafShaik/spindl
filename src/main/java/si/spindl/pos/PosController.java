@@ -21,6 +21,7 @@ public class PosController {
     @GetMapping("/sessions") public List<PosService.SessionView> sessions(@AuthenticationPrincipal Jwt jwt){return service.sessions(userId(jwt));}
     @PostMapping("/sessions") public PosService.SessionView open(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody PosService.OpenSessionRequest request){return service.open(userId(jwt),request);}
     @PostMapping("/sessions/{id}/close") public PosService.SessionView close(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody PosService.CloseSessionRequest request){return service.close(userId(jwt),id,request);}
+    @GetMapping("/sales") public List<PosService.SaleView> allSales(@AuthenticationPrincipal Jwt jwt){return service.allSales(userId(jwt));}
     @GetMapping("/sessions/{id}/sales") public List<PosService.SaleView> sales(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.sales(userId(jwt),id);}
     @PostMapping("/sessions/{id}/checkout") public PosService.SaleView checkout(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody PosService.CheckoutRequest request){return service.checkout(userId(jwt),id,request);}
     @PostMapping("/sales/{id}/void") public PosService.SaleView voidSale(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody PosService.VoidSaleRequest request){return service.voidSale(userId(jwt),id,request);}

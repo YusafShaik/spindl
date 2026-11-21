@@ -77,33 +77,6 @@ export interface EcoDetail {
   signOffs: EcoSignOff[];
 }
 
-export interface RedlineComponentLine {
-  itemId: string;
-  sku: string;
-  name: string;
-  unit: string;
-  quantity: number;
-  scrapPercent: number;
-  changeStatus: 'UNCHANGED' | 'ADDED' | 'REMOVED' | 'MODIFIED';
-  previousQuantity?: number;
-  previousScrapPercent?: number;
-  changeNotes?: string;
-}
-
-export interface BomRedlineComparison {
-  ecoId: string;
-  ecoNumber: string;
-  finishedSku: string;
-  finishedItemName: string;
-  baseRevision: string;
-  targetRevision: string;
-  baselineLines: RedlineComponentLine[];
-  proposedLines: RedlineComponentLine[];
-  addedCount: number;
-  removedCount: number;
-  modifiedCount: number;
-}
-
 export interface EngineeringMetrics {
   activeEcos: number;
   pendingSignOffs: number;

@@ -18,6 +18,8 @@ public interface GlAccountRepository extends JpaRepository<GlAccountEntity, UUID
 
     Optional<GlAccountEntity> findByTenantIdAndAccountCode(UUID tenantId, String accountCode);
 
+    Optional<GlAccountEntity> findByTenantIdAndId(UUID tenantId, UUID id);
+
     boolean existsByTenantIdAndAccountCode(UUID tenantId, String accountCode);
 
     @Query("SELECT a FROM GlAccountEntity a WHERE a.tenantId = :tenantId AND a.isActive = true ORDER BY a.accountCode ASC")

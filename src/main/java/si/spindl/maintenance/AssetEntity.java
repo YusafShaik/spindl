@@ -30,6 +30,7 @@ public class AssetEntity {
     @Column(name = "last_service_date") private LocalDate lastServiceDate;
     @Column(name = "next_service_due_date") private LocalDate nextServiceDueDate;
     @Column(columnDefinition = "TEXT") private String notes;
+    @Column(name = "total_maintenance_cost", precision = 14, scale = 2) private BigDecimal totalMaintenanceCost = BigDecimal.ZERO;
     @CreationTimestamp @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
     @UpdateTimestamp @Column(name = "updated_at", nullable = false) private Instant updatedAt;
 
@@ -68,6 +69,12 @@ public class AssetEntity {
     public LocalDate getLastServiceDate() { return lastServiceDate; }
     public LocalDate getNextServiceDueDate() { return nextServiceDueDate; }
     public String getNotes() { return notes; }
+    public BigDecimal getTotalMaintenanceCost() { return totalMaintenanceCost != null ? totalMaintenanceCost : BigDecimal.ZERO; }
+    public void addMaintenanceCost(BigDecimal cost) {
+        if (cost != null) {
+            this.totalMaintenanceCost = (this.totalMaintenanceCost != null ? this.totalMaintenanceCost : BigDecimal.ZERO).add(cost);
+        }
+    }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 

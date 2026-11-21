@@ -20,6 +20,8 @@ public interface WorkforceOperatorQualificationRepository extends JpaRepository<
 
     Optional<WorkforceOperatorQualificationEntity> findByTenantIdAndUserIdAndSkillId(UUID tenantId, UUID userId, UUID skillId);
 
+    Optional<WorkforceOperatorQualificationEntity> findByTenantIdAndId(UUID tenantId, UUID id);
+
     @Query("SELECT q FROM WorkforceOperatorQualificationEntity q WHERE q.tenantId = :tenantId AND q.user.id = :userId AND q.skill.skillCode = :skillCode AND q.status = 'ACTIVE'")
     Optional<WorkforceOperatorQualificationEntity> findActiveQualificationBySkillCode(
             @Param("tenantId") UUID tenantId,

@@ -10,6 +10,7 @@ import java.util.List;
 public interface TenantMembershipRepository extends JpaRepository<TenantMembershipEntity, UUID> {
     Optional<TenantMembershipEntity> findFirstByUserIdAndActiveTrueOrderByCreatedAtAsc(UUID userId);
     Optional<TenantMembershipEntity> findByTenantIdAndUserIdAndActiveTrue(UUID tenantId, UUID userId);
+    boolean existsByTenantIdAndUserIdAndActiveTrue(UUID tenantId, UUID userId);
     List<TenantMembershipEntity> findAllByUserIdAndActiveTrue(UUID userId);
     @Query("select m.role from TenantMembershipEntity m where m.tenantId = :tenantId and m.userId = :userId and m.active = true")
     Optional<String> findActiveRole(@Param("tenantId") UUID tenantId, @Param("userId") UUID userId);

@@ -29,6 +29,7 @@ public class TenantMembershipEntity {
     public UUID getManagerUserId(){return managerUserId;}
     public String getRole() { return role; }
     public boolean isActive() { return active; }
+    public Instant getCreatedAt() { return createdAt; }
     public void changeRole(String role) { this.role = role; }
     public void setActive(boolean active) { this.active = active; }
     public void setManagerUserId(UUID managerUserId){this.managerUserId=managerUserId;}

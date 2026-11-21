@@ -5,8 +5,8 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  ArrowUpRight,
   Boxes,
-  Calendar,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -20,7 +20,6 @@ import {
   FileText,
   Filter,
   History,
-  Layers,
   Play,
   Plus,
   RefreshCw,
@@ -44,8 +43,6 @@ import type {
   MrpPlannedOrder,
   MrpRun,
   MrpMetrics,
-  MrpMatrixRow,
-  BomExplosionTree,
   CalculateMrpRequest,
   BatchConvertRequest,
   BatchConvertResult
@@ -57,7 +54,7 @@ interface MrpPanelProps {
   notify: (message: string) => void;
 }
 
-type MrpTab = 'recommendations' | 'matrix' | 'bom' | 'runs';
+type MrpTab = 'recommendations' | 'runs';
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
@@ -79,9 +76,6 @@ export function MrpPanel({ items, role, notify }: MrpPanelProps) {
   const [plannedOrders, setPlannedOrders] = useState<MrpPlannedOrder[]>([]);
   const [runs, setRuns] = useState<MrpRun[]>([]);
   const [metrics, setMetrics] = useState<MrpMetrics | null>(null);
-  const [matrixRows, setMatrixRows] = useState<MrpMatrixRow[]>([]);
-  const [bomTree, setBomTree] = useState<BomExplosionTree | null>(null);
-  const [selectedBomItem, setSelectedBomItem] = useState<string>('');
 
   // Filtering & Selection
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,24 +96,15 @@ export function MrpPanel({ items, role, notify }: MrpPanelProps) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ordersRes, runsRes, metricsRes, matrixRes] = await Promise.all([
+      const [ordersRes, runsRes, metricsRes] = await Promise.all([
         apiFetch(`${API}/mrp/planned-orders`),
         apiFetch(`${API}/mrp/runs`),
-        apiFetch(`${API}/mrp/metrics`),
-        apiFetch(`${API}/mrp/schedule-matrix?weeks=8`)
+        apiFetch(`${API}/mrp/metrics`)
       ]);
 
       if (ordersRes.ok) setPlannedOrders(await ordersRes.json());
       if (runsRes.ok) setRuns(await runsRes.json());
       if (metricsRes.ok) setMetrics(await metricsRes.json());
-      if (matrixRes.ok) setMatrixRows(await matrixRes.json());
-
-      // If items exist and no BOM item selected, load first finished product
-      if (items.length > 0 && !selectedBomItem) {
-        const defaultFinished = items.find(i => (i as any).stockable && i.unitPrice) || items[0];
-        setSelectedBomItem(defaultFinished.id);
-        loadBomTree(defaultFinished.id);
-      }
     } catch (err) {
       console.error('Failed to load MRP data:', err);
       notify('Failed to refresh MRP engine calculation data');
@@ -131,22 +116,6 @@ export function MrpPanel({ items, role, notify }: MrpPanelProps) {
   useEffect(() => {
     loadData();
   }, []);
-
-  const loadBomTree = async (itemId: string) => {
-    try {
-      const res = await apiFetch(`${API}/mrp/bom-explosion/${itemId}`);
-      if (res.ok) {
-        setBomTree(await res.json());
-      }
-    } catch (err) {
-      console.error('Failed to load BOM tree:', err);
-    }
-  };
-
-  const handleBomItemChange = (itemId: string) => {
-    setSelectedBomItem(itemId);
-    loadBomTree(itemId);
-  };
 
   // Filtered recommendations
   const filteredOrders = useMemo(() => {
@@ -189,14 +158,14 @@ export function MrpPanel({ items, role, notify }: MrpPanelProps) {
     try {
       setBusy(true);
       const payload: BatchConvertRequest = { orderIds: [orderId] };
-      const res = await apiFetch(`${API}/mrp/planned-orders/convert-batch`, {
+      const res = await apiFetch(`${API}/mrp/batch-convert`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Could not convert order');
       const result: BatchConvertResult = await res.json();
-      notify(`Order converted! Created ${result.purchaseOrdersCreated} POs & ${result.workOrdersCreated} WOs.`);
+      notify(`Order converted! Successfully released live order.`);
       await loadData();
     } catch (err: any) {
       notify(err.message || 'Conversion failed');
@@ -226,7 +195,7 @@ export function MrpPanel({ items, role, notify }: MrpPanelProps) {
     try {
       setBusy(true);
       const payload: BatchConvertRequest = { orderIds: Array.from(selectedOrderIds) };
-      const res = await apiFetch(`${API}/mrp/planned-orders/convert-batch`, {
+      const res = await apiFetch(`${API}/mrp/batch-convert`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -236,7 +205,7 @@ export function MrpPanel({ items, role, notify }: MrpPanelProps) {
         throw new Error(errJson.message || 'Batch conversion failed');
       }
       const result: BatchConvertResult = await res.json();
-      notify(`Batch converted! Successfully released ${result.purchaseOrdersCreated} POs and ${result.workOrdersCreated} Work Orders.`);
+      notify(`Batch converted! Successfully released ${result.convertedCount} orders.`);
       setIsBatchModalOpen(false);
       setSelectedOrderIds(new Set());
       await loadData();
@@ -288,776 +257,527 @@ export function MrpPanel({ items, role, notify }: MrpPanelProps) {
 
   return (
     <div className="sales-screen-layout">
-      {/* 1. Linear Executive Telemetry Strip */}
-      <div className="linear-kpi-grid">
-        <div className="linear-kpi-card">
-          <div className="linear-kpi-top">
-            <span className="linear-kpi-title">Open Net Shortages</span>
-            <AlertTriangle size={14} className="linear-kpi-icon" />
-          </div>
-          <div className="linear-kpi-value">
-            {metrics?.openShortagesCount ?? 0} Shortages
-          </div>
-          <div className="linear-kpi-caption">
-            Deficits requiring procurement action
-          </div>
-        </div>
-
-        <div className="linear-kpi-card">
-          <div className="linear-kpi-top">
-            <span className="linear-kpi-title">Planned Purchases (PO)</span>
-            <ShoppingCart size={14} className="linear-kpi-icon" />
-          </div>
-          <div className="linear-kpi-value">
-            {metrics?.plannedPurchasesCount ?? plannedOrders.filter(o => o.actionType === 'PURCHASE_ORDER').length} Orders
-          </div>
-          <div className="linear-kpi-caption">
-            {formatCurrency(metrics?.totalProjectedSpend ?? 0)} projected spend
-          </div>
-        </div>
-
-        <div className="linear-kpi-card">
-          <div className="linear-kpi-top">
-            <span className="linear-kpi-title">Planned Work Orders (WO)</span>
-            <Factory size={14} className="linear-kpi-icon" />
-          </div>
-          <div className="linear-kpi-value">
-            {metrics?.plannedWorkOrdersCount ?? plannedOrders.filter(o => o.actionType === 'WORK_ORDER').length} Orders
-          </div>
-          <div className="linear-kpi-caption">
-            Sub-assemblies recommended for manufacture
-          </div>
-        </div>
-
-        <div className="linear-kpi-card">
-          <div className="linear-kpi-top">
-            <span className="linear-kpi-title">Converted Orders</span>
-            <FileCheck size={14} className="linear-kpi-icon" />
-          </div>
-          <div className="linear-kpi-value">
-            {metrics?.convertedOrdersCount ?? plannedOrders.filter(o => o.status === 'CONVERTED').length} Converted
-          </div>
-          <div className="linear-kpi-caption">
-            Released to active live production
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Linear Sub-Navigation Tabs */}
-      <div className="sales-subnav-container">
-        <div className="sales-subnav-tabs">
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'recommendations' ? 'active' : ''}`}
-            onClick={() => setActiveTab('recommendations')}
-          >
-            <FileText size={13} />
-            <span>Planned Orders & Recommendations</span>
-            <span className="sales-subnav-badge">
-              {plannedOrders.filter((o) => o.status === 'PENDING').length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'matrix' ? 'active' : ''}`}
-            onClick={() => setActiveTab('matrix')}
-          >
-            <Calendar size={13} />
-            <span>Time-Phased Schedule Matrix</span>
-          </button>
-
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'bom' ? 'active' : ''}`}
-            onClick={() => setActiveTab('bom')}
-          >
-            <Layers size={13} />
-            <span>BOM Multi-Level Explosion</span>
-          </button>
-
-          <button
-            type="button"
-            className={`sales-subnav-tab ${activeTab === 'runs' ? 'active' : ''}`}
-            onClick={() => setActiveTab('runs')}
-          >
-            <Clock size={13} />
-            <span>Calculation Runs</span>
-            <span className="sales-subnav-badge">{runs.length}</span>
-          </button>
-        </div>
-
-        <div className="sales-subnav-actions">
-          {selectedOrderIds.size > 0 && (
-            <button
-              type="button"
-              className="sales-action-btn secondary"
-              onClick={() => setIsBatchModalOpen(true)}
-            >
-              <CheckCircle2 size={12} />
-              <span>Convert Selected ({selectedOrderIds.size})</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            className="sales-action-btn primary"
-            onClick={() => setIsRunModalOpen(true)}
-          >
-            <Play size={12} />
-            <span>Run MRP Engine</span>
-          </button>
-
-          <button
-            type="button"
-            className="sales-action-btn secondary"
-            onClick={loadData}
-            disabled={loading || busy}
-            title="Refresh Planning Matrix"
-          >
-            <RotateCcw size={12} className={loading ? 'spin' : ''} />
-            <span>Refresh</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 3. TAB 1: PLANNED ORDERS & RECOMMENDATIONS */}
-      {activeTab === 'recommendations' && (
-        selectedOrderForDrawer ? (
-          /* =========================================================================
-             AUTHENTIC LINEAR DETAIL VIEW: MRP SHORTAGE REQUIREMENT
-             ========================================================================= */
-          <div className="linear-detail-container">
-            {/* Top Bar with Breadcrumbs & Actions */}
-            <div className="linear-detail-topbar">
-              <div className="linear-detail-breadcrumbs">
-                <button
-                  type="button"
-                  className="linear-crumb-back"
-                  onClick={() => setSelectedOrderForDrawer(null)}
-                >
-                  <ArrowLeft size={13} />
-                  <span>Planning (MRP)</span>
-                </button>
-                <span className="linear-crumb-sep">/</span>
-                <span className="linear-crumb-id">
-                  {selectedOrderForDrawer.convertedOrderNumber || `MRP-${selectedOrderForDrawer.actionType === 'PURCHASE_ORDER' ? 'PO' : 'WO'}-${selectedOrderForDrawer.id.slice(0, 6).toUpperCase()}`}
-                </span>
-              </div>
-
-              <div className="linear-detail-top-actions">
-                {selectedOrderForDrawer.status === 'PENDING' ? (
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      type="button"
-                      className="sales-action-btn primary"
-                      onClick={async () => {
-                        const id = selectedOrderForDrawer.id;
-                        await handleConvertSingle(id);
-                        setSelectedOrderForDrawer(null);
-                      }}
-                      disabled={busy}
-                    >
-                      <Check size={12} />
-                      <span>Convert to Live {selectedOrderForDrawer.actionType === 'PURCHASE_ORDER' ? 'Purchase Order' : 'Work Order'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="sales-action-btn ghost"
-                      style={{ color: 'var(--sp-danger)' }}
-                      onClick={async () => {
-                        const id = selectedOrderForDrawer.id;
-                        await handleDismissSingle(id);
-                        setSelectedOrderForDrawer(null);
-                      }}
-                      disabled={busy}
-                    >
-                      <X size={12} />
-                      <span>Dismiss Shortage</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--sp-success)' }}>
-                    <CheckCircle2 size={14} />
-                    <span>Converted Order: <strong>{selectedOrderForDrawer.convertedOrderNumber || selectedOrderForDrawer.status}</strong></span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 2-Column Linear Layout */}
-            <div className="linear-detail-grid">
-              {/* Left Column: Shortage Narrative & Outlay */}
-              <div className="linear-detail-content">
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <span className="sales-ref-badge">
-                      {selectedOrderForDrawer.convertedOrderNumber || `MRP-${selectedOrderForDrawer.actionType === 'PURCHASE_ORDER' ? 'PO' : 'WO'}-${selectedOrderForDrawer.id.slice(0, 6).toUpperCase()}`}
-                    </span>
-                    <Status label={selectedOrderForDrawer.status} />
-                    <span className={selectedOrderForDrawer.urgency === 'CRITICAL' ? 'sales-sub-warning' : 'sales-warehouse-pill'}>
-                      {selectedOrderForDrawer.urgency}
-                    </span>
-                  </div>
-                  <h1 className="linear-detail-h1">{selectedOrderForDrawer.itemName}</h1>
-                  <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: 'var(--sp-text-muted)' }}>
-                    SKU: {selectedOrderForDrawer.sku} · Classification: {selectedOrderForDrawer.itemType}
-                  </p>
-                </div>
-
-                {/* Requirement & Shortage Outlay */}
-                <div style={{ background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px', padding: '16px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
-                    Requirement & Financial Outlay
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                    <div>
-                      <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Recommended Quantity</div>
-                      <div style={{ fontSize: '16px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--sp-brand)', marginTop: '2px' }}>
-                        {selectedOrderForDrawer.recommendedQuantity} {selectedOrderForDrawer.unit}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Estimated Spend</div>
-                      <div style={{ fontSize: '16px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--sp-text)', marginTop: '2px' }}>
-                        {formatCurrency(selectedOrderForDrawer.estimatedTotalCost)}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Estimated Unit Cost</div>
-                      <div style={{ fontSize: '13px', fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: 'var(--sp-text)', marginTop: '4px' }}>
-                        {formatCurrency(selectedOrderForDrawer.estimatedUnitCost)} / {selectedOrderForDrawer.unit}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Supply Route & Demand Origin Card */}
-                <div className="linear-sublines-card">
-                  <div className="linear-sublines-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Factory size={13} style={{ color: 'var(--sp-brand)' }} />
-                      <span>Supply Route & Demand Origin</span>
-                    </div>
-                  </div>
-                  <div style={{ padding: '14px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '12px' }}>
-                    <div>
-                      <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>Fulfillment Action</div>
-                      <div style={{ fontWeight: 600, marginTop: '2px' }}>
-                        {selectedOrderForDrawer.actionType === 'PURCHASE_ORDER' ? 'External Vendor Purchase Order' : 'Internal Shop Floor Work Order'}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>
-                        {selectedOrderForDrawer.actionType === 'PURCHASE_ORDER' ? 'Assigned Vendor' : 'BOM Revision'}
-                      </div>
-                      <div style={{ fontWeight: 600, marginTop: '2px' }}>
-                        {selectedOrderForDrawer.supplierName || selectedOrderForDrawer.bomRevision || 'Default Factory Standard'}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>Demand Driver</div>
-                      <div style={{ textTransform: 'capitalize', marginTop: '2px' }}>
-                        {selectedOrderForDrawer.demandSourceType.replace(/_/g, ' ').toLowerCase()}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>Demand Reference</div>
-                      <div style={{ fontVariantNumeric: 'tabular-nums', marginTop: '2px' }}>
-                        {selectedOrderForDrawer.demandSourceRef || 'Aggregated Safety Stock Calculation'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Linear Properties Sidebar */}
-              <div className="linear-properties-sidebar">
-                <div className="linear-properties-card">
-                  <div className="linear-properties-title">Properties</div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Status</span>
-                    <Status label={selectedOrderForDrawer.status} />
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Urgency</span>
-                    <span className={selectedOrderForDrawer.urgency === 'CRITICAL' ? 'sales-sub-warning' : 'sales-warehouse-pill'}>
-                      {selectedOrderForDrawer.urgency}
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Required By</span>
-                    <span className="linear-property-value" style={{ fontWeight: 600, color: 'var(--sp-warning)' }}>
-                      {new Date(selectedOrderForDrawer.requiredByDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Order By Date</span>
-                    <span className="linear-property-value">
-                      {new Date(selectedOrderForDrawer.recommendedOrderDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">Lead Offset</span>
-                    <span className="linear-property-value">
-                      {selectedOrderForDrawer.leadTimeDays} Calendar Days
-                    </span>
-                  </div>
-
-                  <div className="linear-property-row">
-                    <span className="linear-property-label">MRP Run</span>
-                    <span className="linear-property-value" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {selectedOrderForDrawer.runNumber}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {/* Toolbar */}
-          <div className="sales-toolbar">
-            <div className="sales-pill-group">
+      {selectedOrderForDrawer ? (
+        /* =========================================================================
+           AUTHENTIC LINEAR DETAIL VIEW: MRP SHORTAGE REQUIREMENT
+           ========================================================================= */
+        <div className="linear-detail-container">
+          {/* Top Bar with Breadcrumbs & Actions */}
+          <div className="linear-detail-topbar">
+            <div className="linear-detail-breadcrumbs">
               <button
                 type="button"
-                className={`sales-pill-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('ALL')}
+                className="linear-crumb-back"
+                onClick={() => setSelectedOrderForDrawer(null)}
               >
-                <span>All Statuses</span>
-                <span className="sales-pill-count">{plannedOrders.length}</span>
+                <ArrowLeft size={13} />
+                <span>Planning (MRP)</span>
               </button>
+              <span className="linear-crumb-sep">/</span>
+              <span className="linear-crumb-id">
+                {selectedOrderForDrawer.convertedOrderNumber || `MRP-${selectedOrderForDrawer.actionType === 'PURCHASE_ORDER' ? 'PO' : 'WO'}-${selectedOrderForDrawer.id.slice(0, 6).toUpperCase()}`}
+              </span>
+            </div>
+
+            <div className="linear-detail-top-actions">
+              {selectedOrderForDrawer.status === 'PENDING' ? (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="sales-action-btn primary"
+                    onClick={async () => {
+                      const id = selectedOrderForDrawer.id;
+                      await handleConvertSingle(id);
+                      setSelectedOrderForDrawer(null);
+                    }}
+                    disabled={busy}
+                  >
+                    <Check size={12} />
+                    <span>Convert to Live {selectedOrderForDrawer.actionType === 'PURCHASE_ORDER' ? 'Purchase Order' : 'Work Order'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="sales-action-btn ghost"
+                    style={{ color: 'var(--sp-danger)' }}
+                    onClick={async () => {
+                      const id = selectedOrderForDrawer.id;
+                      await handleDismissSingle(id);
+                      setSelectedOrderForDrawer(null);
+                    }}
+                    disabled={busy}
+                  >
+                    <X size={12} />
+                    <span>Dismiss Shortage</span>
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--sp-success)' }}>
+                  <CheckCircle2 size={14} />
+                  <span>Converted Order: <strong>{selectedOrderForDrawer.convertedOrderNumber || selectedOrderForDrawer.status}</strong></span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 2-Column Linear Layout */}
+          <div className="linear-detail-grid">
+            {/* Left Column: Shortage Narrative & Outlay */}
+            <div className="linear-detail-content">
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <span className="order-number-pill">
+                    {selectedOrderForDrawer.convertedOrderNumber || `MRP-${selectedOrderForDrawer.actionType === 'PURCHASE_ORDER' ? 'PO' : 'WO'}-${selectedOrderForDrawer.id.slice(0, 6).toUpperCase()}`}
+                  </span>
+                  <Status label={selectedOrderForDrawer.status} />
+                  <span className={`priority-tag priority-${selectedOrderForDrawer.urgency.toLowerCase()}`}>
+                    {selectedOrderForDrawer.urgency}
+                  </span>
+                </div>
+                <h1 className="linear-detail-h1">{selectedOrderForDrawer.itemName}</h1>
+                <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: 'var(--sp-text-muted)' }}>
+                  SKU: <strong style={{ color: 'var(--sp-text)' }}>{selectedOrderForDrawer.sku}</strong> · Classification: <strong style={{ color: 'var(--sp-text)' }}>{selectedOrderForDrawer.itemType}</strong>
+                </p>
+              </div>
+
+              {/* Requirement & Shortage Outlay */}
+              <div style={{ background: 'var(--sp-surface)', border: '1px solid var(--sp-border)', borderRadius: '8px', padding: '16px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
+                  Requirement & Financial Outlay
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Recommended Quantity</div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--sp-brand)', marginTop: '2px' }}>
+                      {selectedOrderForDrawer.recommendedQuantity} {selectedOrderForDrawer.unit}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Estimated Spend</div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--sp-text)', marginTop: '2px' }}>
+                      {formatCurrency(selectedOrderForDrawer.estimatedTotalCost)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Estimated Unit Cost</div>
+                    <div style={{ fontSize: '13px', fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: 'var(--sp-text)', marginTop: '4px' }}>
+                      {formatCurrency(selectedOrderForDrawer.estimatedUnitCost)} / {selectedOrderForDrawer.unit}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Supply Route & Demand Origin Card */}
+              <div className="linear-sublines-card">
+                <div className="linear-sublines-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Factory size={13} style={{ color: 'var(--sp-brand)' }} />
+                    <span>Supply Route & Demand Origin</span>
+                  </div>
+                </div>
+                <div style={{ padding: '14px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '12px' }}>
+                  <div>
+                    <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>Fulfillment Action</div>
+                    <div style={{ fontWeight: 600, marginTop: '2px' }}>
+                      {selectedOrderForDrawer.actionType === 'PURCHASE_ORDER' ? 'External Vendor Purchase Order' : 'Internal Shop Floor Work Order'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>
+                      {selectedOrderForDrawer.actionType === 'PURCHASE_ORDER' ? 'Assigned Vendor' : 'BOM Revision'}
+                    </div>
+                    <div style={{ fontWeight: 600, marginTop: '2px' }}>
+                      {selectedOrderForDrawer.supplierName || selectedOrderForDrawer.bomRevision || 'Default Factory Standard'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>Demand Driver</div>
+                    <div style={{ textTransform: 'capitalize', marginTop: '2px' }}>
+                      {selectedOrderForDrawer.demandSourceType.replace(/_/g, ' ').toLowerCase()}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--sp-text-muted)', fontSize: '11px' }}>Demand Reference</div>
+                    <div style={{ fontVariantNumeric: 'tabular-nums', marginTop: '2px' }}>
+                      {selectedOrderForDrawer.demandSourceRef || 'Aggregated Safety Stock Calculation'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Linear Properties Sidebar */}
+            <div className="linear-properties-sidebar">
+              <div className="linear-properties-card">
+                <div className="linear-properties-title">Properties</div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Status</span>
+                  <Status label={selectedOrderForDrawer.status} />
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Urgency</span>
+                  <span className={`priority-tag priority-${selectedOrderForDrawer.urgency.toLowerCase()}`}>
+                    {selectedOrderForDrawer.urgency}
+                  </span>
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Required By</span>
+                  <span className="linear-property-value" style={{ fontWeight: 600, color: 'var(--sp-warning)' }}>
+                    {formatDate(selectedOrderForDrawer.requiredByDate)}
+                  </span>
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Order By Date</span>
+                  <span className="linear-property-value">
+                    {formatDate(selectedOrderForDrawer.recommendedOrderDate)}
+                  </span>
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Lead Offset</span>
+                  <span className="linear-property-value">
+                    {selectedOrderForDrawer.leadTimeDays} Calendar Days
+                  </span>
+                </div>
+
+                <div className="linear-property-row">
+                  <span className="linear-property-label">MRP Run</span>
+                  <span className="linear-property-value" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {selectedOrderForDrawer.runNumber}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* 1. Linear Executive Telemetry Strip */}
+          <div className="linear-kpi-grid">
+            <div className="linear-kpi-card">
+              <div className="linear-kpi-top">
+                <span className="linear-kpi-title">Open Net Shortages</span>
+                <AlertTriangle size={14} className="linear-kpi-icon" />
+              </div>
+              <div className="linear-kpi-value">
+                {metrics?.openShortagesCount ?? 0} Shortages
+              </div>
+              <div className="linear-kpi-caption">
+                Deficits requiring procurement action
+              </div>
+            </div>
+
+            <div className="linear-kpi-card">
+              <div className="linear-kpi-top">
+                <span className="linear-kpi-title">Planned Purchases (PO)</span>
+                <ShoppingCart size={14} className="linear-kpi-icon" />
+              </div>
+              <div className="linear-kpi-value">
+                {metrics?.plannedPurchasesCount ?? plannedOrders.filter(o => o.actionType === 'PURCHASE_ORDER').length} Orders
+              </div>
+              <div className="linear-kpi-caption">
+                {formatCurrency(metrics?.totalProjectedSpend ?? 0)} projected spend
+              </div>
+            </div>
+
+            <div className="linear-kpi-card">
+              <div className="linear-kpi-top">
+                <span className="linear-kpi-title">Planned Work Orders (WO)</span>
+                <Factory size={14} className="linear-kpi-icon" />
+              </div>
+              <div className="linear-kpi-value">
+                {metrics?.plannedWorkOrdersCount ?? plannedOrders.filter(o => o.actionType === 'WORK_ORDER').length} Orders
+              </div>
+              <div className="linear-kpi-caption">
+                Sub-assemblies recommended for manufacture
+              </div>
+            </div>
+
+            <div className="linear-kpi-card">
+              <div className="linear-kpi-top">
+                <span className="linear-kpi-title">Converted Orders</span>
+                <FileCheck size={14} className="linear-kpi-icon" />
+              </div>
+              <div className="linear-kpi-value">
+                {metrics?.convertedOrdersCount ?? plannedOrders.filter(o => o.status === 'CONVERTED').length} Converted
+              </div>
+              <div className="linear-kpi-caption">
+                Released to active live production
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Linear Sub-Navigation Tabs */}
+          <div className="sales-subnav-container">
+            <div className="sales-subnav-tabs">
               <button
                 type="button"
-                className={`sales-pill-btn ${statusFilter === 'PENDING' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('PENDING')}
+                className={`sales-subnav-tab ${activeTab === 'recommendations' ? 'active' : ''}`}
+                onClick={() => setActiveTab('recommendations')}
               >
-                <span>Pending Action</span>
-                <span className="sales-pill-count">
+                <FileText size={13} />
+                <span>Planned Orders & Recommendations</span>
+                <span className="sales-subnav-badge">
                   {plannedOrders.filter((o) => o.status === 'PENDING').length}
                 </span>
               </button>
+
               <button
                 type="button"
-                className={`sales-pill-btn ${actionFilter === 'PURCHASE_ORDER' ? 'active' : ''}`}
-                onClick={() => setActionFilter(actionFilter === 'PURCHASE_ORDER' ? 'ALL' : 'PURCHASE_ORDER')}
+                className={`sales-subnav-tab ${activeTab === 'runs' ? 'active' : ''}`}
+                onClick={() => setActiveTab('runs')}
               >
-                <span>Purchase (PO)</span>
-                <span className="sales-pill-count">
-                  {plannedOrders.filter((o) => o.actionType === 'PURCHASE_ORDER').length}
-                </span>
-              </button>
-              <button
-                type="button"
-                className={`sales-pill-btn ${actionFilter === 'WORK_ORDER' ? 'active' : ''}`}
-                onClick={() => setActionFilter(actionFilter === 'WORK_ORDER' ? 'ALL' : 'WORK_ORDER')}
-              >
-                <span>Work Orders (WO)</span>
-                <span className="sales-pill-count">
-                  {plannedOrders.filter((o) => o.actionType === 'WORK_ORDER').length}
-                </span>
+                <Clock size={13} />
+                <span>Calculation Runs</span>
+                <span className="sales-subnav-badge">{runs.length}</span>
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div className="sales-search-box">
-                <Search size={13} className="sales-search-icon" />
-                <input
-                  type="text"
-                  className="sales-search-input"
-                  placeholder="Filter by SKU, item name, supplier…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    className="sales-search-clear"
-                    onClick={() => setSearchQuery('')}
-                  >
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
+            <div className="sales-subnav-actions">
+              {selectedOrderIds.size > 0 && (
+                <button
+                  type="button"
+                  className="sales-action-btn secondary"
+                  onClick={() => setIsBatchModalOpen(true)}
+                >
+                  <CheckCircle2 size={12} />
+                  <span>Convert Selected ({selectedOrderIds.size})</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="sales-action-btn primary"
+                onClick={() => setIsRunModalOpen(true)}
+              >
+                <Play size={12} />
+                <span>Run MRP Engine</span>
+              </button>
 
               <button
                 type="button"
                 className="sales-action-btn secondary"
-                onClick={selectAllPending}
+                onClick={loadData}
+                disabled={loading || busy}
+                title="Refresh Planning Matrix"
               >
-                <span>{selectedOrderIds.size > 0 ? 'Deselect All' : 'Select Pending'}</span>
+                <RotateCcw size={12} className={loading ? 'spin' : ''} />
+                <span>Refresh</span>
               </button>
             </div>
           </div>
 
-          {/* High-Density Table (Zero Horizontal Scroll) */}
-          <div className="sales-table-card">
-            <table className="sales-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '32px', textAlign: 'center', padding: '0 6px' }}>
+          {/* 3. TAB 1: PLANNED ORDERS & RECOMMENDATIONS */}
+          {activeTab === 'recommendations' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* Toolbar */}
+              <div className="sales-toolbar">
+                <div className="sales-pill-group">
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
+                    onClick={() => setStatusFilter('ALL')}
+                  >
+                    <span>All Statuses</span>
+                    <span className="sales-pill-count">{plannedOrders.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${statusFilter === 'PENDING' ? 'active' : ''}`}
+                    onClick={() => setStatusFilter('PENDING')}
+                  >
+                    <span>Pending Action</span>
+                    <span className="sales-pill-count">
+                      {plannedOrders.filter((o) => o.status === 'PENDING').length}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${actionFilter === 'PURCHASE_ORDER' ? 'active' : ''}`}
+                    onClick={() => setActionFilter(actionFilter === 'PURCHASE_ORDER' ? 'ALL' : 'PURCHASE_ORDER')}
+                  >
+                    <span>Purchase (PO)</span>
+                    <span className="sales-pill-count">
+                      {plannedOrders.filter((o) => o.actionType === 'PURCHASE_ORDER').length}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sales-pill-btn ${actionFilter === 'WORK_ORDER' ? 'active' : ''}`}
+                    onClick={() => setActionFilter(actionFilter === 'WORK_ORDER' ? 'ALL' : 'WORK_ORDER')}
+                  >
+                    <span>Work Orders (WO)</span>
+                    <span className="sales-pill-count">
+                      {plannedOrders.filter((o) => o.actionType === 'WORK_ORDER').length}
+                    </span>
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="sales-search-box">
+                    <Search size={13} className="sales-search-icon" />
                     <input
-                      type="checkbox"
-                      checked={selectedOrderIds.size > 0 && selectedOrderIds.size === filteredOrders.filter((o) => o.status === 'PENDING').length}
-                      onChange={selectAllPending}
+                      type="text"
+                      className="sales-search-input"
+                      placeholder="Filter by SKU, item name, supplier…"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
                     />
-                  </th>
-                  <th style={{ width: '150px' }}>Order Ref</th>
-                  <th>Target Item & SKU</th>
-                  <th>Action & Rec Qty</th>
-                  <th>Timeline & Spend</th>
-                  <th style={{ textAlign: 'right', width: '130px' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--sp-text-muted)' }}>
-                      No planned order shortages matching your filter.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredOrders.map((order) => {
-                    const isPending = order.status === 'PENDING';
-                    const isSelected = selectedOrderIds.has(order.id);
-                    const isCritical = order.urgency === 'CRITICAL';
-                    const orderRef = order.convertedOrderNumber || `MRP-${order.actionType === 'PURCHASE_ORDER' ? 'PO' : 'WO'}-${order.id.slice(0, 6).toUpperCase()}`;
-
-                    return (
-                      <tr
-                        key={order.id}
-                        className="sales-row"
-                        style={{
-                          background: isSelected ? 'var(--sp-brand-soft)' : undefined,
-                          cursor: 'pointer'
-                        }}
-                        onClick={() => setSelectedOrderForDrawer(order)}
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        className="sales-search-clear"
+                        onClick={() => setSearchQuery('')}
                       >
-                        <td
-                          style={{ textAlign: 'center', padding: '0 6px' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {isPending ? (
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleSelectOrder(order.id)}
-                            />
-                          ) : (
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--sp-border)', display: 'inline-block' }} />
-                          )}
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="sales-ref-badge interactive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedOrderForDrawer(order);
-                            }}
-                            title="Click to inspect MRP shortage details"
-                          >
-                            {orderRef}
-                          </button>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
-                            <span className={isCritical ? 'sales-sub-warning' : 'sales-warehouse-pill'}>
-                              {order.urgency}
-                            </span>
-                            <span style={{ fontSize: '10px', color: 'var(--sp-text-muted)' }}>
-                              {order.runNumber}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>{order.itemName}</div>
-                          <div className="sales-sub-ref">
-                            {order.sku} · <span style={{ textTransform: 'uppercase' }}>{order.itemType}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: '12.5px' }}>
-                              {order.recommendedQuantity}
-                            </span>{' '}
-                            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>{order.unit}</span>
-                          </div>
-                          <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
-                            {order.actionType === 'PURCHASE_ORDER' ? 'Purchase Order' : 'Work Order'}
-                            {order.supplierName ? ` · ${order.supplierName}` : order.bomRevision ? ` · ${order.bomRevision}` : ''}
-                          </div>
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px', fontVariantNumeric: 'tabular-nums' }}>
-                            {formatCurrency(order.estimatedTotalCost)}
-                          </div>
-                          <div className="sales-date-cell" style={{ marginTop: '2px' }}>
-                            <span>Due {formatDate(order.requiredByDate)}</span>
-                            <span style={{ fontSize: '10px', color: 'var(--sp-text-muted)', marginLeft: '6px' }}>
-                              (Order by {formatDate(order.recommendedOrderDate)})
-                            </span>
-                          </div>
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                            <Status label={order.status} />
-                            <button
-                              type="button"
-                              className="sales-action-btn secondary"
-                              style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedOrderForDrawer(order);
-                              }}
-                            >
-                              <span>Inspect</span>
-                              <ChevronRight size={11} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )
-    )}
-
-      {/* 4. TAB 2: TIME-PHASED SCHEDULE MATRIX */}
-      {activeTab === 'matrix' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div
-            style={{
-              padding: '12px 16px',
-              borderRadius: '8px',
-              border: '1px solid var(--sp-border)',
-              background: 'var(--sp-surface)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '12px'
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                Time-Phased Gross / Net Balance Schedule
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
-                Weekly projected stock balances, scheduled inbound receipts, and required order release offsets.
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px' }}>
-              <span className="sales-sub-highlight">Positive Stock Balance</span>
-              <span className="sales-sub-warning">Net Shortage &lt; Safety Buffer</span>
-            </div>
-          </div>
-
-          <div className="sales-table-card">
-            <div className="sales-table-scroll">
-              <table className="sales-table">
-                <thead>
-                  <tr>
-                    <th style={{ minWidth: '220px' }}>ITEM MASTER & BASELINE</th>
-                    <th style={{ minWidth: '140px' }}>BUFFER & LEAD</th>
-                    {matrixRows[0]?.buckets.map((b, idx) => (
-                      <th key={idx} style={{ minWidth: '130px', textAlign: 'center', borderLeft: '1px solid var(--sp-border)' }}>
-                        {b.bucketLabel}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {matrixRows.map((row) => (
-                    <tr key={row.itemId} className="sales-row">
-                      <td style={{ verticalAlign: 'top' }}>
-                        <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>{row.itemName}</div>
-                        <div className="sales-sub-ref">{row.sku} · {row.itemType}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
-                          On Hand: <strong>{row.onHand} {row.unit}</strong>
-                        </div>
-                      </td>
-
-                      <td style={{ verticalAlign: 'top' }}>
-                        <div style={{ fontSize: '11.5px' }}>Safety: <strong>{row.safetyStock} {row.unit}</strong></div>
-                        <div className="sales-date-cell">Lead: {row.leadTimeDays} days</div>
-                        <span className="sales-warehouse-pill" style={{ marginTop: '3px', display: 'inline-block' }}>
-                          {row.actionType === 'PURCHASE_ORDER' ? 'PO' : 'WO'}
-                        </span>
-                      </td>
-
-                      {row.buckets.map((bucket, bIdx) => {
-                        const isShortage = bucket.netRequirements > 0;
-                        return (
-                          <td
-                            key={bIdx}
-                            style={{
-                              verticalAlign: 'top',
-                              textAlign: 'center',
-                              borderLeft: '1px solid var(--sp-border)',
-                              background: isShortage ? 'rgba(239, 68, 68, 0.05)' : undefined
-                            }}
-                          >
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--sp-text-muted)' }}>
-                                <span>Demand:</span>
-                                <strong>{bucket.grossDemand}</strong>
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--sp-text-muted)' }}>
-                                <span>Inbound:</span>
-                                <span style={{ color: 'var(--sp-brand)', fontWeight: 500 }}>+{bucket.scheduledReceipts}</span>
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--sp-border-subtle)', paddingTop: '2px' }}>
-                                <span>Proj. Bal:</span>
-                                <strong style={{ color: bucket.projectedAvailable <= row.safetyStock ? 'var(--sp-danger, #ef4444)' : 'var(--sp-text)' }}>
-                                  {bucket.projectedAvailable}
-                                </strong>
-                              </div>
-                              {isShortage && (
-                                <div style={{ marginTop: '2px' }}>
-                                  <span className="sales-sub-warning">
-                                    Release: +{bucket.plannedOrderReleases}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. TAB 3: BOM MULTI-LEVEL EXPLOSION TREE */}
-      {activeTab === 'bom' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div
-            style={{
-              padding: '12px 16px',
-              borderRadius: '8px',
-              border: '1px solid var(--sp-border)',
-              background: 'var(--sp-surface)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '12px'
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                Recursive BOM Tree & Component Dependencies
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
-                Explore how finished assemblies explode into manufactured sub-assemblies and purchased parts.
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Select Finished Item:</span>
-              <select
-                value={selectedBomItem}
-                onChange={(e) => handleBomItemChange(e.target.value)}
-                style={{ height: '30px', padding: '0 8px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', fontSize: '12px' }}
-              >
-                {items.map((it) => (
-                  <option key={it.id} value={it.id}>
-                    {it.sku} — {it.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {bomTree ? (
-            <div className="sales-table-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--sp-border)' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--sp-text)' }}>{bomTree.itemName}</span>
-                    <span className="sales-sub-highlight">Level 0 (Finished Assembly)</span>
+                        <X size={12} />
+                      </button>
+                    )}
                   </div>
-                  <div className="sales-sub-ref" style={{ marginTop: '2px' }}>
-                    SKU: {bomTree.sku} · On Hand: {bomTree.onHand} · Net Shortage: {bomTree.netShortage}
-                  </div>
+
+                  <button
+                    type="button"
+                    className="sales-action-btn secondary"
+                    onClick={selectAllPending}
+                  >
+                    <span>{selectedOrderIds.size > 0 ? 'Deselect All' : 'Select Pending'}</span>
+                  </button>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--sp-text-muted)' }}>
-                  Exploded Dependent Components ({bomTree.children.length})
-                </span>
+              {/* Linear Planning Recommendations Table */}
+              <div className="sales-table-card">
+                <table className="sales-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '36px', textAlign: 'center', padding: '0 6px' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedOrderIds.size > 0 && selectedOrderIds.size === filteredOrders.filter((o) => o.status === 'PENDING').length}
+                          onChange={selectAllPending}
+                        />
+                      </th>
+                      <th style={{ width: '190px' }}>Order Ref</th>
+                      <th>Item</th>
+                      <th style={{ width: '170px' }}>Action & Qty</th>
+                      <th style={{ width: '130px', textAlign: 'right' }}>Est. Spend</th>
+                      <th style={{ width: '130px' }}>Required By</th>
+                      <th style={{ width: '110px' }}>Status</th>
+                      <th style={{ width: '80px', textAlign: 'right' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--sp-text-muted)' }}>
+                          No planned order shortages matching your filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredOrders.map((order) => {
+                        const isPending = order.status === 'PENDING';
+                        const isSelected = selectedOrderIds.has(order.id);
+                        const orderRef = order.convertedOrderNumber || `MRP-${order.actionType === 'PURCHASE_ORDER' ? 'PO' : 'WO'}-${order.id.slice(0, 6).toUpperCase()}`;
 
-                {bomTree.children.length === 0 ? (
-                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--sp-text-muted)', fontSize: '12px' }}>
-                    No dependent BOM lines configured for this SKU. Treated as a direct purchase item.
-                  </div>
-                ) : (
-                  bomTree.children.map((child) => (
-                    <div
-                      key={child.itemId}
-                      style={{
-                        padding: '10px 14px',
-                        borderRadius: '6px',
-                        border: '1px solid var(--sp-border)',
-                        background: 'var(--sp-surface-subtle)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                        gap: '12px',
-                        fontSize: '12px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span className="sales-ref-badge">L{child.level}</span>
-                        <div>
-                          <div style={{ fontWeight: 500, color: 'var(--sp-text)', fontSize: '12.5px' }}>
-                            {child.itemName} <span className="sales-sub-ref">({child.sku})</span>
-                          </div>
-                          <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)', display: 'flex', gap: '10px', marginTop: '2px' }}>
-                            <span>Per Unit: <strong>{child.quantityPerUnit} pcs</strong></span>
-                            <span>Scrap: <strong>{child.scrapPercent}%</strong></span>
-                            <span>Lead: <strong>{child.leadTimeDays}d</strong></span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ textAlign: 'right', fontSize: '11px' }}>
-                          <div>On Hand: <strong>{child.onHand}</strong></div>
-                          <div>Available: <strong>{child.available}</strong></div>
-                        </div>
-
-                        <span className={child.actionType === 'PURCHASE_ORDER' ? 'sales-sub-highlight' : 'sales-warehouse-pill'}>
-                          {child.actionType === 'PURCHASE_ORDER' ? 'Planned PO' : 'Planned WO'}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
+                        return (
+                          <tr
+                            key={order.id}
+                            className="sales-row production-clickable-row"
+                            style={{
+                              background: isSelected ? 'var(--sp-brand-soft)' : undefined,
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => setSelectedOrderForDrawer(order)}
+                          >
+                            <td
+                              style={{ textAlign: 'center', padding: '0 6px' }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {isPending ? (
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSelectOrder(order.id)}
+                                />
+                              ) : (
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--sp-border)', display: 'inline-block' }} />
+                              )}
+                            </td>
+                            <td>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <button
+                                  type="button"
+                                  className="order-number-pill interactive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedOrderForDrawer(order);
+                                  }}
+                                  title="Click to inspect MRP shortage details"
+                                >
+                                  <span>{orderRef}</span>
+                                  <ArrowUpRight size={11} className="order-link-arrow" />
+                                </button>
+                                <span className={`priority-tag priority-${order.urgency.toLowerCase()}`}>
+                                  {order.urgency}
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <div style={{ fontWeight: 600, color: 'var(--sp-text)', fontSize: '13px' }}>
+                                {order.itemName}
+                              </div>
+                            </td>
+                            <td>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                <span className="station-code-pill" style={{ fontSize: '11px', fontWeight: 500 }}>
+                                  {order.actionType === 'PURCHASE_ORDER' ? 'Purchase Order' : 'Work Order'}
+                                </span>
+                                <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '12.5px', color: 'var(--sp-text)' }}>
+                                  {order.recommendedQuantity} <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)', fontWeight: 400 }}>{order.unit}</span>
+                                </span>
+                              </div>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <div style={{ fontWeight: 600, color: 'var(--sp-text)', fontSize: '12.5px', fontVariantNumeric: 'tabular-nums' }}>
+                                {formatCurrency(order.estimatedTotalCost)}
+                              </div>
+                            </td>
+                            <td>
+                              <div style={{ fontSize: '12px', color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                                {formatDate(order.requiredByDate)}
+                              </div>
+                            </td>
+                            <td>
+                              <Status label={order.status} />
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                type="button"
+                                className="sales-action-btn secondary"
+                                style={{ height: '24px', padding: '0 8px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderForDrawer(order);
+                                }}
+                                title="Inspect requirement details"
+                              >
+                                <span>Inspect</span>
+                                <ArrowUpRight size={11} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-          ) : (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--sp-text-muted)' }}>Loading BOM explosion tree…</div>
           )}
-        </div>
-      )}
 
-      {/* 6. TAB 4: CALCULATION RUNS */}
+      {/* 4. TAB 2: CALCULATION RUNS */}
       {activeTab === 'runs' && (
         <div className="sales-table-card">
           <div className="sales-table-scroll">
@@ -1099,6 +819,8 @@ export function MrpPanel({ items, role, notify }: MrpPanelProps) {
             </table>
           </div>
         </div>
+      )}
+        </>
       )}
 
       {/* MODAL: RUN MRP ENGINE */}

@@ -3,33 +3,32 @@ import {
   Activity,
   AlertOctagon,
   AlertTriangle,
+  ArrowLeft,
+  ArrowUpRight,
   Building2,
   Calendar,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Clock,
-  CreditCard,
   Download,
-  ExternalLink,
+  FileCheck,
   FileText,
   Filter,
   GitMerge,
-  HelpCircle,
   IndianRupee,
-  Layers,
   Mail,
   MapPin,
   Phone,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   ShieldAlert,
   ShieldCheck,
   ShoppingBag,
-  TrendingUp,
-  UserCheck,
+  Tag,
+  User,
   Users,
   X
 } from 'lucide-react';
@@ -55,6 +54,7 @@ export interface CustomerDirectoryProps {
 
 type CustomerSubTab = 'accounts' | 'timeline' | 'governance';
 type QuickFilterPill = 'ALL' | 'ACTIVE' | 'KEY' | 'HOLD';
+type TimelineFilter = 'ALL' | 'QUOTE' | 'SALES_ORDER' | 'INVOICE' | 'PAYMENT' | 'CUSTOMER_RETURN';
 
 function parseAmount(val: string | number | null | undefined): number {
   if (typeof val === 'number') return val;
@@ -88,7 +88,755 @@ function isCustomerTimelineEvent(value: unknown): value is CustomerTimelineEvent
   );
 }
 
-/* Linear Customer Merge Dialog Modal */
+function formatEventType(type: string): { label: string; icon: React.ReactNode; colorClass: string } {
+  switch (type.toUpperCase()) {
+    case 'SALES_ORDER':
+      return { label: 'Sales Order', icon: <ShoppingBag size={12} />, colorClass: 'sales_order' };
+    case 'QUOTE':
+      return { label: 'Quotation', icon: <FileText size={12} />, colorClass: 'quote' };
+    case 'INVOICE':
+      return { label: 'Invoice', icon: <FileCheck size={12} />, colorClass: 'invoice' };
+    case 'PAYMENT':
+      return { label: 'Payment', icon: <IndianRupee size={12} />, colorClass: 'payment' };
+    case 'CUSTOMER_RETURN':
+      return { label: 'Customer Return', icon: <RotateCcw size={12} />, colorClass: 'customer_return' };
+    default:
+      return { label: type.replace(/_/g, ' '), icon: <Activity size={12} />, colorClass: 'neutral' };
+  }
+}
+
+function formatStatus(status: string): string {
+  if (!status) return 'Completed';
+  return status
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/* ==========================================================================
+   LINEAR CUSTOMER TIMELINE WIDGET
+   Replaces repetitive raw events with clean, high-density timeline stream
+   ========================================================================== */
+interface CustomerTimelineWidgetProps {
+  customerId: string;
+  onOpenProfile?: () => void;
+}
+
+function CustomerTimelineWidget({ customerId, onOpenProfile }: CustomerTimelineWidgetProps) {
+  const [events, setEvents] = useState<CustomerTimelineEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [typeFilter, setTypeFilter] = useState<TimelineFilter>('ALL');
+
+  useEffect(() => {
+    let current = true;
+    setLoading(true);
+    setError('');
+    apiFetch(`${API}/customers/${customerId}/timeline`)
+      .then(async (response) => {
+        const body: unknown = await response.json().catch(() => []);
+        if (!response.ok) {
+          throw new Error(apiError(body) ?? 'Could not load customer timeline');
+        }
+        if (!Array.isArray(body) || !body.every(isCustomerTimelineEvent)) {
+          throw new Error('Invalid activity format returned from backend');
+        }
+        if (current) setEvents(body);
+      })
+      .catch((err: unknown) => {
+        if (current) setError(messageFrom(err, 'Could not load timeline'));
+      })
+      .finally(() => {
+        if (current) setLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [customerId]);
+
+  const filteredEvents = useMemo(() => {
+    if (typeFilter === 'ALL') return events;
+    return events.filter((ev) => ev.eventType.toUpperCase() === typeFilter);
+  }, [events, typeFilter]);
+
+  const eventCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: events.length };
+    events.forEach((e) => {
+      const t = e.eventType.toUpperCase();
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    return counts;
+  }, [events]);
+
+  const totalVolume = useMemo(() => {
+    return filteredEvents.reduce((sum, ev) => sum + (parseAmount(ev.amount) || 0), 0);
+  }, [filteredEvents]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {/* Event Type Filter Pills & Summary Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`sales-pill-btn ${typeFilter === 'ALL' ? 'active' : ''}`}
+            onClick={() => setTypeFilter('ALL')}
+            style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
+          >
+            All Activity <span className="sales-pill-count">{events.length}</span>
+          </button>
+          {eventCounts['SALES_ORDER'] > 0 && (
+            <button
+              type="button"
+              className={`sales-pill-btn ${typeFilter === 'SALES_ORDER' ? 'active' : ''}`}
+              onClick={() => setTypeFilter('SALES_ORDER')}
+              style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
+            >
+              Orders <span className="sales-pill-count">{eventCounts['SALES_ORDER']}</span>
+            </button>
+          )}
+          {eventCounts['QUOTE'] > 0 && (
+            <button
+              type="button"
+              className={`sales-pill-btn ${typeFilter === 'QUOTE' ? 'active' : ''}`}
+              onClick={() => setTypeFilter('QUOTE')}
+              style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
+            >
+              Quotes <span className="sales-pill-count">{eventCounts['QUOTE']}</span>
+            </button>
+          )}
+          {eventCounts['INVOICE'] > 0 && (
+            <button
+              type="button"
+              className={`sales-pill-btn ${typeFilter === 'INVOICE' ? 'active' : ''}`}
+              onClick={() => setTypeFilter('INVOICE')}
+              style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
+            >
+              Invoices <span className="sales-pill-count">{eventCounts['INVOICE']}</span>
+            </button>
+          )}
+          {eventCounts['PAYMENT'] > 0 && (
+            <button
+              type="button"
+              className={`sales-pill-btn ${typeFilter === 'PAYMENT' ? 'active' : ''}`}
+              onClick={() => setTypeFilter('PAYMENT')}
+              style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
+            >
+              Payments <span className="sales-pill-count">{eventCounts['PAYMENT']}</span>
+            </button>
+          )}
+          {eventCounts['CUSTOMER_RETURN'] > 0 && (
+            <button
+              type="button"
+              className={`sales-pill-btn ${typeFilter === 'CUSTOMER_RETURN' ? 'active' : ''}`}
+              onClick={() => setTypeFilter('CUSTOMER_RETURN')}
+              style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
+            >
+              Returns <span className="sales-pill-count">{eventCounts['CUSTOMER_RETURN']}</span>
+            </button>
+          )}
+        </div>
+
+        {filteredEvents.length > 0 && (
+          <div style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
+            <span>{filteredEvents.length} events</span>
+            {totalVolume > 0 && (
+              <>
+                <span style={{ margin: '0 6px' }}>·</span>
+                <span>Volume: <strong style={{ color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totalVolume)}</strong></span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* High-Density Linear Activity Stream */}
+      {loading ? (
+        <div style={{ padding: '36px 20px', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
+          <Clock size={20} style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 8px' }} />
+          <div style={{ fontSize: '12px' }}>Loading transaction activity…</div>
+        </div>
+      ) : error ? (
+        <div style={{ padding: '12px 14px', color: '#dc2626', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '6px', fontSize: '12px' }}>
+          {error}
+        </div>
+      ) : filteredEvents.length === 0 ? (
+        <div className="sales-empty-state" style={{ padding: '36px 20px' }}>
+          <ShoppingBag size={28} className="sales-empty-icon" />
+          <div className="sales-empty-title">No transactions recorded</div>
+          <div className="sales-empty-desc">
+            {typeFilter !== 'ALL' ? 'No transactions match this category.' : 'This account has no quotes, sales orders, invoices, payments, or credit returns on file.'}
+          </div>
+        </div>
+      ) : (
+        <div className="linear-activity-stream">
+          <div className="linear-activity-header-row">
+            <span>EVENT TYPE</span>
+            <span>REFERENCE</span>
+            <span>STATUS & DETAILS</span>
+            <span style={{ textAlign: 'right' }}>AMOUNT</span>
+            <span style={{ textAlign: 'right' }}>DATE & TIME</span>
+          </div>
+
+          {filteredEvents.map((ev, idx) => {
+            const typeInfo = formatEventType(ev.eventType);
+            const statusLabel = formatStatus(ev.status);
+            const dateObj = new Date(ev.occurredAt);
+            const formattedDate = dateObj.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            });
+            const formattedTime = dateObj.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+
+            return (
+              <div key={`${ev.eventType}-${ev.reference}-${idx}`} className="linear-activity-row">
+                {/* Event Type */}
+                <div>
+                  <span className={`linear-activity-type ${typeInfo.colorClass}`}>
+                    {typeInfo.icon}
+                    <span>{typeInfo.label}</span>
+                  </span>
+                </div>
+
+                {/* Reference Code */}
+                <div>
+                  <span
+                    className="sales-ref-badge"
+                    style={{ fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--sp-font-mono, monospace)', fontSize: '11px' }}
+                  >
+                    {ev.reference}
+                  </span>
+                </div>
+
+                {/* Status & Details */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, overflow: 'hidden' }}>
+                  <span className="sales-status-chip completed" style={{ flexShrink: 0 }}>
+                    {statusLabel}
+                  </span>
+                  <span style={{ fontSize: '11.5px', color: 'var(--sp-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {typeInfo.label} #{ev.reference}
+                  </span>
+                </div>
+
+                {/* Amount */}
+                <div style={{ textAlign: 'right' }}>
+                  {ev.amount != null ? (
+                    <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatCurrency(ev.amount)}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--sp-text-muted)', fontSize: '12px' }}>—</span>
+                  )}
+                </div>
+
+                {/* Timestamp */}
+                <div style={{ textAlign: 'right', fontSize: '11px', color: 'var(--sp-text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  {formattedDate} · {formattedTime}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ==========================================================================
+   EDIT CUSTOMER PROFILE MODAL
+   Allows comprehensive editing of name, contact, address, terms, tags
+   ========================================================================== */
+interface EditCustomerModalProps {
+  customer: CustomerRecord;
+  onClose: () => void;
+  onRefresh?: () => Promise<void>;
+  notify: (msg: string) => void;
+  onCustomerUpdated?: (updated: CustomerRecord) => void;
+}
+
+function EditCustomerModal({
+  customer,
+  onClose,
+  onRefresh,
+  notify,
+  onCustomerUpdated,
+}: EditCustomerModalProps) {
+  const [name, setName] = useState(customer.name);
+  const [email, setEmail] = useState(customer.email);
+  const [contactName, setContactName] = useState(customer.contactName || '');
+  const [phone, setPhone] = useState(customer.phone || '');
+  const [customerType, setCustomerType] = useState(customer.customerType || 'COMPANY');
+  const [taxId, setTaxId] = useState(customer.taxId || '');
+  const [addressLine1, setAddressLine1] = useState(customer.addressLine1 || '');
+  const [addressLine2, setAddressLine2] = useState(customer.addressLine2 || '');
+  const [city, setCity] = useState(customer.city || '');
+  const [region, setRegion] = useState(customer.region || '');
+  const [postalCode, setPostalCode] = useState(customer.postalCode || '');
+  const [countryCode, setCountryCode] = useState(customer.countryCode || 'IN');
+  const [paymentTermsDays, setPaymentTermsDays] = useState(customer.paymentTermsDays ?? 30);
+  const [creditLimit, setCreditLimit] = useState(customer.creditLimit ? String(customer.creditLimit) : '0');
+  const [tags, setTags] = useState(customer.tags || '');
+  const [creditHold, setCreditHold] = useState(customer.creditHold ?? false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload = {
+        name: name.trim(),
+        email: email.trim(),
+        status: customer.status || 'Active',
+        active: true,
+        customerType: customerType.toUpperCase(),
+        contactName: contactName.trim(),
+        phone: phone.trim(),
+        addressLine1: addressLine1.trim(),
+        addressLine2: addressLine2.trim(),
+        city: city.trim(),
+        region: region.trim(),
+        postalCode: postalCode.trim(),
+        countryCode: countryCode.trim().toUpperCase(),
+        taxId: taxId.trim(),
+        paymentTermsDays: Number(paymentTermsDays),
+        creditLimit: parseFloat(creditLimit) || 0,
+        tags: tags.trim(),
+        creditHold,
+      };
+
+      const res = await apiFetch(`${API}/customers/${customer.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const body: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(apiError(body) ?? 'Failed to update customer');
+      if (onRefresh) await onRefresh();
+      if (onCustomerUpdated && isRecord(body)) {
+        onCustomerUpdated(body as unknown as CustomerRecord);
+      }
+      notify(`Customer ${name} updated successfully`);
+      onClose();
+    } catch (err) {
+      notify(messageFrom(err, 'Could not save customer profile'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}>
+      <form className="record-modal" onSubmit={handleSubmit} style={{ width: 'min(640px, 95vw)', maxHeight: '90vh' }}>
+        <div className="modal-title">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--sp-brand-soft)', color: 'var(--sp-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Building2 size={16} />
+            </div>
+            <div>
+              <h2>Edit Customer Account</h2>
+              <p>{customer.code} · Master Data & Governance</p>
+            </div>
+          </div>
+          <button type="button" disabled={saving} onClick={onClose} aria-label="Close dialog">
+            <X size={15} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', paddingRight: '4px' }}>
+          {/* Identity & Company */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '12px' }}>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+                Company / Customer Name <span style={{ color: '#dc2626' }}>*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+                Customer Type
+              </label>
+              <select
+                value={customerType}
+                onChange={(e) => setCustomerType(e.target.value)}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              >
+                <option value="COMPANY">Company / Enterprise</option>
+                <option value="INDIVIDUAL">Individual / Retail</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Contact & Email */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+                Primary Contact Person
+              </label>
+              <input
+                type="text"
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                placeholder="e.g. Dr. Sunita Rao"
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+                Email Address <span style={{ color: '#dc2626' }}>*</span>
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+91 98000 00000"
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
+
+          {/* Tax ID & Tags */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+                Tax ID / GSTIN
+              </label>
+              <input
+                type="text"
+                value={taxId}
+                onChange={(e) => setTaxId(e.target.value)}
+                placeholder="e.g. 36AABCB1234F1Z0"
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+                Industry Tags (Comma-separated)
+              </label>
+              <input
+                type="text"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="Aerospace, Defense, Tier-1"
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
+
+          {/* Address Lines */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Billing & Dispatch Address
+            </span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <input
+                type="text"
+                placeholder="Address Line 1"
+                value={addressLine1}
+                onChange={(e) => setAddressLine1(e.target.value)}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+              <input
+                type="text"
+                placeholder="Address Line 2 (Optional)"
+                value={addressLine2}
+                onChange={(e) => setAddressLine2(e.target.value)}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.8fr 0.6fr', gap: '10px' }}>
+              <input
+                type="text"
+                placeholder="City"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+              <input
+                type="text"
+                placeholder="Region / State"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+              <input
+                type="text"
+                placeholder="Postal Code"
+                value={postalCode}
+                onChange={(e) => setPostalCode(e.target.value)}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+              <input
+                type="text"
+                placeholder="Country (IN)"
+                maxLength={2}
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
+
+          {/* Credit Terms & Limits */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+                Payment Terms (Days)
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="365"
+                value={paymentTermsDays}
+                onChange={(e) => setPaymentTermsDays(Number(e.target.value))}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+              <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>0 = Due on receipt, 30 = Net 30d</span>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+                Approved Credit Limit (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1000"
+                value={creditLimit}
+                onChange={(e) => setCreditLimit(e.target.value)}
+                disabled={saving}
+                style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+              />
+              <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Outstanding exposure: {customer.outstanding}</span>
+            </div>
+          </div>
+
+          {/* Credit Hold Toggle */}
+          <div style={{ padding: '10px 12px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12.5px', color: 'var(--sp-text)' }}>
+              <input
+                type="checkbox"
+                checked={creditHold}
+                onChange={(e) => setCreditHold(e.target.checked)}
+                disabled={saving}
+                style={{ width: 15, height: 15 }}
+              />
+              <span style={{ fontWeight: 600, color: creditHold ? '#dc2626' : 'var(--sp-text)' }}>
+                Place account on Credit Hold
+              </span>
+            </label>
+            <p style={{ fontSize: '11px', color: 'var(--sp-text-muted)', margin: '4px 0 0 23px' }}>
+              Blocks order fulfillment and new quotation issuance until released.
+            </p>
+          </div>
+        </div>
+
+        <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--sp-border)' }}>
+          <button type="button" className="button button-secondary" disabled={saving} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="button button-primary" disabled={saving}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ==========================================================================
+   EDIT TERMS MODAL
+   ========================================================================== */
+interface EditCustomerTermsModalProps {
+  customer: CustomerRecord;
+  onClose: () => void;
+  onRefresh?: () => Promise<void>;
+  notify: (msg: string) => void;
+}
+
+function EditCustomerTermsModal({
+  customer,
+  onClose,
+  onRefresh,
+  notify,
+}: EditCustomerTermsModalProps) {
+  const [termsDays, setTermsDays] = useState(customer.paymentTermsDays ?? 30);
+  const [creditLimit, setCreditLimit] = useState(customer.creditLimit ? String(customer.creditLimit) : '0');
+  const [creditHold, setCreditHold] = useState(customer.creditHold ?? false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload = {
+        name: customer.name,
+        email: customer.email,
+        status: customer.status || 'Active',
+        active: true,
+        customerType: customer.customerType || 'COMPANY',
+        contactName: customer.contactName || '',
+        phone: customer.phone || '',
+        addressLine1: customer.addressLine1 || '',
+        addressLine2: customer.addressLine2 || '',
+        city: customer.city || '',
+        region: customer.region || '',
+        postalCode: customer.postalCode || '',
+        countryCode: customer.countryCode || 'IN',
+        taxId: customer.taxId || '',
+        paymentTermsDays: Number(termsDays),
+        creditLimit: parseFloat(creditLimit) || 0,
+        tags: customer.tags || '',
+        creditHold,
+      };
+
+      const res = await apiFetch(`${API}/customers/${customer.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const body: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(apiError(body) ?? 'Failed to update credit terms');
+      if (onRefresh) await onRefresh();
+      notify(`Credit terms updated for ${customer.name}`);
+      onClose();
+    } catch (err) {
+      notify(messageFrom(err, 'Could not save customer terms'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}>
+      <form className="record-modal" onSubmit={handleSave} style={{ width: 'min(480px, 95vw)' }}>
+        <div className="modal-title">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(16, 185, 129, 0.1)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ShieldCheck size={16} />
+            </div>
+            <div>
+              <h2>Edit Credit & Payment Terms</h2>
+              <p>{customer.name} ({customer.code})</p>
+            </div>
+          </div>
+          <button type="button" disabled={saving} onClick={onClose} aria-label="Close dialog">
+            <X size={15} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+              Payment Terms (Days)
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="365"
+              value={termsDays}
+              onChange={(e) => setTermsDays(Number(e.target.value))}
+              required
+              disabled={saving}
+              style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+            />
+            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>0 = Due on receipt, 15 = Net 15d, 30 = Net 30d</span>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
+              Approved Credit Limit (₹)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              value={creditLimit}
+              onChange={(e) => setCreditLimit(e.target.value)}
+              required
+              disabled={saving}
+              style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)', boxSizing: 'border-box' }}
+            />
+            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Current outstanding exposure: {customer.outstanding}</span>
+          </div>
+
+          <div style={{ padding: '10px 12px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12.5px', color: 'var(--sp-text)' }}>
+              <input
+                type="checkbox"
+                checked={creditHold}
+                onChange={(e) => setCreditHold(e.target.checked)}
+                disabled={saving}
+                style={{ width: 15, height: 15 }}
+              />
+              <span style={{ fontWeight: 600, color: creditHold ? '#dc2626' : 'var(--sp-text)' }}>
+                Place account on Credit Hold
+              </span>
+            </label>
+            <p style={{ fontSize: '11px', color: 'var(--sp-text-muted)', margin: '4px 0 0 23px' }}>
+              Blocks dispatch of sales orders and new quotation issuance until released.
+            </p>
+          </div>
+        </div>
+
+        <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
+          <button type="button" className="button button-secondary" disabled={saving} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="button button-primary" disabled={saving}>
+            {saving ? 'Saving…' : 'Save Credit Terms'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ==========================================================================
+   CUSTOMER MERGE MODAL
+   ========================================================================== */
 interface CustomerMergeModalProps {
   sourceCustomer: CustomerRecord;
   customers: CustomerRecord[];
@@ -102,7 +850,7 @@ function CustomerMergeModal({
   customers,
   onClose,
   onMerged,
-  notify
+  notify,
 }: CustomerMergeModalProps) {
   const [targetId, setTargetId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -118,7 +866,7 @@ function CustomerMergeModal({
       const response = await apiFetch(`${API}/customers/${sourceCustomer.id}/merge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetCustomerId: targetCustomer.id })
+        body: JSON.stringify({ targetCustomerId: targetCustomer.id }),
       });
       const body: unknown = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(apiError(body) ?? 'Could not merge customer accounts');
@@ -193,7 +941,8 @@ function CustomerMergeModal({
               border: '1px solid var(--sp-border)',
               background: 'var(--sp-surface)',
               color: 'var(--sp-text)',
-              fontSize: '13px'
+              fontSize: '13px',
+              boxSizing: 'border-box',
             }}
           >
             <option value="">-- Choose destination customer --</option>
@@ -251,299 +1000,9 @@ function CustomerMergeModal({
   );
 }
 
-/* Quick Timeline Drawer Modal */
-interface QuickTimelineDrawerProps {
-  customer: CustomerRecord;
-  onClose: () => void;
-  onViewAllTimeline?: () => void;
-}
-
-function QuickTimelineDrawer({ customer, onClose, onViewAllTimeline }: QuickTimelineDrawerProps) {
-  const [events, setEvents] = useState<CustomerTimelineEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let current = true;
-    setLoading(true);
-    setError('');
-    apiFetch(`${API}/customers/${customer.id}/timeline`)
-      .then(async (response) => {
-        const body: unknown = await response.json().catch(() => []);
-        if (!response.ok) {
-          throw new Error(apiError(body) ?? 'Could not load customer timeline');
-        }
-        if (!Array.isArray(body) || !body.every(isCustomerTimelineEvent)) {
-          throw new Error('Invalid activity format returned from backend');
-        }
-        if (current) setEvents(body);
-      })
-      .catch((reason: unknown) => {
-        if (current) setError(messageFrom(reason, 'Could not load timeline'));
-      })
-      .finally(() => {
-        if (current) setLoading(false);
-      });
-    return () => {
-      current = false;
-    };
-  }, [customer.id]);
-
-  return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="record-modal" style={{ width: 'min(580px, 95vw)', maxHeight: '85vh' }}>
-        <div className="modal-title">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--sp-brand-soft)', color: 'var(--sp-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Clock size={16} />
-            </div>
-            <div>
-              <h2>{customer.name} Activity</h2>
-              <p>Commercial timeline across quotes, orders, invoices, and payments.</p>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close dialog">
-            <X size={15} />
-          </button>
-        </div>
-
-        {/* Customer Mini Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
-          <div>
-            <span className="sales-ref-badge">{customer.code}</span>
-            <span style={{ fontSize: '12px', color: 'var(--sp-text-secondary)', marginLeft: '8px' }}>{customer.email}</span>
-          </div>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sp-text)' }}>
-            Outstanding: {customer.outstanding}
-          </div>
-        </div>
-
-        {/* Timeline Stream */}
-        <div style={{ overflowY: 'auto', padding: '4px 8px 12px', maxHeight: '420px' }}>
-          {loading ? (
-            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
-              <Clock size={24} style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 8px' }} />
-              <div>Fetching transaction history…</div>
-            </div>
-          ) : error ? (
-            <div style={{ padding: '20px', color: '#dc2626', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '6px', fontSize: '12px' }}>
-              {error}
-            </div>
-          ) : events.length === 0 ? (
-            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
-              <ShoppingBag size={28} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>No recorded transactions yet</div>
-              <div style={{ fontSize: '12px' }}>Create quotes or sales orders to see customer events.</div>
-            </div>
-          ) : (
-            <div className="customer-timeline-feed">
-              {events.map((ev, idx) => {
-                const typeClass = ev.eventType.toLowerCase();
-                const formattedDate = new Date(ev.occurredAt).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                });
-
-                return (
-                  <div key={`${ev.eventType}-${ev.reference}-${idx}`} className="customer-timeline-entry">
-                    <div className={`customer-timeline-node ${typeClass}`} />
-                    <div className="customer-timeline-card">
-                      <div className="customer-timeline-topline">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span className={`customer-event-pill ${typeClass}`}>
-                            {ev.eventType.replace('_', ' ')}
-                          </span>
-                          <span className="sales-ref-badge">{ev.reference}</span>
-                        </div>
-                        {ev.amount != null && (
-                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
-                            {formatCurrency(ev.amount)}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--sp-text-secondary)', marginTop: '2px' }}>
-                        <span>Status: <strong style={{ textTransform: 'capitalize' }}>{ev.status}</strong></span>
-                        <time dateTime={ev.occurredAt}>{formattedDate}</time>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {onViewAllTimeline ? (
-            <button
-              type="button"
-              className="sales-action-btn secondary"
-              onClick={() => {
-                onClose();
-                onViewAllTimeline();
-              }}
-            >
-              Open in Timeline Register <ChevronRight size={13} />
-            </button>
-          ) : <div />}
-          <button type="button" className="button button-secondary" onClick={onClose}>
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* Edit Customer Terms & Governance Modal */
-interface EditCustomerTermsModalProps {
-  customer: CustomerRecord;
-  onClose: () => void;
-  onRefresh?: () => Promise<void>;
-  notify: (msg: string) => void;
-}
-
-function EditCustomerTermsModal({
-  customer,
-  onClose,
-  onRefresh,
-  notify
-}: EditCustomerTermsModalProps) {
-  const [termsDays, setTermsDays] = useState(customer.paymentTermsDays ?? 30);
-  const [creditLimit, setCreditLimit] = useState(customer.creditLimit ? String(customer.creditLimit) : '0');
-  const [creditHold, setCreditHold] = useState(customer.creditHold ?? false);
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const payload = {
-        name: customer.name,
-        email: customer.email,
-        status: customer.status || 'Active',
-        active: true,
-        customerType: customer.customerType || 'COMPANY',
-        contactName: customer.contactName || '',
-        phone: customer.phone || '',
-        addressLine1: customer.addressLine1 || '',
-        addressLine2: customer.addressLine2 || '',
-        city: customer.city || '',
-        region: customer.region || '',
-        postalCode: customer.postalCode || '',
-        countryCode: customer.countryCode || 'IN',
-        taxId: customer.taxId || '',
-        paymentTermsDays: Number(termsDays),
-        creditLimit: parseFloat(creditLimit) || 0,
-        tags: customer.tags || '',
-        creditHold: creditHold
-      };
-
-      const res = await apiFetch(`${API}/customers/${customer.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const body: unknown = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(apiError(body) ?? 'Failed to update credit terms');
-      if (onRefresh) await onRefresh();
-      notify(`Credit terms updated for ${customer.name}`);
-      onClose();
-    } catch (err) {
-      notify(messageFrom(err, 'Could not save customer terms'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}>
-      <form className="record-modal" onSubmit={handleSave} style={{ width: 'min(480px, 95vw)' }}>
-        <div className="modal-title">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(16, 185, 129, 0.1)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ShieldCheck size={16} />
-            </div>
-            <div>
-              <h2>Edit Credit & Payment Terms</h2>
-              <p>{customer.name} ({customer.code})</p>
-            </div>
-          </div>
-          <button type="button" disabled={saving} onClick={onClose} aria-label="Close dialog">
-            <X size={15} />
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
-              Payment Terms (Days)
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="365"
-              value={termsDays}
-              onChange={(e) => setTermsDays(Number(e.target.value))}
-              required
-              disabled={saving}
-              style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)' }}
-            />
-            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>0 = Due on receipt, 15 = Net 15d, 30 = Net 30d</span>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--sp-text)', display: 'block', marginBottom: '4px' }}>
-              Approved Credit Limit (₹)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="1000"
-              value={creditLimit}
-              onChange={(e) => setCreditLimit(e.target.value)}
-              required
-              disabled={saving}
-              style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid var(--sp-border)', background: 'var(--sp-surface)', color: 'var(--sp-text)' }}
-            />
-            <span style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>Current outstanding exposure: {customer.outstanding}</span>
-          </div>
-
-          <div style={{ padding: '10px 12px', background: 'var(--sp-surface-hover)', borderRadius: '6px', border: '1px solid var(--sp-border)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12.5px', color: 'var(--sp-text)' }}>
-              <input
-                type="checkbox"
-                checked={creditHold}
-                onChange={(e) => setCreditHold(e.target.checked)}
-                disabled={saving}
-                style={{ width: 15, height: 15 }}
-              />
-              <span style={{ fontWeight: 600, color: creditHold ? '#dc2626' : 'var(--sp-text)' }}>
-                Place account on Credit Hold
-              </span>
-            </label>
-            <p style={{ fontSize: '11px', color: 'var(--sp-text-muted)', margin: '4px 0 0 23px' }}>
-              Prevents dispatch of sales orders and new quotation issuance until released.
-            </p>
-          </div>
-        </div>
-
-        <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-          <button type="button" className="button button-secondary" disabled={saving} onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="button button-primary" disabled={saving}>
-            {saving ? 'Saving…' : 'Save Credit Terms'}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
+/* ==========================================================================
+   MAIN CUSTOMER DIRECTORY COMPONENT
+   ========================================================================== */
 export function CustomerDirectory({
   title,
   subtitle,
@@ -555,14 +1014,36 @@ export function CustomerDirectory({
   onMerged,
   notify,
   onNewCustomer,
-  onRefresh
+  onRefresh,
 }: CustomerDirectoryProps) {
   const [activeTab, setActiveTab] = useState<CustomerSubTab>('accounts');
   const [quickPill, setQuickPill] = useState<QuickFilterPill>('ALL');
-  const [mergingCustomer, setMergingCustomer] = useState<CustomerRecord | null>(null);
-  const [drawerCustomer, setDrawerCustomer] = useState<CustomerRecord | null>(null);
+  const [selectedCustomerDetail, setSelectedCustomerDetail] = useState<CustomerRecord | null>(null);
+  const [editingCustomer, setEditingCustomer] = useState<CustomerRecord | null>(null);
   const [editingTermsCustomer, setEditingTermsCustomer] = useState<CustomerRecord | null>(null);
+  const [mergingCustomer, setMergingCustomer] = useState<CustomerRecord | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Dedicated Timeline tab customer selection & filter
+  const [selectedTimelineCustomerId, setSelectedTimelineCustomerId] = useState<string>(
+    customers[0]?.id || ''
+  );
+  const [sidebarCustomerSearch, setSidebarCustomerSearch] = useState('');
+
+  // Keep selected customer detail in sync with updated customer records
+  useEffect(() => {
+    if (selectedCustomerDetail) {
+      const fresh = customers.find((c) => c.id === selectedCustomerDetail.id);
+      if (fresh) setSelectedCustomerDetail(fresh);
+    }
+  }, [customers]);
+
+  // Sync selected customer if empty
+  useEffect(() => {
+    if (!selectedTimelineCustomerId && customers.length > 0) {
+      setSelectedTimelineCustomerId(customers[0].id);
+    }
+  }, [customers, selectedTimelineCustomerId]);
 
   const handleRefresh = async () => {
     if (!onRefresh || refreshing) return;
@@ -573,49 +1054,6 @@ export function CustomerDirectory({
       setRefreshing(false);
     }
   };
-
-  // Dedicated Timeline tab customer selection
-  const [selectedTimelineCustomerId, setSelectedTimelineCustomerId] = useState<string>(
-    customers[0]?.id || ''
-  );
-  const [timelineEvents, setTimelineEvents] = useState<CustomerTimelineEvent[]>([]);
-  const [timelineLoading, setTimelineLoading] = useState(false);
-  const [timelineError, setTimelineError] = useState('');
-
-  // Sync selected customer if empty
-  useEffect(() => {
-    if (!selectedTimelineCustomerId && customers.length > 0) {
-      setSelectedTimelineCustomerId(customers[0].id);
-    }
-  }, [customers, selectedTimelineCustomerId]);
-
-  // Load timeline for selected customer when in 'timeline' tab
-  useEffect(() => {
-    if (activeTab !== 'timeline' || !selectedTimelineCustomerId) return;
-    let current = true;
-    setTimelineLoading(true);
-    setTimelineError('');
-    apiFetch(`${API}/customers/${selectedTimelineCustomerId}/timeline`)
-      .then(async (response) => {
-        const body: unknown = await response.json().catch(() => []);
-        if (!response.ok) {
-          throw new Error(apiError(body) ?? 'Could not load customer timeline');
-        }
-        if (!Array.isArray(body) || !body.every(isCustomerTimelineEvent)) {
-          throw new Error('Invalid timeline format');
-        }
-        if (current) setTimelineEvents(body);
-      })
-      .catch((err: unknown) => {
-        if (current) setTimelineError(messageFrom(err, 'Failed to load timeline'));
-      })
-      .finally(() => {
-        if (current) setTimelineLoading(false);
-      });
-    return () => {
-      current = false;
-    };
-  }, [activeTab, selectedTimelineCustomerId]);
 
   // Executive KPI calculations across all customers
   const { totalOutstanding, totalOrders, activeCount, inactiveCount, holdCount, goodStandingPct } =
@@ -643,7 +1081,7 @@ export function CustomerDirectory({
         activeCount: active,
         inactiveCount: inactive,
         holdCount: hold,
-        goodStandingPct
+        goodStandingPct,
       };
     }, [customers]);
 
@@ -656,6 +1094,18 @@ export function CustomerDirectory({
       return true;
     });
   }, [data, quickPill]);
+
+  // Filtered sidebar customers in Timeline tab
+  const sidebarCustomers = useMemo(() => {
+    if (!sidebarCustomerSearch.trim()) return customers;
+    const q = sidebarCustomerSearch.toLowerCase();
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.code.toLowerCase().includes(q) ||
+        (c.contactName || '').toLowerCase().includes(q)
+    );
+  }, [customers, sidebarCustomerSearch]);
 
   // CSV Export
   const exportDirectoryCSV = () => {
@@ -675,7 +1125,7 @@ export function CustomerDirectory({
       'Outstanding Balance',
       'Status',
       'Credit Hold',
-      'Tags'
+      'Tags',
     ];
 
     const rows = filteredAccounts.map((c) => [
@@ -694,7 +1144,7 @@ export function CustomerDirectory({
       `"${c.outstanding}"`,
       `"${c.status}"`,
       c.creditHold ? 'YES' : 'NO',
-      `"${(c.tags || '').replace(/"/g, '""')}"`
+      `"${(c.tags || '').replace(/"/g, '""')}"`,
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -730,25 +1180,402 @@ export function CustomerDirectory({
         paymentTermsDays: customer.paymentTermsDays ?? 0,
         creditLimit: customer.creditLimit ? parseAmount(customer.creditLimit) : 0,
         tags: customer.tags || '',
-        creditHold: nextHold
+        creditHold: nextHold,
       };
 
       const res = await apiFetch(`${API}/customers/${customer.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
       const body: unknown = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(apiError(body) ?? 'Failed to toggle credit hold');
       if (onRefresh) await onRefresh();
+      if (selectedCustomerDetail && selectedCustomerDetail.id === customer.id) {
+        setSelectedCustomerDetail((prev) => (prev ? { ...prev, creditHold: nextHold } : null));
+      }
       notify(`Customer ${customer.name} ${nextHold ? 'placed on credit hold' : 'released from credit hold'}`);
     } catch (err) {
       notify(messageFrom(err, 'Could not toggle credit hold'));
     }
   };
 
-  const selectedCustomer = customers.find((c) => c.id === selectedTimelineCustomerId);
+  const selectedTimelineCustomer = customers.find((c) => c.id === selectedTimelineCustomerId);
 
+  /* =========================================================================
+     AUTHENTIC LINEAR CUSTOMER DETAIL VIEW (MATCHING MAINTENANCE & ECO)
+     ========================================================================= */
+  if (selectedCustomerDetail) {
+    const outstandingVal = parseAmount(selectedCustomerDetail.outstanding);
+    const limitVal = parseAmount(selectedCustomerDetail.creditLimit);
+    const utilization = limitVal > 0 ? Math.min(100, Math.round((outstandingVal / limitVal) * 100)) : 0;
+    const isOverLimit = limitVal > 0 && outstandingVal > limitVal;
+
+    return (
+      <div className="linear-detail-container">
+        {/* Top Bar with Breadcrumbs & Actions */}
+        <div className="linear-detail-topbar">
+          <div className="linear-detail-breadcrumbs">
+            <button
+              type="button"
+              className="linear-crumb-back"
+              onClick={() => setSelectedCustomerDetail(null)}
+              title="Return to customer accounts list"
+            >
+              <ArrowLeft size={13} />
+              <span>Customers</span>
+            </button>
+            <span className="linear-crumb-sep">/</span>
+            <span className="linear-crumb-id">{selectedCustomerDetail.code}</span>
+          </div>
+
+          <div className="linear-detail-top-actions">
+            <CustomFieldEditor resource="customers" recordId={selectedCustomerDetail.id} />
+
+            <button
+              type="button"
+              className="sales-action-btn secondary"
+              onClick={() => setEditingCustomer(selectedCustomerDetail)}
+              title="Edit customer master profile"
+            >
+              <Building2 size={13} />
+              <span>Edit Profile</span>
+            </button>
+
+            <button
+              type="button"
+              className="sales-action-btn secondary"
+              onClick={() => setEditingTermsCustomer(selectedCustomerDetail)}
+              title="Edit payment terms and credit limit"
+            >
+              <ShieldCheck size={13} />
+              <span>Credit Terms</span>
+            </button>
+
+            <button
+              type="button"
+              className={`sales-action-btn ${selectedCustomerDetail.creditHold ? 'primary' : 'secondary'}`}
+              onClick={() => void toggleCreditHold(selectedCustomerDetail)}
+              style={selectedCustomerDetail.creditHold ? { background: '#10b981', borderColor: '#059669', color: '#fff' } : {}}
+              title={selectedCustomerDetail.creditHold ? 'Release account from credit hold' : 'Place account on credit hold'}
+            >
+              {selectedCustomerDetail.creditHold ? 'Release Hold' : 'Place on Hold'}
+            </button>
+
+            {['OWNER', 'ADMIN'].includes(role ?? '') && customers.length >= 2 && (
+              <button
+                type="button"
+                className="sales-action-btn secondary"
+                onClick={() => setMergingCustomer(selectedCustomerDetail)}
+                title="Merge duplicate customer into another account"
+              >
+                <GitMerge size={12} />
+                <span>Merge</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 2-Column Linear Layout */}
+        <div className="linear-detail-grid">
+          {/* Left Column: Narrative & Detailed Data */}
+          <div className="linear-detail-content">
+            {/* Hero Customer Card */}
+            <div className="sales-table-card" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <span className={`sales-customer-avatar ${selectedCustomerDetail.tone || 'lavender'}`} style={{ width: 46, height: 46, fontSize: '16px', borderRadius: '8px' }}>
+                    {selectedCustomerDetail.initials}
+                  </span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <h1 className="linear-detail-h1">{selectedCustomerDetail.name}</h1>
+                      <span className="customer-code-pill" style={{ cursor: 'default' }}>{selectedCustomerDetail.code}</span>
+                      <Status label={selectedCustomerDetail.status} />
+                      {selectedCustomerDetail.creditHold && (
+                        <span className="customer-risk-chip hold">
+                          <AlertTriangle size={11} /> Credit Hold Active
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'var(--sp-text-muted)', marginTop: '4px', flexWrap: 'wrap' }}>
+                      <span>{selectedCustomerDetail.customerType === 'INDIVIDUAL' ? 'Retail / Individual Account' : 'Corporate Enterprise Account'}</span>
+                      {selectedCustomerDetail.taxId && (
+                        <span>· GSTIN: <strong style={{ color: 'var(--sp-text)' }}>{selectedCustomerDetail.taxId}</strong></span>
+                      )}
+                      {selectedCustomerDetail.city && (
+                        <span>· {selectedCustomerDetail.city}, {selectedCustomerDetail.countryCode || 'IN'}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedCustomerDetail.tags && (
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {selectedCustomerDetail.tags.split(',').map((tag) => (
+                      <span key={tag} className="customer-tag-pill" style={{ padding: '3px 8px', fontSize: '11.5px' }}>
+                        {tag.trim()}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Quick 4-metric strip */}
+              <div className="sales-metric-strip" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginTop: '4px' }}>
+                <div className="sales-metric-card" style={{ padding: '12px 14px' }}>
+                  <span className="sales-metric-label">OUTSTANDING BALANCE</span>
+                  <div className="sales-metric-val" style={{ fontSize: '16px', color: outstandingVal > 0 ? '#dc2626' : '#16a34a' }}>
+                    {selectedCustomerDetail.outstanding}
+                  </div>
+                  <div className="sales-metric-sub">Open receivables</div>
+                </div>
+
+                <div className="sales-metric-card" style={{ padding: '12px 14px' }}>
+                  <span className="sales-metric-label">LIFETIME ORDERS</span>
+                  <div className="sales-metric-val" style={{ fontSize: '16px' }}>
+                    {selectedCustomerDetail.orders || 0}
+                  </div>
+                  <div className="sales-metric-sub">Orders converted</div>
+                </div>
+
+                <div className="sales-metric-card" style={{ padding: '12px 14px' }}>
+                  <span className="sales-metric-label">APPROVED CREDIT LINE</span>
+                  <div className="sales-metric-val" style={{ fontSize: '16px' }}>
+                    {limitVal > 0 ? formatCurrency(limitVal) : 'No limit'}
+                  </div>
+                  <div className="sales-metric-sub">Risk threshold</div>
+                </div>
+
+                <div className="sales-metric-card" style={{ padding: '12px 14px' }}>
+                  <span className="sales-metric-label">INVOICE SETTLEMENT</span>
+                  <div className="sales-metric-val" style={{ fontSize: '16px' }}>
+                    Net {selectedCustomerDetail.paymentTermsDays ?? 30}d
+                  </div>
+                  <div className="sales-metric-sub">Payment terms</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Primary Contact & Corporate Profile Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {/* Primary Contact Card */}
+              <div className="linear-properties-card">
+                <div className="linear-properties-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <User size={13} />
+                  <span>Primary Contact & Communication</span>
+                </div>
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Contact Person</span>
+                  <span className="linear-property-value">{selectedCustomerDetail.contactName || '—'}</span>
+                </div>
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Email Address</span>
+                  <span className="linear-property-value">
+                    {selectedCustomerDetail.email ? (
+                      <a href={`mailto:${selectedCustomerDetail.email}`} style={{ color: 'var(--sp-brand)', textDecoration: 'none' }}>
+                        {selectedCustomerDetail.email}
+                      </a>
+                    ) : '—'}
+                  </span>
+                </div>
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Phone</span>
+                  <span className="linear-property-value">
+                    {selectedCustomerDetail.phone ? (
+                      <a href={`tel:${selectedCustomerDetail.phone}`} style={{ color: 'var(--sp-text)', textDecoration: 'none' }}>
+                        {selectedCustomerDetail.phone}
+                      </a>
+                    ) : '—'}
+                  </span>
+                </div>
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Tax ID / GSTIN</span>
+                  <span className="linear-property-value">{selectedCustomerDetail.taxId || '—'}</span>
+                </div>
+              </div>
+
+              {/* Billing Address Card */}
+              <div className="linear-properties-card">
+                <div className="linear-properties-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <MapPin size={13} />
+                  <span>Billing & Dispatch Address</span>
+                </div>
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Street Address</span>
+                  <span className="linear-property-value" title={[selectedCustomerDetail.addressLine1, selectedCustomerDetail.addressLine2].filter(Boolean).join(', ')}>
+                    {[selectedCustomerDetail.addressLine1, selectedCustomerDetail.addressLine2].filter(Boolean).join(', ') || '—'}
+                  </span>
+                </div>
+                <div className="linear-property-row">
+                  <span className="linear-property-label">City</span>
+                  <span className="linear-property-value">{selectedCustomerDetail.city || '—'}</span>
+                </div>
+                <div className="linear-property-row">
+                  <span className="linear-property-label">State / Region</span>
+                  <span className="linear-property-value">{selectedCustomerDetail.region || '—'}</span>
+                </div>
+                <div className="linear-property-row">
+                  <span className="linear-property-label">Postal Code & Country</span>
+                  <span className="linear-property-value">
+                    {[selectedCustomerDetail.postalCode, selectedCustomerDetail.countryCode || 'IN'].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Redesigned Activity Timeline Widget for this customer */}
+            <div className="sales-table-card" style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', borderBottom: '1px solid var(--sp-border)', paddingBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Activity size={15} style={{ color: 'var(--sp-brand)' }} />
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--sp-text)', margin: 0 }}>
+                    Transaction Timeline & History
+                  </h3>
+                </div>
+                <span style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)' }}>
+                  Quotes, sales orders, invoices, payments, and credit returns
+                </span>
+              </div>
+
+              <CustomerTimelineWidget customerId={selectedCustomerDetail.id} />
+            </div>
+          </div>
+
+          {/* Right Sidebar: Governance & Risk */}
+          <div className="linear-properties-sidebar">
+            {/* Credit Governance & Risk */}
+            <div className="linear-properties-card">
+              <div className="linear-properties-title">Credit Governance & Risk</div>
+              <div className="linear-property-row">
+                <span className="linear-property-label">Credit Status</span>
+                <span className="linear-property-value">
+                  {selectedCustomerDetail.creditHold ? (
+                    <span className="customer-risk-chip hold"><AlertTriangle size={10} /> On Hold</span>
+                  ) : (
+                    <span className="customer-risk-chip good"><CheckCircle2 size={10} /> Approved</span>
+                  )}
+                </span>
+              </div>
+              <div className="linear-property-row">
+                <span className="linear-property-label">Payment Terms</span>
+                <span className="linear-property-value">Net {selectedCustomerDetail.paymentTermsDays ?? 30} days</span>
+              </div>
+              <div className="linear-property-row">
+                <span className="linear-property-label">Credit Limit</span>
+                <span className="linear-property-value">
+                  {limitVal > 0 ? formatCurrency(limitVal) : 'No limit'}
+                </span>
+              </div>
+              <div className="linear-property-row">
+                <span className="linear-property-label">Outstanding</span>
+                <span className="linear-property-value">{selectedCustomerDetail.outstanding}</span>
+              </div>
+
+              {/* Credit Utilization Bar */}
+              {limitVal > 0 && (
+                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--sp-border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--sp-text-muted)', marginBottom: '4px' }}>
+                    <span>Credit Utilization</span>
+                    <span style={{ fontWeight: 600, color: isOverLimit ? '#dc2626' : 'var(--sp-text)' }}>
+                      {utilization}% {isOverLimit && '(Over Limit)'}
+                    </span>
+                  </div>
+                  <div className="customer-progress-track">
+                    <div
+                      className={`customer-progress-bar ${isOverLimit ? 'danger' : utilization > 75 ? 'warning' : ''}`}
+                      style={{ width: `${utilization}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Master Data Card */}
+            <div className="linear-properties-card">
+              <div className="linear-properties-title">Master Data Specifications</div>
+              <div className="linear-property-row">
+                <span className="linear-property-label">Customer Code</span>
+                <span className="linear-property-value"><span className="sales-ref-badge">{selectedCustomerDetail.code}</span></span>
+              </div>
+              <div className="linear-property-row">
+                <span className="linear-property-label">Account Type</span>
+                <span className="linear-property-value">{selectedCustomerDetail.customerType || 'Company'}</span>
+              </div>
+              <div className="linear-property-row">
+                <span className="linear-property-label">Status</span>
+                <span className="linear-property-value">{selectedCustomerDetail.status}</span>
+              </div>
+              <div className="linear-property-row">
+                <span className="linear-property-label">Country Code</span>
+                <span className="linear-property-value">{selectedCustomerDetail.countryCode || 'IN'}</span>
+              </div>
+            </div>
+
+            {/* Quick Actions Card */}
+            <div className="linear-properties-card">
+              <div className="linear-properties-title">Quick Actions</div>
+              <button
+                type="button"
+                className="sales-action-btn secondary"
+                onClick={() => setEditingCustomer(selectedCustomerDetail)}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <Building2 size={13} />
+                <span>Edit Full Profile</span>
+              </button>
+              <button
+                type="button"
+                className="sales-action-btn secondary"
+                onClick={() => setEditingTermsCustomer(selectedCustomerDetail)}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <ShieldCheck size={13} />
+                <span>Adjust Credit Terms</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Modals when in detail view */}
+        {editingCustomer && (
+          <EditCustomerModal
+            customer={editingCustomer}
+            onClose={() => setEditingCustomer(null)}
+            onRefresh={onRefresh}
+            notify={notify}
+            onCustomerUpdated={(updated) => setSelectedCustomerDetail(updated)}
+          />
+        )}
+
+        {editingTermsCustomer && (
+          <EditCustomerTermsModal
+            customer={editingTermsCustomer}
+            onClose={() => setEditingTermsCustomer(null)}
+            onRefresh={onRefresh}
+            notify={notify}
+          />
+        )}
+
+        {mergingCustomer && (
+          <CustomerMergeModal
+            sourceCustomer={mergingCustomer}
+            customers={customers}
+            onClose={() => setMergingCustomer(null)}
+            onMerged={async () => {
+              await onMerged();
+              setSelectedCustomerDetail(null);
+            }}
+            notify={notify}
+          />
+        )}
+      </div>
+    );
+  }
+
+  /* =========================================================================
+     STANDARD LIST & REGISTER VIEWS
+     ========================================================================= */
   return (
     <div className="sales-screen-layout">
       {/* 1. Executive Commercial KPI Strip */}
@@ -948,13 +1775,13 @@ export function CustomerDirectory({
               <table className="sales-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '30%' }}>CUSTOMER & CONTACT</th>
+                    <th style={{ width: '32%' }}>CUSTOMER & CONTACT</th>
                     <th style={{ width: '10%' }}>CODE</th>
                     <th style={{ width: '14%' }}>TERMS & LIMIT</th>
                     <th style={{ width: '8%' }}>ORDERS</th>
                     <th style={{ width: '12%' }}>OUTSTANDING</th>
-                    <th style={{ width: '11%' }}>STATUS</th>
-                    <th style={{ width: '15%', textAlign: 'right' }}>ACTIONS</th>
+                    <th style={{ width: '10%' }}>STATUS</th>
+                    <th style={{ width: '14%', textAlign: 'right' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -975,7 +1802,12 @@ export function CustomerDirectory({
                       const outstandingNum = parseAmount(customer.outstanding);
 
                       return (
-                        <tr key={customer.id} className="sales-row">
+                        <tr
+                          key={customer.id}
+                          className="sales-row"
+                          onClick={() => setSelectedCustomerDetail(customer)}
+                          style={{ cursor: 'pointer' }}
+                        >
                           {/* Customer & Contact */}
                           <td>
                             <div className="sales-customer-cell">
@@ -983,7 +1815,9 @@ export function CustomerDirectory({
                                 {customer.initials}
                               </span>
                               <div className="customer-info-cell">
-                                <strong>{customer.name}</strong>
+                                <strong style={{ color: 'var(--sp-text)', fontSize: '13px' }}>
+                                  {customer.name}
+                                </strong>
                                 <small>
                                   {[customer.contactName, customer.phone, customer.email, customer.city].filter(Boolean).join(' · ')}
                                 </small>
@@ -1000,9 +1834,20 @@ export function CustomerDirectory({
                             </div>
                           </td>
 
-                          {/* Customer Code */}
+                          {/* Customer Code - Clickable Link Pill */}
                           <td>
-                            <span className="sales-ref-badge">{customer.code}</span>
+                            <button
+                              type="button"
+                              className="customer-code-pill interactive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCustomerDetail(customer);
+                              }}
+                              title="View full customer details"
+                            >
+                              <span>{customer.code}</span>
+                              <ArrowUpRight size={11} className="order-link-arrow" />
+                            </button>
                           </td>
 
                           {/* Terms & Limit */}
@@ -1044,19 +1889,18 @@ export function CustomerDirectory({
                           </td>
 
                           {/* Actions */}
-                          <td style={{ textAlign: 'right' }}>
+                          <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                             <div className="sales-actions-cell" style={{ justifyContent: 'flex-end', gap: '6px' }}>
-                              <CustomFieldEditor resource="customers" recordId={customer.id} />
-                              
                               <button
                                 type="button"
                                 className="sales-action-btn secondary"
-                                onClick={() => setDrawerCustomer(customer)}
-                                title="View transaction timeline"
+                                onClick={() => setSelectedCustomerDetail(customer)}
+                                title="View customer profile and history"
                               >
-                                <Clock size={12} />
-                                <span>Activity</span>
+                                <span>Details</span>
                               </button>
+
+                              <CustomFieldEditor resource="customers" recordId={customer.id} />
 
                               {['OWNER', 'ADMIN'].includes(role ?? '') && customers.length >= 2 && (
                                 <button
@@ -1084,135 +1928,155 @@ export function CustomerDirectory({
 
       {/* 4. SUB-TAB 2: Activity & Timelines Register */}
       {activeTab === 'timeline' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: '16px' }}>
-          {/* Customer Selector Sidebar */}
-          <div className="sales-table-card" style={{ padding: '14px', height: 'fit-content' }}>
-            <div style={{ fontSize: '11px', fontWeight: 500, color: 'var(--sp-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
-              Select Customer Account
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: '16px' }}>
+          {/* Customer Selector Sidebar with Search */}
+          <div className="sales-table-card" style={{ padding: '14px', height: 'fit-content', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Customer Accounts
+              </span>
+              <span className="sales-pill-count">{customers.length}</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '480px', overflowY: 'auto' }}>
-              {customers.map((c) => {
-                const isSelected = c.id === selectedTimelineCustomerId;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setSelectedTimelineCustomerId(c.id)}
-                    style={{
-                      textAlign: 'left',
-                      padding: '8px 10px',
-                      borderRadius: '6px',
-                      border: '1px solid',
-                      borderColor: isSelected ? 'var(--sp-brand)' : 'var(--sp-border)',
-                      background: isSelected ? 'var(--sp-brand-soft)' : 'var(--sp-surface)',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong style={{ fontSize: '12.5px', color: isSelected ? 'var(--sp-brand)' : 'var(--sp-text)' }}>
-                        {c.name}
-                      </strong>
-                      <span className="sales-ref-badge" style={{ fontSize: '10px' }}>{c.code}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--sp-text-muted)', marginTop: '2px' }}>
-                      <span>{c.orders} orders</span>
-                      <span>{c.outstanding}</span>
-                    </div>
-                  </button>
-                );
-              })}
+
+            {/* Sidebar Search */}
+            <div className="sales-search-box" style={{ width: '100%' }}>
+              <Search size={13} className="sales-search-icon" />
+              <input
+                className="sales-search-input"
+                placeholder="Filter accounts…"
+                value={sidebarCustomerSearch}
+                onChange={(e) => setSidebarCustomerSearch(e.target.value)}
+                style={{ height: '30px', fontSize: '12px' }}
+              />
+              {sidebarCustomerSearch && (
+                <button
+                  type="button"
+                  className="sales-search-clear"
+                  onClick={() => setSidebarCustomerSearch('')}
+                >
+                  <X size={11} />
+                </button>
+              )}
+            </div>
+
+            {/* Account List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '520px', overflowY: 'auto' }}>
+              {sidebarCustomers.length === 0 ? (
+                <div style={{ padding: '20px 10px', textAlign: 'center', fontSize: '12px', color: 'var(--sp-text-muted)' }}>
+                  No accounts found
+                </div>
+              ) : (
+                sidebarCustomers.map((c) => {
+                  const isSelected = c.id === selectedTimelineCustomerId;
+                  const outstandingNum = parseAmount(c.outstanding);
+
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setSelectedTimelineCustomerId(c.id)}
+                      style={{
+                        textAlign: 'left',
+                        padding: '8px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid',
+                        borderColor: isSelected ? 'var(--sp-brand)' : 'var(--sp-border)',
+                        background: isSelected ? 'var(--sp-brand-soft)' : 'var(--sp-surface)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '12.5px', color: isSelected ? 'var(--sp-brand)' : 'var(--sp-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.name}
+                        </strong>
+                        <span className="sales-ref-badge" style={{ fontSize: '10px', marginLeft: '6px', flexShrink: 0 }}>{c.code}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+                        <span>{c.orders} orders</span>
+                        <span style={{ fontWeight: 500, color: outstandingNum > 0 ? '#dc2626' : 'var(--sp-text-muted)' }}>
+                          {c.outstanding}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
 
           {/* Activity Stream View */}
-          <div className="sales-table-card" style={{ padding: '16px 20px' }}>
-            {selectedCustomer && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '14px', borderBottom: '1px solid var(--sp-border)', marginBottom: '14px' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--sp-text)', margin: 0 }}>
-                      {selectedCustomer.name}
-                    </h3>
-                    <span className="sales-ref-badge">{selectedCustomer.code}</span>
-                    {selectedCustomer.creditHold && (
-                      <span className="customer-risk-chip hold">
-                        <AlertTriangle size={11} /> Credit Hold
-                      </span>
-                    )}
+          <div className="sales-table-card" style={{ padding: '14px 16px' }}>
+            {selectedTimelineCustomer && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px', borderBottom: '1px solid var(--sp-border)', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span className={`sales-customer-avatar ${selectedTimelineCustomer.tone || 'lavender'}`} style={{ width: 32, height: 32, fontSize: '12px', borderRadius: '6px', flexShrink: 0 }}>
+                    {selectedTimelineCustomer.initials}
+                  </span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--sp-text)', margin: 0 }}>
+                        {selectedTimelineCustomer.name}
+                      </h3>
+                      <button
+                        type="button"
+                        className="customer-code-pill interactive"
+                        onClick={() => setSelectedCustomerDetail(selectedTimelineCustomer)}
+                        title="Open full customer profile"
+                      >
+                        <span>{selectedTimelineCustomer.code}</span>
+                        <ArrowUpRight size={11} className="order-link-arrow" />
+                      </button>
+                      {selectedTimelineCustomer.creditHold && (
+                        <span className="customer-risk-chip hold">
+                          <AlertTriangle size={10} /> Credit Hold
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', margin: '2px 0 0' }}>
+                      {[selectedTimelineCustomer.contactName, selectedTimelineCustomer.phone, selectedTimelineCustomer.email, selectedTimelineCustomer.city].filter(Boolean).join(' · ')}
+                    </p>
                   </div>
-                  <p style={{ fontSize: '11.5px', color: 'var(--sp-text-muted)', margin: '4px 0 0' }}>
-                    {[selectedCustomer.contactName, selectedCustomer.phone, selectedCustomer.email, selectedCustomer.city].filter(Boolean).join(' · ')}
-                  </p>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--sp-text)' }}>
-                    Outstanding: {selectedCustomer.outstanding}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '12.5px', fontWeight: 600, color: parseAmount(selectedTimelineCustomer.outstanding) > 0 ? '#dc2626' : 'var(--sp-text)' }}>
+                      Outstanding: {selectedTimelineCustomer.outstanding}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)', marginTop: '1px' }}>
+                      Terms: Net {selectedTimelineCustomer.paymentTermsDays ?? 30}d
+                    </div>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--sp-text-secondary)', marginTop: '2px' }}>
-                    Terms: Net {selectedCustomer.paymentTermsDays ?? 30}d
-                  </div>
+
+                  <button
+                    type="button"
+                    className="sales-action-btn secondary"
+                    onClick={() => setSelectedCustomerDetail(selectedTimelineCustomer)}
+                    style={{ height: '30px', fontSize: '12px' }}
+                  >
+                    <span>View Profile</span>
+                    <ChevronRight size={12} />
+                  </button>
                 </div>
               </div>
             )}
 
-            {timelineLoading ? (
-              <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--sp-text-muted)' }}>
-                <Clock size={28} style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 8px' }} />
-                <div>Loading customer activity stream…</div>
-              </div>
-            ) : timelineError ? (
-              <div style={{ padding: '20px', color: '#dc2626', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '6px' }}>
-                {timelineError}
-              </div>
-            ) : timelineEvents.length === 0 ? (
-              <div className="sales-empty-state" style={{ padding: '60px 20px' }}>
-                <ShoppingBag size={36} className="sales-empty-icon" />
-                <div className="sales-empty-title">No transactions recorded yet</div>
-                <div className="sales-empty-desc">
-                  This account has no quotes, sales orders, invoices, payments, or credit returns on file.
-                </div>
-              </div>
+            {selectedTimelineCustomerId ? (
+              <CustomerTimelineWidget
+                customerId={selectedTimelineCustomerId}
+                onOpenProfile={() => {
+                  if (selectedTimelineCustomer) setSelectedCustomerDetail(selectedTimelineCustomer);
+                }}
+              />
             ) : (
-              <div className="customer-timeline-feed">
-                {timelineEvents.map((ev, idx) => {
-                  const typeClass = ev.eventType.toLowerCase();
-                  const formattedDate = new Date(ev.occurredAt).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  });
-
-                  return (
-                    <div key={`${ev.eventType}-${ev.reference}-${idx}`} className="customer-timeline-entry">
-                      <div className={`customer-timeline-node ${typeClass}`} />
-                      <div className="customer-timeline-card">
-                        <div className="customer-timeline-topline">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span className={`customer-event-pill ${typeClass}`}>
-                              {ev.eventType.replace('_', ' ')}
-                            </span>
-                            <span className="sales-ref-badge">{ev.reference}</span>
-                            <span className="sales-status-chip completed" style={{ textTransform: 'capitalize' }}>
-                              {ev.status}
-                            </span>
-                          </div>
-                          {ev.amount != null && (
-                            <span style={{ fontSize: '13.5px', fontWeight: 500, color: 'var(--sp-text)', fontVariantNumeric: 'tabular-nums' }}>
-                              {formatCurrency(ev.amount)}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--sp-text-secondary)', marginTop: '4px' }}>
-                          <span>Event reference: <code>{ev.reference}</code></span>
-                          <time dateTime={ev.occurredAt}>{formattedDate}</time>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="sales-empty-state" style={{ padding: '60px 20px' }}>
+                <Users size={32} className="sales-empty-icon" />
+                <div className="sales-empty-title">Select a customer account</div>
+                <div className="sales-empty-desc">Choose an account from the left sidebar to view their activity stream.</div>
               </div>
             )}
           </div>
@@ -1297,14 +2161,28 @@ export function CustomerDirectory({
                     return (
                       <tr key={c.id} className="sales-row">
                         <td>
-                          <strong>{c.name}</strong>
-                          <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
-                            {c.city ? `${c.city}, ${c.countryCode || 'IN'}` : c.customerType || 'Company'}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCustomerDetail(c)}
+                            style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}
+                          >
+                            <strong style={{ fontSize: '13px', color: 'var(--sp-text)' }}>{c.name}</strong>
+                            <div style={{ fontSize: '11px', color: 'var(--sp-text-muted)' }}>
+                              {c.city ? `${c.city}, ${c.countryCode || 'IN'}` : c.customerType || 'Company'}
+                            </div>
+                          </button>
                         </td>
 
                         <td>
-                          <span className="sales-ref-badge">{c.code}</span>
+                          <button
+                            type="button"
+                            className="customer-code-pill interactive"
+                            onClick={() => setSelectedCustomerDetail(c)}
+                            title="View full customer profile"
+                          >
+                            <span>{c.code}</span>
+                            <ArrowUpRight size={11} className="order-link-arrow" />
+                          </button>
                         </td>
 
                         <td>
@@ -1393,86 +2271,13 @@ export function CustomerDirectory({
         </div>
       )}
 
-      {/* 6. ERP Commercial Lifecycle & Account Governance Guide */}
-      <div className="sales-pipeline-banner">
-        <div className="sales-pipeline-header">
-          <div className="sales-pipeline-title">
-            <span className="sales-pipeline-dot" />
-            <span>Commercial Customer Lifecycle & Account Governance</span>
-          </div>
-          <span className="sales-pipeline-tag">ISO 9001 · ERP Master Data</span>
-        </div>
-
-        <div className="sales-pipeline-stages">
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">01</div>
-            <div className="sales-step-content">
-              <b>Onboarding & KYC</b>
-              <span>Entity registration, GSTIN tax validation & contact binding</span>
-            </div>
-          </div>
-
-          <ChevronRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">02</div>
-            <div className="sales-step-content">
-              <b>Credit Assessment</b>
-              <span>Exposure limits, payment terms approval & hold controls</span>
-            </div>
-          </div>
-
-          <ChevronRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">03</div>
-            <div className="sales-step-content">
-              <b>Commercial Quoting</b>
-              <span>Formal quotes, conversion to confirmed sales orders</span>
-            </div>
-          </div>
-
-          <ChevronRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">04</div>
-            <div className="sales-step-content">
-              <b>Billing & Receivables</b>
-              <span>Tax invoice issuance, fulfillment tracking & AR aging</span>
-            </div>
-          </div>
-
-          <ChevronRight size={14} className="sales-pipeline-arrow" />
-
-          <div className="sales-pipeline-step">
-            <div className="sales-step-num">05</div>
-            <div className="sales-step-content">
-              <b>Cash Settlement</b>
-              <span>Bank payments, credit notes, ledger reconciliation</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 7. Linear Modals & Drawers */}
-      {mergingCustomer && (
-        <CustomerMergeModal
-          sourceCustomer={mergingCustomer}
-          customers={customers}
-          onClose={() => setMergingCustomer(null)}
-          onMerged={onMerged}
+      {/* Modals & Dialogs */}
+      {editingCustomer && (
+        <EditCustomerModal
+          customer={editingCustomer}
+          onClose={() => setEditingCustomer(null)}
+          onRefresh={onRefresh}
           notify={notify}
-        />
-      )}
-
-      {drawerCustomer && (
-        <QuickTimelineDrawer
-          customer={drawerCustomer}
-          onClose={() => setDrawerCustomer(null)}
-          onViewAllTimeline={() => {
-            setSelectedTimelineCustomerId(drawerCustomer.id);
-            setActiveTab('timeline');
-          }}
         />
       )}
 
@@ -1481,6 +2286,16 @@ export function CustomerDirectory({
           customer={editingTermsCustomer}
           onClose={() => setEditingTermsCustomer(null)}
           onRefresh={onRefresh}
+          notify={notify}
+        />
+      )}
+
+      {mergingCustomer && (
+        <CustomerMergeModal
+          sourceCustomer={mergingCustomer}
+          customers={customers}
+          onClose={() => setMergingCustomer(null)}
+          onMerged={onMerged}
           notify={notify}
         />
       )}

@@ -44,7 +44,8 @@ public class EcoBomDiffLineEntity {
     @Column(length = 255)
     private String notes;
 
-    protected EcoBomDiffLineEntity() {}
+    protected EcoBomDiffLineEntity() {
+    }
 
     public EcoBomDiffLineEntity(UUID tenantId, EngineeringChangeOrderEntity eco, String changeType,
                                 ItemEntity componentItem, int oldQuantity, int newQuantity,
@@ -60,15 +61,47 @@ public class EcoBomDiffLineEntity {
         this.notes = notes;
     }
 
-    public UUID getId() { return id; }
-    public UUID getTenantId() { return tenantId; }
-    public EngineeringChangeOrderEntity getEco() { return eco; }
-    public void setEco(EngineeringChangeOrderEntity eco) { this.eco = eco; }
-    public String getChangeType() { return changeType; }
-    public ItemEntity getComponentItem() { return componentItem; }
-    public int getOldQuantity() { return oldQuantity; }
-    public int getNewQuantity() { return newQuantity; }
-    public BigDecimal getOldScrapPercent() { return oldScrapPercent; }
-    public BigDecimal getNewScrapPercent() { return newScrapPercent; }
-    public String getNotes() { return notes; }
+    public UUID getId() {
+        return id;
+    }
+
+    public UUID getTenantId() {
+        return tenantId;
+    }
+
+    public EngineeringChangeOrderEntity getEco() {
+        return eco;
+    }
+
+    public void setEco(EngineeringChangeOrderEntity eco) {
+        this.eco = eco;
+    }
+
+    public String getChangeType() {
+        return changeType;
+    }
+
+    public ItemEntity getComponentItem() {
+        return componentItem;
+    }
+
+    public int getOldQuantity() {
+        return oldQuantity;
+    }
+
+    public int getNewQuantity() {
+        return newQuantity;
+    }
+
+    public BigDecimal getOldScrapPercent() {
+        return oldScrapPercent;
+    }
+
+    public BigDecimal getNewScrapPercent() {
+        return newScrapPercent;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
 }
