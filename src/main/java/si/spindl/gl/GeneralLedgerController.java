@@ -1,5 +1,6 @@
 package si.spindl.gl;
 
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -43,7 +44,7 @@ public class GeneralLedgerController {
 
     @PostMapping("/accounts")
     @ResponseStatus(HttpStatus.CREATED)
-    public GlDtos.GlAccountDto createAccount(@RequestBody GlDtos.CreateGlAccountRequest req) {
+    public GlDtos.GlAccountDto createAccount(@Valid @RequestBody GlDtos.CreateGlAccountRequest req) {
         return service.createAccount(tenant.currentTenantId(), req);
     }
 
@@ -70,7 +71,7 @@ public class GeneralLedgerController {
     @ResponseStatus(HttpStatus.CREATED)
     public GlDtos.GlJournalEntryDto createJournalEntry(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestBody GlDtos.CreateJournalEntryRequest req
+            @Valid @RequestBody GlDtos.CreateJournalEntryRequest req
     ) {
         UUID userId = null;
         if (jwt != null && jwt.getSubject() != null) {

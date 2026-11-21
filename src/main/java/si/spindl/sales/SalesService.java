@@ -5,14 +5,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import si.spindl.catalog.InventoryMovementEntity;
-import si.spindl.catalog.InventoryMovementRepository;
+import si.spindl.inventory.InventoryMovementEntity;
+import si.spindl.inventory.InventoryMovementRepository;
 import si.spindl.catalog.ItemEntity;
 import si.spindl.catalog.ItemRepository;
-import si.spindl.catalog.WarehouseEntity;
-import si.spindl.catalog.WarehouseRepository;
-import si.spindl.catalog.WarehouseStockEntity;
-import si.spindl.catalog.WarehouseStockRepository;
+import si.spindl.inventory.WarehouseEntity;
+import si.spindl.inventory.WarehouseRepository;
+import si.spindl.inventory.WarehouseStockEntity;
+import si.spindl.inventory.WarehouseStockRepository;
 import si.spindl.party.CustomerEntity;
 import si.spindl.party.CustomerRepository;
 import si.spindl.finance.InvoiceRepository;
@@ -126,4 +126,14 @@ public class SalesService {
 
     private SalesQuoteEntity lockQuote(UUID id){return quotes.findForUpdateByTenantIdAndId(tenant.currentTenantId(),id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));}
     private static String number(String prefix){return prefix+"-"+Year.now()+"-"+UUID.randomUUID().toString().substring(0,8).toUpperCase(Locale.ROOT);}
+
+    @Transactional
+    public int reassignCustomerQuotes(UUID tenantId, UUID sourceId, CustomerEntity target) {
+        return quotes.reassignCustomer(tenantId, sourceId, target);
+    }
+
+    @Transactional
+    public int reassignCustomerOrders(UUID tenantId, UUID sourceId, CustomerEntity target) {
+        return orders.reassignCustomer(tenantId, sourceId, target);
+    }
 }

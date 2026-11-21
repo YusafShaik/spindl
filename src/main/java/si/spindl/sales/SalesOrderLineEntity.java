@@ -2,7 +2,7 @@ package si.spindl.sales;
 
 import jakarta.persistence.*;
 import si.spindl.catalog.ItemEntity;
-import si.spindl.catalog.WarehouseEntity;
+import si.spindl.inventory.WarehouseEntity;
 import java.math.BigDecimal;
 import java.util.UUID;
 

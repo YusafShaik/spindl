@@ -123,4 +123,9 @@ public class TenantAttachmentService {
     private String sha256(Path path)throws Exception{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));}
     public record AttachmentView(UUID id,String filename,String mediaType,long sizeBytes,String scanStatus,UUID uploadedBy,java.time.Instant uploadedAt){static AttachmentView from(TenantAttachmentEntity e){return new AttachmentView(e.getId(),e.getOriginalFilename(),e.getMediaType(),e.getSizeBytes(),e.getScanStatus(),e.getUploadedBy(),e.getUploadedAt());}}
     public record Download(Resource resource,String filename,String mediaType,long sizeBytes){}
+
+    @Transactional
+    public int moveCustomerAttachments(UUID tenantId, UUID sourceId, UUID targetId) {
+        return attachments.moveCustomerAttachments(tenantId, sourceId, targetId);
+    }
 }

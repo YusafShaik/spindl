@@ -80,7 +80,7 @@ public class EngineeringController {
     public EngineeringDtos.EcoDetailView implement(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id,
-            @RequestBody(required = false) EngineeringDtos.ImplementEcoRequest request
+            @Valid @RequestBody(required = false) EngineeringDtos.ImplementEcoRequest request
     ) {
         UUID actorId = jwt != null && jwt.getSubject() != null ? UUID.fromString(jwt.getSubject()) : null;
         return service.implementEco(tenant.currentTenantId(), actorId, id, request);

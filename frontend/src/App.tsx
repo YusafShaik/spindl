@@ -6,6 +6,7 @@ import { Dashboard } from './features/overview/Dashboard.tsx';
 import { NotificationCenter } from './features/notifications/NotificationCenter.tsx';
 import { Sidebar } from './components/layout/Sidebar.tsx';
 import { AuthPage } from './features/auth/AuthPage.tsx';
+import { MarketingLanding } from './features/marketing/MarketingLanding.tsx';
 import { useAuthActions, type AuthSession } from './features/auth/useAuthActions.ts';
 import { CustomerDirectory } from './features/customers/CustomerDirectory.tsx';
 import { TransactionRegister } from './features/transactions/TransactionRegister.tsx';
@@ -71,6 +72,7 @@ function App() {
   const tenantData = useTenantData(session);
   const { items, setItems, customers, setCustomers, suppliers, setSuppliers, purchaseOrders, setPurchaseOrders, purchaseRequisitions, setPurchaseRequisitions, supplierBills, setSupplierBills, supplierCredits, setSupplierCredits, customerCredits, setCustomerCredits, transactions, setTransactions, quotes, setQuotes, salesOrders, setSalesOrders, invoices, setInvoices, movements, setMovements, trend, metrics, setMetrics, apiOnline, setApiOnline } = tenantData;
   const [authMode, setAuthMode] = useState<AuthMode>(() => { const params = new URLSearchParams(window.location.search); return params.has('reset') ? 'reset' : params.has('invite') ? 'accept' : params.get('mode') === 'register' ? 'register' : 'login'; });
+  const [showMarketing, setShowMarketing] = useState(() => { const params = new URLSearchParams(window.location.search); return !params.has('mode') && !params.has('reset') && !params.has('invite'); });
   const [authError, setAuthError] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
@@ -96,7 +98,7 @@ function App() {
           : authMode === 'reset'
           ? 'Set password'
           : 'Sign in';
-      document.title = `Spindl — ${modeLabel}`;
+      document.title = showMarketing ? 'Spindl — Business operations software' : `Spindl — ${modeLabel}`;
     } else {
       document.title = section ? `Spindl — ${section}` : 'Spindl';
       try {
@@ -104,7 +106,7 @@ function App() {
         window.location.hash = encodeURIComponent(section);
       } catch {}
     }
-  }, [session, authMode, section]);
+  }, [session, authMode, section, showMarketing]);
   const [query, setQuery] = useState('');
   const [importResource, setImportResource] = useState<ImportResource>('CUSTOMERS');
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -167,6 +169,7 @@ function App() {
     if (!isRecordKind(kind)) { notify(`${kind} creation is planned for the next backend increment`); return; }
     setNewKind(kind);
   };
+  if (!session && showMarketing) return <MarketingLanding onSignIn={() => { setAuthMode('login'); setShowMarketing(false); }} onGetStarted={() => { setAuthMode('register'); setShowMarketing(false); }} />;
   if (!session) return <AuthPage mode={authMode} busy={authBusy} error={authError} message={authMessage} onModeChange={setAuthMode} onErrorChange={setAuthError} onMessageChange={setAuthMessage} onSubmit={submitAuth} />;
 
   return <div className="app-shell">

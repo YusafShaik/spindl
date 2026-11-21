@@ -1,5 +1,6 @@
 package si.spindl.workforce;
 
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -36,7 +37,7 @@ public class WorkforceController {
     @ResponseStatus(HttpStatus.CREATED)
     public WorkforceDtos.EmployeeDto createEmployee(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestBody WorkforceDtos.CreateEmployeeRequest req
+            @Valid @RequestBody WorkforceDtos.CreateEmployeeRequest req
     ) {
         UUID actorId = null;
         if (jwt != null && jwt.getSubject() != null) {
@@ -70,7 +71,7 @@ public class WorkforceController {
 
     @PostMapping("/skills")
     @ResponseStatus(HttpStatus.CREATED)
-    public WorkforceDtos.SkillDto createSkill(@RequestBody WorkforceDtos.CreateSkillRequest req) {
+    public WorkforceDtos.SkillDto createSkill(@Valid @RequestBody WorkforceDtos.CreateSkillRequest req) {
         return service.createSkill(tenant.currentTenantId(), req);
     }
 
@@ -89,7 +90,7 @@ public class WorkforceController {
     @PostMapping("/qualifications")
     public WorkforceDtos.OperatorQualificationDto upsertQualification(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestBody WorkforceDtos.UpsertQualificationRequest req
+            @Valid @RequestBody WorkforceDtos.UpsertQualificationRequest req
     ) {
         UUID certifyingUserId = null;
         if (jwt != null && jwt.getSubject() != null) {
@@ -115,14 +116,14 @@ public class WorkforceController {
 
     @PostMapping("/shifts")
     @ResponseStatus(HttpStatus.CREATED)
-    public WorkforceDtos.ShiftDto createShift(@RequestBody WorkforceDtos.CreateShiftRequest req) {
+    public WorkforceDtos.ShiftDto createShift(@Valid @RequestBody WorkforceDtos.CreateShiftRequest req) {
         return service.createShift(tenant.currentTenantId(), req);
     }
 
     @PutMapping("/shifts/{id}")
     public WorkforceDtos.ShiftDto updateShift(
             @PathVariable UUID id,
-            @RequestBody WorkforceDtos.UpdateShiftRequest req
+            @Valid @RequestBody WorkforceDtos.UpdateShiftRequest req
     ) {
         return service.updateShift(tenant.currentTenantId(), id, req);
     }
@@ -143,7 +144,7 @@ public class WorkforceController {
     @PostMapping("/roster")
     @ResponseStatus(HttpStatus.CREATED)
     public WorkforceDtos.RosterAssignmentDto createRosterAssignment(
-            @RequestBody WorkforceDtos.CreateRosterAssignmentRequest req
+            @Valid @RequestBody WorkforceDtos.CreateRosterAssignmentRequest req
     ) {
         return service.createRosterAssignment(tenant.currentTenantId(), req);
     }
@@ -164,7 +165,7 @@ public class WorkforceController {
 
     @PostMapping("/verify-skill")
     public WorkforceDtos.SkillGuardVerificationResponse verifySkillGuard(
-            @RequestBody WorkforceDtos.SkillGuardVerificationRequest req
+            @Valid @RequestBody WorkforceDtos.SkillGuardVerificationRequest req
     ) {
         return service.verifySkillGuard(tenant.currentTenantId(), req);
     }

@@ -1,6 +1,9 @@
 package si.spindl.catalog;
 
 import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -8,6 +11,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "items", uniqueConstraints = {@UniqueConstraint(name = "uk_items_tenant_sku", columnNames = {"tenant_id", "sku"}),@UniqueConstraint(name="uk_items_tenant_id",columnNames={"tenant_id","id"})})
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ItemEntity {
     @Id @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -28,23 +33,14 @@ public class ItemEntity {
     @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
     @Column(name = "updated_at", nullable = false) private Instant updatedAt;
 
-    protected ItemEntity() {}
     public ItemEntity(UUID tenantId, String sku, String name, String category, int onHand, String unit, BigDecimal unitPrice, int lowStockThreshold) {
         this.tenantId = tenantId; this.sku = sku; this.name = name; this.category = category;
         this.onHand = onHand; this.unit = unit; this.unitPrice = unitPrice; this.lowStockThreshold = lowStockThreshold;
     }
     @PrePersist void onCreate() { createdAt = Instant.now(); updatedAt = createdAt; }
     @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
-    public UUID getId() { return id; } public UUID getTenantId() { return tenantId; }
-    public String getSku() { return sku; } public String getName() { return name; }
-    public String getCategory() { return category; } public String getItemType(){return itemType;} public int getOnHand() { return onHand; }
-    public String getUnit() { return unit; } public BigDecimal getUnitPrice() { return unitPrice; }
-    public boolean isActive() { return active; }
-    public int getReservedQuantity(){return reservedQuantity;}
-    public int getLowStockThreshold(){return lowStockThreshold;}
+
     public int getAvailableQuantity(){return onHand-reservedQuantity-manufacturingReservedQuantity-qualityHoldQuantity;}
-    public int getQualityHoldQuantity(){return qualityHoldQuantity;}
-    public boolean isQualityInspectionRequired(){return qualityInspectionRequired;}
     public void setQualityInspectionRequired(boolean required){qualityInspectionRequired=required;}
     public void receiveStockForQuality(int quantity){if(quantity<=0)throw new IllegalArgumentException("Received quantity must be positive");onHand=Math.addExact(onHand,quantity);qualityHoldQuantity=Math.addExact(qualityHoldQuantity,quantity);}
     public void addExistingStockToQualityHold(int quantity){if(quantity<0||quantity>onHand-qualityHoldQuantity)throw new IllegalArgumentException("Invalid existing stock hold");qualityHoldQuantity=Math.addExact(qualityHoldQuantity,quantity);}
@@ -66,7 +62,6 @@ public class ItemEntity {
         if (quantityDelta == 0) throw new IllegalArgumentException("Adjustment quantity cannot be zero");
         onHand = Math.addExact(onHand, quantityDelta);
     }
-    public int getManufacturingReservedQuantity(){return manufacturingReservedQuantity;}
     public void reserveForManufacturing(int quantity){if(quantity<=0||quantity>getAvailableQuantity())throw new IllegalArgumentException("Requested quantity exceeds available stock");manufacturingReservedQuantity=Math.addExact(manufacturingReservedQuantity,quantity);}
     public void issueForManufacturing(int quantity){if(quantity<=0||quantity>manufacturingReservedQuantity||quantity>onHand)throw new IllegalArgumentException("Issue quantity exceeds manufacturing reservation");manufacturingReservedQuantity-=quantity;onHand-=quantity;}
     public void releaseManufacturingReservation(int quantity){if(quantity<0||quantity>manufacturingReservedQuantity)throw new IllegalArgumentException("Release quantity exceeds manufacturing reservation");manufacturingReservedQuantity-=quantity;}

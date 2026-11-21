@@ -51,4 +51,9 @@ public class LeadService {
     public record ActivityView(UUID id,String activityType,String body,Instant dueAt,Instant completedAt,Instant createdAt,UUID actorUserId){}
     public record LeadView(UUID id,String name,String company,String email,String phone,String source,String stage,UUID ownerUserId,UUID branchId,BigDecimal expectedValue,String nextActivityTitle,Instant nextActivityAt,UUID convertedCustomerId,Instant createdAt,Instant updatedAt,List<ActivityView> activities){}
     public record LeadConversionView(UUID leadId,UUID customerId,String customerName,boolean customerCreated,UUID quoteId,String quoteNumber){}
+
+    @Transactional
+    public int reassignConvertedCustomer(UUID tenantId, UUID sourceId, UUID targetId) {
+        return leads.reassignConvertedCustomer(tenantId, sourceId, targetId);
+    }
 }

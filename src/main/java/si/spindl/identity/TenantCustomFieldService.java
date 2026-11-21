@@ -196,4 +196,10 @@ public class TenantCustomFieldService {
     public record FieldView(UUID id,String resourceCode,String fieldKey,String displayName,String fieldType,boolean required,List<String> options,Map<String,Object> validation,JsonNode defaultValue,boolean published,int version,java.time.Instant createdAt){
         static FieldView from(TenantCustomFieldEntity f){return new FieldView(f.getId(),f.getResourceCode(),f.getFieldKey(),f.getDisplayName(),f.getFieldType(),f.isRequired(),f.getOptions(),f.getValidation(),f.getDefaultValue(),f.isPublished(),f.getVersion(),f.getCreatedAt());}
     }
+
+    @Transactional
+    public int moveCustomerValues(UUID tenantId, UUID sourceId, UUID targetId, UUID actorId) {
+        values.deleteConflictingCustomerValues(tenantId, sourceId, targetId);
+        return values.moveCustomerValues(tenantId, sourceId, targetId, actorId);
+    }
 }

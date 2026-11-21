@@ -43,8 +43,7 @@ public class PasswordResetService {
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         var reset = resetTokens.save(new PasswordResetTokenEntity(UUID.randomUUID(), user.getId(), sha256(token), Instant.now().plus(30, ChronoUnit.MINUTES)));
         String link = frontendUrl.replaceAll("/$", "") + "/?reset=" + token;
-        try { sender.sendPasswordReset(user.getEmail(), link); }
-        catch (RuntimeException deliveryFailure) { resetTokens.delete(reset); }
+        sender.sendPasswordReset(user.getEmail(), link);
     }
 
     @Transactional

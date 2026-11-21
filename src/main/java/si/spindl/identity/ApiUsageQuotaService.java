@@ -3,6 +3,7 @@ package si.spindl.identity;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -19,11 +20,14 @@ public class ApiUsageQuotaService {
     private final ConcurrentHashMap<UUID, Long> cachedLimits = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, Long> cachedTotals = new ConcurrentHashMap<>();
 
-    public ApiUsageQuotaService(TenantSubscriptionRepository subscriptions,SubscriptionPlanRepository plans,TenantApiUsageRepository usage){
-        this.subscriptions=subscriptions;this.plans=plans;this.usage=usage;
+    public ApiUsageQuotaService(TenantSubscriptionRepository subscriptions, SubscriptionPlanRepository plans, TenantApiUsageRepository usage) {
+        this.subscriptions = subscriptions;
+        this.plans = plans;
+        this.usage = usage;
     }
 
-    public void recordAuthenticatedRequest(UUID tenantId){
+    @Transactional
+    public void recordAuthenticatedRequest(UUID tenantId) {
         long limit = cachedLimits.computeIfAbsent(tenantId, id -> {
             var subscription = subscriptions.findByTenantId(id).orElse(null);
             if (subscription == null) return 100000L;
@@ -38,7 +42,7 @@ public class ApiUsageQuotaService {
             long refreshed = currentMonthUsage(tenantId);
             cachedTotals.put(tenantId, refreshed);
             if (refreshed >= limit) {
-                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"This workspace has reached its monthly API request allowance. Review the plan and usage in Settings.");
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "This workspace has reached its monthly API request allowance. Review the plan and usage in Settings.");
             }
         } else if (currentPending >= 50) {
             flushTenant(tenantId);
@@ -46,13 +50,15 @@ public class ApiUsageQuotaService {
     }
 
     @Scheduled(fixedDelay = 5000)
+    @Transactional
     public void flushAll() {
         for (UUID tenantId : pendingUsage.keySet()) {
             flushTenant(tenantId);
         }
     }
 
-    private void flushTenant(UUID tenantId) {
+    @Transactional
+    public void flushTenant(UUID tenantId) {
         AtomicLong counter = pendingUsage.get(tenantId);
         if (counter == null) return;
         long delta = counter.getAndSet(0);
@@ -67,5 +73,8 @@ public class ApiUsageQuotaService {
         }
     }
 
-    public long currentMonthUsage(UUID tenantId){return usage.countForMonth(tenantId,LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1));}
+    @Transactional(readOnly = true)
+    public long currentMonthUsage(UUID tenantId) {
+        return usage.countForMonth(tenantId, LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1));
+    }
 }

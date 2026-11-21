@@ -18,6 +18,23 @@ public class AuditEventService {
     private final TenantAuditEventRepository events;private final AppUserRepository users;private final DevelopmentTenant tenant;
     public AuditEventService(TenantAuditEventRepository events,AppUserRepository users,DevelopmentTenant tenant){this.events=events;this.users=users;this.tenant=tenant;}
 
+    @Transactional
+    public void record(UUID tenantId, UUID actorId, String eventType, String subjectType, UUID subjectId, Map<String, ?> details) {
+        events.save(new TenantAuditEventEntity(
+                tenantId,
+                actorId,
+                eventType,
+                subjectType,
+                subjectId,
+                details != null ? (Map<String, Object>) details : Map.of()
+        ));
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onDomainAuditEvent(si.spindl.common.event.DomainAuditEvent event) {
+        record(event.tenantId(), event.actorId(), event.eventType(), event.subjectType(), event.subjectId(), event.details());
+    }
+
     @Transactional(readOnly=true)
     public EventPage search(String requestedEventType,String requestedSubjectType,UUID actorId,UUID subjectId,LocalDate from,LocalDate to,String requestedSearch,int page,int size){
         if(from!=null&&to!=null&&from.isAfter(to))throw badRequest("From date must not be after the to date");

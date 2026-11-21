@@ -15,7 +15,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Value;
 import si.spindl.crm.LeadRepository;
-import si.spindl.catalog.InventoryCycleCountRepository;
+import si.spindl.inventory.InventoryCycleCountRepository;
 import si.spindl.party.CustomerRepository;
 
 /** Maps every business API request to a database-backed tenant permission. Unknown routes fail closed. */

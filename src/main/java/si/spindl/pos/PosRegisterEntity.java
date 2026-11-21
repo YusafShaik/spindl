@@ -2,7 +2,7 @@ package si.spindl.pos;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.UuidGenerator;
-import si.spindl.catalog.WarehouseEntity;
+import si.spindl.inventory.WarehouseEntity;
 import java.time.Instant;
 import java.util.UUID;
 

@@ -128,4 +128,9 @@ public class InvoiceService {
 
     public record FinanceSettingsView(String taxCode,BigDecimal taxRate,String invoicePrefix,long nextInvoiceNumber){}
     public record TaxSummaryView(String period,String taxCode,BigDecimal taxRate,BigDecimal subtotal,BigDecimal taxAmount,BigDecimal grossTotal){}
+
+    @Transactional
+    public int reassignCustomer(UUID tenantId, UUID sourceId, si.spindl.party.CustomerEntity target) {
+        return invoices.reassignCustomer(tenantId, sourceId, target);
+    }
 }

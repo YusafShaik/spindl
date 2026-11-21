@@ -1,7 +1,7 @@
 package si.spindl.purchasing;
 
 import jakarta.persistence.*;
-import si.spindl.catalog.WarehouseEntity;
+import si.spindl.inventory.WarehouseEntity;
 import java.util.UUID;
 
 @Entity

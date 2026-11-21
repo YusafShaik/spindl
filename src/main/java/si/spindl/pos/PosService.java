@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import si.spindl.catalog.*;
+import si.spindl.inventory.*;
 import si.spindl.finance.TenantFinanceSettingsEntity;
 import si.spindl.finance.TenantFinanceSettingsRepository;
 import si.spindl.identity.*;
