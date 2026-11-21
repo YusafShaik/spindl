@@ -37,3 +37,8 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Skills & Agents
+.agents/
+.hallmark/
+skills-lock.json
