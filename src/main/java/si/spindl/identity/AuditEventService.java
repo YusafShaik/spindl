@@ -1,22 +1,24 @@
 package si.spindl.identity;
 
+import si.spindl.common.exception.BadRequestException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.*;
+import si.spindl.identity.AuditEventDtos.EventView;
+import si.spindl.identity.AuditEventDtos.EventPage;
 
 @Service
 public class AuditEventService {
-    private final TenantAuditEventRepository events;private final AppUserRepository users;private final DevelopmentTenant tenant;
-    public AuditEventService(TenantAuditEventRepository events,AppUserRepository users,DevelopmentTenant tenant){this.events=events;this.users=users;this.tenant=tenant;}
+    private final TenantAuditEventRepository events;private final AppUserRepository users;private final CurrentTenant tenant;
+    public AuditEventService(TenantAuditEventRepository events,AppUserRepository users,CurrentTenant tenant){this.events=events;this.users=users;this.tenant=tenant;}
 
     @Transactional
     public void record(UUID tenantId, UUID actorId, String eventType, String subjectType, UUID subjectId, Map<String, ?> details) {
@@ -79,7 +81,5 @@ public class AuditEventService {
     private String maskEmail(String email){int at=email.indexOf('@');if(at<=0)return "[REDACTED]";String local=email.substring(0,at);return local.substring(0,1)+"***"+email.substring(at);}
     private String clean(String value){return value==null||value.isBlank()?null:value.trim();}
     private String cell(String value){String safe=value==null?"":value.replaceAll("^[\\s]*([=+@-])","'$1");return "\""+safe.replace("\"","\"\"")+"\"";}
-    private ResponseStatusException badRequest(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}
-    public record EventView(UUID id,UUID actorUserId,String actorName,String actorEmail,String eventType,String subjectType,UUID subjectId,Map<String,Object> details,Instant createdAt){}
-    public record EventPage(List<EventView> items,int page,int pageSize,long totalElements,int totalPages){}
+    private ResponseStatusException badRequest(String message){return new BadRequestException(message);}
 }

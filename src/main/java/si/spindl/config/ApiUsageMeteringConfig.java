@@ -1,10 +1,10 @@
 package si.spindl.config;
 
+import si.spindl.common.exception.UnauthorizedException;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -31,7 +31,7 @@ public class ApiUsageMeteringConfig implements WebMvcConfigurer {
             String path=request.getRequestURI();
             if(path.equals("/api/tenant/settings/plan")||path.startsWith("/api/tenant/settings/plan-"))return true;
             try{quota.recordAuthenticatedRequest(UUID.fromString(jwt.getToken().getClaimAsString("tenant_id")));}
-            catch(IllegalArgumentException exception){throw new ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED,"Workspace session is invalid");}
+            catch(IllegalArgumentException exception){throw new UnauthorizedException("Workspace session is invalid");}
             return true;
         }
     }

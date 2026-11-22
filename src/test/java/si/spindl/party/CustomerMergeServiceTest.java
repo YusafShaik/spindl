@@ -15,7 +15,7 @@ import si.spindl.finance.InvoiceService;
 import si.spindl.identity.TenantCustomFieldService;
 import si.spindl.identity.TenantMembershipRepository;
 import si.spindl.sales.SalesService;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -35,7 +35,7 @@ class CustomerMergeServiceTest {
     @Mock private TenantCustomFieldService customFieldService;
     @Mock private TenantAttachmentService attachmentService;
     @Mock private ApplicationEventPublisher eventPublisher;
-    @Mock private DevelopmentTenant tenant;
+    @Mock private CurrentTenant tenant;
 
     private CustomerMergeService mergeService;
     private final UUID tenantId = UUID.randomUUID();
@@ -93,7 +93,7 @@ class CustomerMergeServiceTest {
         when(customFieldService.moveCustomerValues(tenantId, sourceId, targetId, actorId)).thenReturn(5);
         when(attachmentService.moveCustomerAttachments(tenantId, sourceId, targetId)).thenReturn(6);
 
-        CustomerMergeService.MergeResult result = mergeService.merge(actorId, sourceId, targetId);
+        CustomerMergeDtos.MergeResult result = mergeService.merge(actorId, sourceId, targetId);
 
         assertEquals(sourceId, result.archivedCustomerId());
         assertEquals(targetId, result.survivingCustomerId());

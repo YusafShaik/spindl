@@ -1,6 +1,8 @@
 package si.spindl.manufacturing;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -37,7 +39,7 @@ public class BomService {
 
     @Transactional
     public ManufacturingDtos.BomView updateDraft(UUID tenantId,UUID actorId,UUID id,ManufacturingDtos.UpdateBomRequest request){
-        BomEntity bom=boms.findForUpdate(tenantId,id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"BOM not found"));
+        BomEntity bom=boms.findForUpdate(tenantId,id).orElseThrow(()->new NotFoundException("BOM not found"));
         if(!bom.getStatus().equals("DRAFT"))throw conflict("Only draft BOM revisions can be edited");
         LocalDate from=request.effectiveFrom()==null?bom.getEffectiveFrom():request.effectiveFrom();
         if(request.effectiveTo()!=null&&request.effectiveTo().isBefore(from))throw badRequest("Effective-to date must not be before effective-from date");
@@ -52,13 +54,13 @@ public class BomService {
 
     @Transactional(readOnly=true)
     public List<ManufacturingDtos.BomHistoryView> history(UUID tenantId,UUID id){
-        if(boms.findByTenantIdAndId(tenantId,id).isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND,"BOM not found");
+        if(boms.findByTenantIdAndId(tenantId,id).isEmpty())throw new NotFoundException("BOM not found");
         return history.findAllByTenantIdAndBomIdOrderByCreatedAtDesc(tenantId,id).stream().map(e->new ManufacturingDtos.BomHistoryView(e.getId(),e.getEventType(),e.getPreviousStatus(),e.getNewStatus(),e.getActorUserId(),e.getCreatedAt())).toList();
     }
 
     @Transactional
     public ManufacturingDtos.BomView approve(UUID tenantId,UUID actorId,UUID id){
-        BomEntity bom=boms.findForUpdate(tenantId,id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"BOM not found"));
+        BomEntity bom=boms.findForUpdate(tenantId,id).orElseThrow(()->new NotFoundException("BOM not found"));
         if(bom.getStatus().equals("APPROVED"))return view(tenantId,bom);
         if(!bom.getStatus().equals("DRAFT"))throw conflict("Only draft BOM revisions can be approved");
         if(lines.findAllByTenantIdAndBomIdOrderById(tenantId,id).isEmpty())throw badRequest("Add at least one component before approving this BOM");
@@ -80,11 +82,11 @@ public class BomService {
         var operationViews=operations.findAllByTenantIdAndBomIdOrderBySequenceAsc(tenantId,bom.getId()).stream().map(op->{var center=centers.findByTenantIdAndId(tenantId,op.getWorkCenterId()).orElseThrow();return new ManufacturingDtos.BomOperationView(op.getId(),op.getSequence(),op.getName(),center.getId(),center.getCode(),center.getName(),op.getSetupMinutes(),op.getRunMinutesPerUnit(),op.getSkillRequirements());}).toList();
         return new ManufacturingDtos.BomView(bom.getId(),finished.getId(),finished.getSku(),finished.getName(),bom.getRevision(),bom.getStatus(),bom.getEffectiveFrom(),bom.getEffectiveTo(),lineViews,operationViews);
     }
-    private ItemEntity item(UUID tenantId,UUID itemId){return items.findByTenantIdAndId(tenantId,itemId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Item not found in this workspace"));}
+    private ItemEntity item(UUID tenantId,UUID itemId){return items.findByTenantIdAndId(tenantId,itemId).orElseThrow(()->new NotFoundException("Item not found in this workspace"));}
     private Map<UUID,Set<UUID>> componentGraph(UUID tenantId,UUID excludedBom){var graph=new HashMap<UUID,Set<UUID>>();for(var bom:boms.findAllByTenantIdOrderByCreatedAtDesc(tenantId)){if(Objects.equals(bom.getId(),excludedBom))continue;for(var line:lines.findAllByTenantIdAndBomIdOrderById(tenantId,bom.getId()))graph.computeIfAbsent(bom.getFinishedItemId(),k->new HashSet<>()).add(line.getComponentItemId());}return graph;}
     private void validateLines(UUID tenantId,UUID finishedId,UUID excludedBom,List<ManufacturingDtos.BomLineRequest> requests){var graph=componentGraph(tenantId,excludedBom);var componentIds=new HashSet<UUID>();var alternativeCounts=new HashMap<String,Integer>();for(var line:requests){ItemEntity component=item(tenantId,line.componentItemId());if(!component.isActive())throw conflict("BOM components must be active items");if(!componentIds.add(component.getId()))throw badRequest("Each component may appear only once in a BOM revision");String group=normalizeAlternativeGroup(line.alternativeGroup());if(group!=null)alternativeCounts.merge(group,1,Integer::sum);if(component.getId().equals(finishedId)||reaches(graph,component.getId(),finishedId))throw conflict("BOM would create a component cycle");}if(alternativeCounts.values().stream().anyMatch(count->count<2))throw badRequest("Each alternate component group must contain at least two components");}
     private String normalizeAlternativeGroup(String value){if(value==null||value.isBlank())return null;String normalized=value.trim().toUpperCase(Locale.ROOT);if(normalized.length()>40)throw badRequest("Alternate group names can be at most 40 characters");return normalized;}
     private void recordHistory(UUID tenantId,BomEntity bom,UUID actorId,String event,String previous,String next){history.save(new BomRevisionEventEntity(tenantId,bom.getId(),actorId,event,previous,next));}
     private boolean reaches(Map<UUID,Set<UUID>> graph,UUID from,UUID target){var seen=new HashSet<UUID>();var stack=new ArrayDeque<UUID>();stack.push(from);while(!stack.isEmpty()){UUID current=stack.pop();if(current.equals(target))return true;if(seen.add(current))for(UUID next:graph.getOrDefault(current,Set.of()))stack.push(next);}return false;}
-    private ResponseStatusException conflict(String message){return new ResponseStatusException(HttpStatus.CONFLICT,message);}private ResponseStatusException badRequest(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}
+    private ResponseStatusException conflict(String message){return new ConflictException(message);}private ResponseStatusException badRequest(String message){return new BadRequestException(message);}
 }

@@ -1,5 +1,6 @@
 package si.spindl.finance;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -28,13 +29,13 @@ public class InvoiceController {
     public InvoiceView payment(@PathVariable UUID id, @Valid @RequestBody PaymentRequest request) { return service.recordPayment(id, request); }
 
     @GetMapping("/api/invoices/settings")
-    public InvoiceService.FinanceSettingsView settings(){return service.settings();}
+    public InvoiceDtos.FinanceSettingsView settings(){return service.settings();}
 
     @PutMapping("/api/invoices/settings")
-    public InvoiceService.FinanceSettingsView updateSettings(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody FinanceSettingsUpdateRequest request){return service.updateSettings(UUID.fromString(jwt.getSubject()),request);}
+    public InvoiceDtos.FinanceSettingsView updateSettings(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody FinanceSettingsUpdateRequest request){return service.updateSettings(AuthenticatedActor.userId(jwt),request);}
 
     @GetMapping("/api/invoices/tax-summary")
-    public List<InvoiceService.TaxSummaryView> taxSummary(@RequestParam(required=false) LocalDate from,@RequestParam(required=false) LocalDate to){return service.taxSummary(from,to);}
+    public List<InvoiceDtos.TaxSummaryView> taxSummary(@RequestParam(required=false) LocalDate from,@RequestParam(required=false) LocalDate to){return service.taxSummary(from,to);}
 
     @GetMapping(value="/api/invoices/tax-summary/export",produces="text/csv")
     public String exportTaxSummary(@RequestParam(required=false) LocalDate from,@RequestParam(required=false) LocalDate to){return service.exportTaxSummary(from,to);}
@@ -47,8 +48,8 @@ public class InvoiceController {
 
     @PostMapping("/api/invoices/{id}/credits")
     @ResponseStatus(HttpStatus.CREATED)
-    public CustomerCreditNoteDtos.CreditNoteView credit(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody CustomerCreditNoteDtos.CreateCreditRequest request){return creditNotes.create(UUID.fromString(jwt.getSubject()),id,request);}
+    public CustomerCreditNoteDtos.CreditNoteView credit(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody CustomerCreditNoteDtos.CreateCreditRequest request){return creditNotes.create(AuthenticatedActor.userId(jwt),id,request);}
 
     @PostMapping("/api/customer-credit-notes/{id}/refunds")
-    public CustomerCreditNoteDtos.CreditNoteView refund(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody CustomerCreditNoteDtos.RefundRequest request){return creditNotes.refund(UUID.fromString(jwt.getSubject()),id,request);}
+    public CustomerCreditNoteDtos.CreditNoteView refund(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody CustomerCreditNoteDtos.RefundRequest request){return creditNotes.refund(AuthenticatedActor.userId(jwt),id,request);}
 }

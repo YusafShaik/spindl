@@ -1,7 +1,9 @@
 package si.spindl.finance;
 
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -12,7 +14,7 @@ import si.spindl.identity.TenantAuditEventRepository;
 import si.spindl.identity.TenantWebhookService;
 import si.spindl.quality.QualityLotEntity;
 import si.spindl.quality.QualityLotRepository;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -21,12 +23,13 @@ import java.time.Year;
 import java.util.*;
 
 import static si.spindl.finance.CustomerCreditNoteDtos.*;
+import si.spindl.finance.CustomerCreditNoteMapper;
 
 @Service
 public class CustomerCreditNoteService {
     private static final Set<String> DISPOSITIONS=Set.of("RESTOCK","QUARANTINE","SCRAP");
     private static final Set<String> METHODS=Set.of("CASH","UPI","BANK_TRANSFER","CARD","CHEQUE");
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
     private final InvoiceRepository invoices;
     private final CustomerCreditNoteRepository notes;
     private final CustomerCreditRefundRepository refunds;
@@ -37,13 +40,13 @@ public class CustomerCreditNoteService {
     private final TenantAuditEventRepository audit;
     private final TenantWebhookService webhooks;
 
-    public CustomerCreditNoteService(DevelopmentTenant tenant,InvoiceRepository invoices,CustomerCreditNoteRepository notes,CustomerCreditRefundRepository refunds,ItemRepository items,WarehouseStockRepository stock,InventoryMovementRepository movements,QualityLotRepository qualityLots,TenantAuditEventRepository audit,TenantWebhookService webhooks){this.tenant=tenant;this.invoices=invoices;this.notes=notes;this.refunds=refunds;this.items=items;this.stock=stock;this.movements=movements;this.qualityLots=qualityLots;this.audit=audit;this.webhooks=webhooks;}
+    public CustomerCreditNoteService(CurrentTenant tenant,InvoiceRepository invoices,CustomerCreditNoteRepository notes,CustomerCreditRefundRepository refunds,ItemRepository items,WarehouseStockRepository stock,InventoryMovementRepository movements,QualityLotRepository qualityLots,TenantAuditEventRepository audit,TenantWebhookService webhooks){this.tenant=tenant;this.invoices=invoices;this.notes=notes;this.refunds=refunds;this.items=items;this.stock=stock;this.movements=movements;this.qualityLots=qualityLots;this.audit=audit;this.webhooks=webhooks;}
 
     @Transactional(readOnly=true)
-    public List<CreditNoteView> list(){return notes.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(CreditNoteView::from).toList();}
+    public List<CreditNoteView> list(){return notes.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(CustomerCreditNoteMapper::toCreditNoteView).toList();}
 
     @Transactional(readOnly=true)
-    public CreditNoteView get(UUID id){return notes.findByTenantIdAndId(tenant.currentTenantId(),id).map(CreditNoteView::from).orElseThrow(()->notFound("Credit note not found"));}
+    public CreditNoteView get(UUID id){return notes.findByTenantIdAndId(tenant.currentTenantId(),id).map(CustomerCreditNoteMapper::toCreditNoteView).orElseThrow(()->notFound("Credit note not found"));}
 
     @Transactional
     public CreditNoteView create(UUID actorId,UUID invoiceId,CreateCreditRequest request){
@@ -54,7 +57,7 @@ public class CustomerCreditNoteService {
         List<NormalizedLine> lines=normalize(request.lines());
         String hash=hash(reason+"\n"+lines.stream().map(line->line.invoiceLineId+":"+line.quantity+":"+line.disposition).reduce((a,b)->a+"\n"+b).orElse(""));
         CustomerCreditNoteEntity prior=notes.findByTenantIdAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
-        if(prior!=null){if(!prior.matches(invoiceId,hash))throw conflict("Idempotency key was reused with different credit details");return CreditNoteView.from(prior);}
+        if(prior!=null){if(!prior.matches(invoiceId,hash))throw conflict("Idempotency key was reused with different credit details");return CustomerCreditNoteMapper.toCreditNoteView(prior);}
 
         Map<UUID,InvoiceLineEntity> invoiceLines=new HashMap<>();invoice.getLines().forEach(line->invoiceLines.put(line.getId(),line));
         BigDecimal subtotal=BigDecimal.ZERO,taxTotal=BigDecimal.ZERO;
@@ -86,7 +89,7 @@ public class CustomerCreditNoteService {
             note.addLine(line,qty,value.input.disposition,value.subtotal,value.tax,value.total);
             if(!value.input.disposition.equals("SCRAP"))movements.save(new InventoryMovementEntity(tenantId,item,warehouse,qty,"Customer return - "+value.input.disposition,creditNumber,creditNumber+":"+line.getId()));
         }
-        try{invoice.recordCredit(total);CustomerCreditNoteEntity saved=notes.saveAndFlush(note);audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOMER_CREDIT_NOTE_ISSUED","customer_credit_note",saved.getId(),Map.of("creditNumber",creditNumber,"invoiceNumber",invoice.getInvoiceNumber(),"total",total,"refundDue",refundDue,"reason",reason)));webhooks.enqueue(tenantId,"CUSTOMER_CREDIT_NOTE_ISSUED",Map.of("creditNoteId",saved.getId().toString(),"creditNumber",creditNumber,"invoiceId",invoice.getId().toString(),"invoiceNumber",invoice.getInvoiceNumber(),"total",total,"refundDue",refundDue));return CreditNoteView.from(saved);}
+        try{invoice.recordCredit(total);CustomerCreditNoteEntity saved=notes.saveAndFlush(note);audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOMER_CREDIT_NOTE_ISSUED","customer_credit_note",saved.getId(),Map.of("creditNumber",creditNumber,"invoiceNumber",invoice.getInvoiceNumber(),"total",total,"refundDue",refundDue,"reason",reason)));webhooks.enqueue(tenantId,"CUSTOMER_CREDIT_NOTE_ISSUED",Map.of("creditNoteId",saved.getId().toString(),"creditNumber",creditNumber,"invoiceId",invoice.getId().toString(),"invoiceNumber",invoice.getInvoiceNumber(),"total",total,"refundDue",refundDue));return CustomerCreditNoteMapper.toCreditNoteView(saved);}
         catch(DataIntegrityViolationException exception){throw conflict("Credit request already exists; retry with its idempotency key");}
         catch(IllegalArgumentException exception){throw conflict(exception.getMessage());}
     }
@@ -98,17 +101,17 @@ public class CustomerCreditNoteService {
         BigDecimal amount;try{amount=request.amount().setScale(2,java.math.RoundingMode.UNNECESSARY);}catch(ArithmeticException exception){throw badRequest("Refund amount must have no more than two decimal places");}
         String reference=request.reference()==null||request.reference().isBlank()?null:request.reference().trim();
         CustomerCreditRefundEntity prior=refunds.findByTenantIdAndNoteAndIdempotencyKey(tenantId,noteId,request.idempotencyKey()).orElse(null);
-        if(prior!=null){if(!prior.matches(noteId,amount,method,reference))throw conflict("Idempotency key was reused with different refund details");return CreditNoteView.from(notes.findByTenantIdAndId(tenantId,noteId).orElse(note));}
+        if(prior!=null){if(!prior.matches(noteId,amount,method,reference))throw conflict("Idempotency key was reused with different refund details");return CustomerCreditNoteMapper.toCreditNoteView(notes.findByTenantIdAndId(tenantId,noteId).orElse(note));}
         if(amount.signum()<=0||amount.compareTo(note.getRefundBalance())>0)throw conflict("Refund must be positive and cannot exceed the remaining refund due");
-        try{CustomerCreditRefundEntity refund=new CustomerCreditRefundEntity(tenantId,note,request.idempotencyKey(),amount,method,reference);note.addRefund(refund);refunds.save(refund);notes.saveAndFlush(note);audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOMER_CREDIT_REFUNDED","customer_credit_note",noteId,Map.of("creditNumber",note.getCreditNumber(),"amount",amount,"method",method)));return CreditNoteView.from(notes.findByTenantIdAndId(tenantId,noteId).orElse(note));}
+        try{CustomerCreditRefundEntity refund=new CustomerCreditRefundEntity(tenantId,note,request.idempotencyKey(),amount,method,reference);note.addRefund(refund);refunds.save(refund);notes.saveAndFlush(note);audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOMER_CREDIT_REFUNDED","customer_credit_note",noteId,Map.of("creditNumber",note.getCreditNumber(),"amount",amount,"method",method)));return CustomerCreditNoteMapper.toCreditNoteView(notes.findByTenantIdAndId(tenantId,noteId).orElse(note));}
         catch(DataIntegrityViolationException exception){throw conflict("Refund request already exists; retry with its idempotency key");}
     }
 
     private List<NormalizedLine> normalize(List<CreditLineRequest> inputs){if(inputs==null||inputs.isEmpty())throw badRequest("At least one invoice line is required");Set<UUID> seen=new HashSet<>();List<NormalizedLine> result=new ArrayList<>();for(CreditLineRequest input:inputs){String disposition=input.disposition().trim().toUpperCase(Locale.ROOT);if(!DISPOSITIONS.contains(disposition))throw badRequest("Disposition must be RESTOCK, QUARANTINE, or SCRAP");if(!seen.add(input.invoiceLineId()))throw badRequest("Each invoice line can appear only once per credit note");result.add(new NormalizedLine(input.invoiceLineId(),input.quantity(),disposition));}result.sort(Comparator.comparing(line->line.invoiceLineId.toString()));return result;}
     private String hash(String input){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8)));}catch(Exception exception){throw new IllegalStateException(exception);}}
-    private ResponseStatusException notFound(String message){return new ResponseStatusException(HttpStatus.NOT_FOUND,message);}
-    private ResponseStatusException badRequest(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}
-    private ResponseStatusException conflict(String message){return new ResponseStatusException(HttpStatus.CONFLICT,message);}
+    private ResponseStatusException notFound(String message){return new NotFoundException(message);}
+    private ResponseStatusException badRequest(String message){return new BadRequestException(message);}
+    private ResponseStatusException conflict(String message){return new ConflictException(message);}
     private record NormalizedLine(UUID invoiceLineId,int quantity,String disposition){}
     private record PreparedLine(InvoiceLineEntity invoiceLine,NormalizedLine input,BigDecimal subtotal,BigDecimal tax,BigDecimal total){}
 }

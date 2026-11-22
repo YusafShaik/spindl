@@ -1,6 +1,5 @@
 package si.spindl.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -10,8 +9,11 @@ import java.util.Set;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
-    @Value("${spindl.frontend-url:http://localhost:5173}")
-    private String frontendUrl;
+    private final String frontendUrl;
+
+    public WebConfig(SpindlProperties properties) {
+        this.frontendUrl = properties.getFrontendUrl();
+    }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {

@@ -8,6 +8,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
+import si.spindl.common.exception.ApiException;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
@@ -43,8 +44,19 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(ApiException.class)
+    public ProblemDetail handleApiException(ApiException ex) {
+        if (ex.getStatusCode().is5xxServerError()) {
+            log.error("Request failed: {}", ex.getReason(), ex);
+        }
+        return handleResponseStatusException(ex);
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ProblemDetail handleResponseStatusException(ResponseStatusException ex) {
+        if (ex.getStatusCode().is5xxServerError() && !(ex instanceof ApiException)) {
+            log.error("Request failed: {}", ex.getReason(), ex);
+        }
         String detail = ex.getReason() != null ? ex.getReason() : ex.getMessage();
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(ex.getStatusCode(), detail);
         problem.setTitle(ex.getStatusCode().toString());

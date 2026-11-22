@@ -6,10 +6,14 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 import java.util.UUID;
 
-/** Resolves the active tenant only from the authenticated, server-issued membership claim. */
+/**
+ * Resolves the active tenant only from the authenticated, server-issued membership claim.
+ * The previous type name implied a fixed development tenant; resolution has always been the JWT claim.
+ */
 @Component
-public class DevelopmentTenant {
+public class CurrentTenant {
     public static final UUID ID = UUID.fromString("00000000-0000-4000-8000-000000000001");
+
     public UUID currentTenantId() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication instanceof JwtAuthenticationToken jwt) {

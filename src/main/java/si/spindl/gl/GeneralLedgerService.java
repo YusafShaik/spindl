@@ -98,22 +98,7 @@ public class GeneralLedgerService {
                 balance = credit.subtract(debit);
             }
 
-            return new GlDtos.GlAccountDto(
-                    a.getId(),
-                    a.getTenantId(),
-                    a.getAccountCode(),
-                    a.getAccountName(),
-                    a.getAccountType(),
-                    a.getSubType(),
-                    a.getNormalBalance(),
-                    a.getParentAccount() != null ? a.getParentAccount().getId() : null,
-                    a.getCurrency(),
-                    a.isActive(),
-                    a.isSystem(),
-                    a.getDescription(),
-                    balance,
-                    a.getCreatedAt()
-            );
+            return GlMapper.toAccount(a, balance);
         }).toList();
     }
 
@@ -139,22 +124,7 @@ public class GeneralLedgerService {
         }
 
         GlAccountEntity saved = accountRepository.save(entity);
-        return new GlDtos.GlAccountDto(
-                saved.getId(),
-                saved.getTenantId(),
-                saved.getAccountCode(),
-                saved.getAccountName(),
-                saved.getAccountType(),
-                saved.getSubType(),
-                saved.getNormalBalance(),
-                saved.getParentAccount() != null ? saved.getParentAccount().getId() : null,
-                saved.getCurrency(),
-                saved.isActive(),
-                saved.isSystem(),
-                saved.getDescription(),
-                BigDecimal.ZERO,
-                saved.getCreatedAt()
-        );
+        return GlMapper.toAccount(saved, BigDecimal.ZERO);
     }
 
     @Transactional(readOnly = true)
@@ -567,37 +537,9 @@ public class GeneralLedgerService {
     private GlDtos.GlJournalEntryDto toEntryDto(GlJournalEntryEntity entity, boolean loadLines) {
         List<GlDtos.GlJournalLineDto> lineDtos = Collections.emptyList();
         if (loadLines) {
-            List<GlJournalLineEntity> lines = lineRepository.findAllByTenantIdAndJournalEntryIdOrderByLineNumberAsc(entity.getTenantId(), entity.getId());
-            lineDtos = lines.stream().map(l -> new GlDtos.GlJournalLineDto(
-                    l.getId(),
-                    l.getLineNumber(),
-                    l.getAccount().getId(),
-                    l.getAccount().getAccountCode(),
-                    l.getAccount().getAccountName(),
-                    l.getAccount().getAccountType(),
-                    l.getDebitAmount(),
-                    l.getCreditAmount(),
-                    l.getDescription(),
-                    l.getPartyName()
-            )).toList();
+            lineDtos = lineRepository.findAllByTenantIdAndJournalEntryIdOrderByLineNumberAsc(entity.getTenantId(), entity.getId())
+                    .stream().map(GlMapper::toLine).toList();
         }
-
-        return new GlDtos.GlJournalEntryDto(
-                entity.getId(),
-                entity.getTenantId(),
-                entity.getEntryNumber(),
-                entity.getPostingDate(),
-                entity.getSourceType(),
-                entity.getSourceReferenceId(),
-                entity.getSourceReferenceNumber(),
-                entity.getMemo(),
-                entity.getStatus(),
-                entity.getTotalDebit(),
-                entity.getTotalCredit(),
-                entity.getCreatedByUserId(),
-                entity.getCreatedAt(),
-                entity.getPostedAt(),
-                lineDtos
-        );
+        return GlMapper.toEntry(entity, lineDtos);
     }
 }

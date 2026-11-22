@@ -12,7 +12,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.springframework.beans.factory.annotation.Value;
+import si.spindl.config.SpindlProperties;
 
 @Service
 public class LoginThrottleService {
@@ -23,9 +23,9 @@ public class LoginThrottleService {
     private final byte[] bucketSecret;
     private final AtomicInteger cleanupCounter = new AtomicInteger();
 
-    public LoginThrottleService(AuthLoginLimitRepository limits, @Value("${spindl.security.jwt-secret}") String bucketSecret) {
+    public LoginThrottleService(AuthLoginLimitRepository limits, SpindlProperties properties) {
         this.limits = limits;
-        this.bucketSecret = bucketSecret.getBytes(StandardCharsets.UTF_8);
+        this.bucketSecret = properties.getSecurity().getJwtSecret().getBytes(StandardCharsets.UTF_8);
     }
 
     @Transactional(readOnly = true)

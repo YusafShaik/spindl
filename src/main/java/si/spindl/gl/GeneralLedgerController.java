@@ -1,12 +1,13 @@
 package si.spindl.gl;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -17,9 +18,9 @@ import java.util.UUID;
 public class GeneralLedgerController {
 
     private final GeneralLedgerService service;
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
 
-    public GeneralLedgerController(GeneralLedgerService service, DevelopmentTenant tenant) {
+    public GeneralLedgerController(GeneralLedgerService service, CurrentTenant tenant) {
         this.service = service;
         this.tenant = tenant;
     }
@@ -73,13 +74,7 @@ public class GeneralLedgerController {
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody GlDtos.CreateJournalEntryRequest req
     ) {
-        UUID userId = null;
-        if (jwt != null && jwt.getSubject() != null) {
-            try {
-                userId = UUID.fromString(jwt.getSubject());
-            } catch (Exception ignored) {}
-        }
-        return service.createJournalEntry(tenant.currentTenantId(), userId, req);
+        return service.createJournalEntry(tenant.currentTenantId(), AuthenticatedActor.optionalUserId(jwt), req);
     }
 
     // ==========================================

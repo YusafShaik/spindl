@@ -1,8 +1,9 @@
 package si.spindl.manufacturing;
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import si.spindl.identity.TenantAuditEventEntity;
 import si.spindl.identity.TenantAuditEventRepository;
 import java.util.HashSet;
@@ -15,13 +16,13 @@ public class BomRoutingService {
     public BomRoutingService(BomRepository boms,BomOperationRepository operations,WorkCenterRepository centers,TenantAuditEventRepository audit,BomRevisionEventRepository history){this.boms=boms;this.operations=operations;this.centers=centers;this.audit=audit;this.history=history;}
     @Transactional
     public List<ManufacturingDtos.BomOperationView> replace(UUID tenantId,UUID actorId,UUID bomId,ManufacturingDtos.UpdateRoutingRequest request){
-        var bom=boms.findForUpdate(tenantId,bomId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"BOM not found"));
-        if(!bom.getStatus().equals("DRAFT"))throw new ResponseStatusException(HttpStatus.CONFLICT,"Routing is locked after BOM approval");
+        var bom=boms.findForUpdate(tenantId,bomId).orElseThrow(()->new NotFoundException("BOM not found"));
+        if(!bom.getStatus().equals("DRAFT"))throw new ConflictException("Routing is locked after BOM approval");
         var sequences=new HashSet<Integer>();
         for(var operation:request.operations()){
-            if(!sequences.add(operation.sequence()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Operation sequence numbers must be unique");
-            var center=centers.findByTenantIdAndId(tenantId,operation.workCenterId()).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Select a work center in this workspace"));
-            if(!center.isActive())throw new ResponseStatusException(HttpStatus.CONFLICT,"Routing can only use active work centers");
+            if(!sequences.add(operation.sequence()))throw new BadRequestException("Operation sequence numbers must be unique");
+            var center=centers.findByTenantIdAndId(tenantId,operation.workCenterId()).orElseThrow(()->new BadRequestException("Select a work center in this workspace"));
+            if(!center.isActive())throw new ConflictException("Routing can only use active work centers");
         }
         var prior=operations.findAllByTenantIdAndBomIdOrderBySequenceAsc(tenantId,bomId);operations.deleteAll(prior);operations.flush();
         var saved=operations.saveAll(request.operations().stream().map(op->new BomOperationEntity(tenantId,bomId,op.sequence(),op.name().trim(),op.workCenterId(),op.setupMinutes(),op.runMinutesPerUnit(),op.skillRequirements()==null?null:op.skillRequirements().trim())).toList());
@@ -30,6 +31,6 @@ public class BomRoutingService {
         return view(tenantId,bomId);
     }
     @Transactional(readOnly=true)
-    public List<ManufacturingDtos.BomOperationView> list(UUID tenantId,UUID bomId){if(boms.findByTenantIdAndId(tenantId,bomId).isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND,"BOM not found");return view(tenantId,bomId);}
+    public List<ManufacturingDtos.BomOperationView> list(UUID tenantId,UUID bomId){if(boms.findByTenantIdAndId(tenantId,bomId).isEmpty())throw new NotFoundException("BOM not found");return view(tenantId,bomId);}
     private List<ManufacturingDtos.BomOperationView> view(UUID tenantId,UUID bomId){return operations.findAllByTenantIdAndBomIdOrderBySequenceAsc(tenantId,bomId).stream().map(op->{var center=centers.findByTenantIdAndId(tenantId,op.getWorkCenterId()).orElseThrow();return new ManufacturingDtos.BomOperationView(op.getId(),op.getSequence(),op.getName(),center.getId(),center.getCode(),center.getName(),op.getSetupMinutes(),op.getRunMinutesPerUnit(),op.getSkillRequirements());}).toList();}
 }

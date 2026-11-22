@@ -1,9 +1,10 @@
 package si.spindl.engineering;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import si.spindl.catalog.ItemEntity;
 import si.spindl.catalog.ItemRepository;
 import si.spindl.identity.AppUserEntity;
@@ -83,16 +84,16 @@ public class EngineeringService {
         return ecos.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream()
                 .filter(e -> status == null || status.isBlank() || "ALL".equalsIgnoreCase(status) || e.getStatus().equalsIgnoreCase(status))
                 .filter(e -> severity == null || severity.isBlank() || "ALL".equalsIgnoreCase(severity) || e.getChangeSeverity().equalsIgnoreCase(severity))
-                .map(EngineeringDtos.EcoSummaryView::from)
+                .map(EngineeringMapper::toEcoSummaryView)
                 .toList();
     }
 
     public EngineeringDtos.EcoDetailView getEco(UUID tenantId, UUID id) {
         EngineeringChangeOrderEntity eco = ecos.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Engineering Change Order not found"));
+                .orElseThrow(() -> new NotFoundException("Engineering Change Order not found"));
         var lines = diffLines.findAllByTenantIdAndEcoIdOrderById(tenantId, id);
         var signs = signOffs.findAllByTenantIdAndEcoIdOrderByCreatedAtAsc(tenantId, id);
-        return EngineeringDtos.EcoDetailView.of(eco, lines, signs);
+        return EngineeringMapper.toEcoDetailView(eco, lines, signs);
     }
 
     // ==========================================
@@ -102,12 +103,12 @@ public class EngineeringService {
     @Transactional
     public EngineeringDtos.EcoDetailView createEco(UUID tenantId, UUID actorId, EngineeringDtos.CreateEcoRequest request) {
         ItemEntity finished = items.findByTenantIdAndId(tenantId, request.finishedItemId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Finished item not found"));
+                .orElseThrow(() -> new BadRequestException("Finished item not found"));
 
         BomEntity baseBom = null;
         if (request.baseBomId() != null) {
             baseBom = boms.findByTenantIdAndId(tenantId, request.baseBomId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Base BOM not found"));
+                    .orElseThrow(() -> new BadRequestException("Base BOM not found"));
         } else {
             List<BomEntity> current = boms.findEffectiveApproved(tenantId, finished.getId());
             if (!current.isEmpty()) baseBom = current.getFirst();
@@ -115,7 +116,7 @@ public class EngineeringService {
 
         String targetRev = request.targetRevision().trim().toUpperCase(Locale.ROOT);
         if (boms.existsByTenantIdAndFinishedItemIdAndRevision(tenantId, finished.getId(), targetRev)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Target BOM revision " + targetRev + " already exists for this finished item");
+            throw new ConflictException("Target BOM revision " + targetRev + " already exists for this finished item");
         }
 
         String ecoNumber = "ECO-" + YearMonth.now().format(DateTimeFormatter.ofPattern("yyyyMM")) + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase(Locale.ROOT);
@@ -139,7 +140,7 @@ public class EngineeringService {
         // Add diff lines
         for (EngineeringDtos.CreateDiffLineRequest dl : request.diffLines()) {
             ItemEntity component = items.findByTenantIdAndId(tenantId, dl.componentItemId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Component item not found: " + dl.componentItemId()));
+                    .orElseThrow(() -> new BadRequestException("Component item not found: " + dl.componentItemId()));
             EcoBomDiffLineEntity diff = new EcoBomDiffLineEntity(
                     tenantId,
                     eco,
@@ -171,7 +172,7 @@ public class EngineeringService {
                 Map.of("ecoNumber", eco.getEcoNumber(), "finishedSku", finished.getSku(), "targetRevision", targetRev)
         ));
 
-        return EngineeringDtos.EcoDetailView.from(eco);
+        return EngineeringMapper.toEcoDetailView(eco);
     }
 
     // ==========================================
@@ -181,15 +182,15 @@ public class EngineeringService {
     @Transactional
     public EngineeringDtos.EcoDetailView processSignOff(UUID tenantId, UUID actorId, UUID ecoId, EngineeringDtos.SignOffRequest request) {
         EngineeringChangeOrderEntity eco = ecos.findForUpdate(tenantId, ecoId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ECO not found"));
+                .orElseThrow(() -> new NotFoundException("ECO not found"));
 
         if (!"UNDER_REVIEW".equalsIgnoreCase(eco.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sign-offs can only be submitted for ECOs under review");
+            throw new BadRequestException("Sign-offs can only be submitted for ECOs under review");
         }
 
         String dept = request.department().toUpperCase(Locale.ROOT);
         EcoSignOffEntity signOff = signOffs.findByTenantIdAndEcoIdAndDepartment(tenantId, ecoId, dept)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sign-off entry not found for department: " + dept));
+                .orElseThrow(() -> new NotFoundException("Sign-off entry not found for department: " + dept));
 
         AppUserEntity actor = actorId != null ? users.findById(actorId).orElse(null) : null;
 
@@ -200,7 +201,7 @@ public class EngineeringService {
             signOff.reject(actor, request.signOffRole(), request.comments());
             eco.markRejected("Rejected by " + dept + ": " + (request.comments() != null ? request.comments() : "No comments provided"));
         } else {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid sign-off action: " + request.action());
+            throw new BadRequestException("Invalid sign-off action: " + request.action());
         }
 
         signOffs.save(signOff);
@@ -217,7 +218,7 @@ public class EngineeringService {
 
         var lines = diffLines.findAllByTenantIdAndEcoIdOrderById(tenantId, ecoId);
         var signs = signOffs.findAllByTenantIdAndEcoIdOrderByCreatedAtAsc(tenantId, ecoId);
-        return EngineeringDtos.EcoDetailView.of(eco, lines, signs);
+        return EngineeringMapper.toEcoDetailView(eco, lines, signs);
     }
 
     // ==========================================
@@ -227,10 +228,10 @@ public class EngineeringService {
     @Transactional
     public EngineeringDtos.EcoDetailView implementEco(UUID tenantId, UUID actorId, UUID ecoId, EngineeringDtos.ImplementEcoRequest request) {
         EngineeringChangeOrderEntity eco = ecos.findForUpdate(tenantId, ecoId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ECO not found"));
+                .orElseThrow(() -> new NotFoundException("ECO not found"));
 
         if (!"APPROVED".equalsIgnoreCase(eco.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only fully APPROVED ECOs can be implemented for cutover");
+            throw new BadRequestException("Only fully APPROVED ECOs can be implemented for cutover");
         }
 
         ItemEntity finished = eco.getFinishedItem();
@@ -346,6 +347,6 @@ public class EngineeringService {
         ));
 
         var finalSigns = signOffs.findAllByTenantIdAndEcoIdOrderByCreatedAtAsc(tenantId, ecoId);
-        return EngineeringDtos.EcoDetailView.of(eco, currentDiffs, finalSigns);
+        return EngineeringMapper.toEcoDetailView(eco, currentDiffs, finalSigns);
     }
 }

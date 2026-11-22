@@ -1,5 +1,6 @@
 package si.spindl.identity;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -25,15 +26,15 @@ public class AuthController {
         return authService.login(request, servletRequest.getRemoteAddr());
     }
     @PostMapping("/logout") public java.util.Map<String, String> logout(@AuthenticationPrincipal Jwt jwt) {
-        authService.revokeSession(UUID.fromString(jwt.getSubject()), UUID.fromString(jwt.getId()));
+        authService.revokeSession(AuthenticatedActor.userId(jwt), UUID.fromString(jwt.getId()));
         SecurityContextHolder.clearContext();
         return java.util.Map.of("status", "signed_out", "message", "Remove the bearer token from this device to complete sign out.");
     }
     @GetMapping("/sessions") public java.util.List<AuthDtos.SessionView> sessions(@AuthenticationPrincipal Jwt jwt) {
-        return authService.listSessions(UUID.fromString(jwt.getSubject()), UUID.fromString(jwt.getId()));
+        return authService.listSessions(AuthenticatedActor.userId(jwt), UUID.fromString(jwt.getId()));
     }
     @DeleteMapping("/sessions/{id}") public java.util.Map<String, String> revokeSession(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
-        authService.revokeSession(UUID.fromString(jwt.getSubject()), id);
+        authService.revokeSession(AuthenticatedActor.userId(jwt), id);
         return java.util.Map.of("status", "revoked");
     }
     @PostMapping("/password/forgot") public java.util.Map<String, String> forgot(@Valid @RequestBody AuthDtos.ForgotPasswordRequest request) {
@@ -45,10 +46,10 @@ public class AuthController {
         return java.util.Map.of("status", "password_reset", "message", "Password updated. Sign in with your new password.");
     }
     @GetMapping("/workspaces") public java.util.List<AuthDtos.WorkspaceView> workspaces(@AuthenticationPrincipal Jwt jwt) {
-        return authService.listWorkspaces(UUID.fromString(jwt.getSubject()));
+        return authService.listWorkspaces(AuthenticatedActor.userId(jwt));
     }
     @PostMapping("/switch-tenant/{tenantId}") public AuthDtos.AuthResponse switchTenant(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID tenantId) {
-        return authService.switchTenant(UUID.fromString(jwt.getSubject()), tenantId);
+        return authService.switchTenant(AuthenticatedActor.userId(jwt), tenantId);
     }
     @GetMapping("/me") public java.util.Map<String, Object> me(@AuthenticationPrincipal Jwt jwt) {
         return java.util.Map.of("userId", jwt.getSubject(), "email", jwt.getClaimAsString("email"), "name", jwt.getClaimAsString("name"),

@@ -190,7 +190,7 @@ public class WorkforceService {
     @Transactional(readOnly = true)
     public WorkforceDtos.SkillsMatrixResponse getSkillsMatrix(UUID tenantId) {
         List<WorkforceSkillEntity> skills = skillRepository.findAllByTenantIdOrderByCategoryAscSkillCodeAsc(tenantId);
-        List<WorkforceDtos.SkillDto> skillDtos = skills.stream().map(this::toSkillDto).toList();
+        List<WorkforceDtos.SkillDto> skillDtos = skills.stream().map(WorkforceMapper::toSkill).toList();
 
         List<TenantMembershipEntity> memberships = membershipRepository.findAllByTenantIdOrderByCreatedAtAsc(tenantId);
         List<WorkforceOperatorQualificationEntity> allQuals = qualificationRepository.findAllByTenantIdOrderByCreatedAtDesc(tenantId);
@@ -207,7 +207,7 @@ public class WorkforceService {
             List<WorkforceOperatorQualificationEntity> userQuals = qualsByUser.getOrDefault(user.getId(), Collections.emptyList());
             Map<String, WorkforceDtos.OperatorQualificationDto> qualMap = new HashMap<>();
             for (WorkforceOperatorQualificationEntity q : userQuals) {
-                qualMap.put(q.getSkill().getSkillCode(), toQualDto(q));
+                qualMap.put(q.getSkill().getSkillCode(), WorkforceMapper.toQualification(q));
             }
 
             rows.add(new WorkforceDtos.SkillsMatrixRowDto(
@@ -229,7 +229,7 @@ public class WorkforceService {
     @Transactional(readOnly = true)
     public List<WorkforceDtos.SkillDto> listSkills(UUID tenantId) {
         return skillRepository.findAllByTenantIdOrderByCategoryAscSkillCodeAsc(tenantId)
-                .stream().map(this::toSkillDto).toList();
+                .stream().map(WorkforceMapper::toSkill).toList();
     }
 
     public WorkforceDtos.SkillDto createSkill(UUID tenantId, WorkforceDtos.CreateSkillRequest req) {
@@ -245,7 +245,7 @@ public class WorkforceService {
                 req.minCertHours() > 0 ? req.minCertHours() : 40
         );
         WorkforceSkillEntity saved = skillRepository.save(entity);
-        return toSkillDto(saved);
+        return WorkforceMapper.toSkill(saved);
     }
 
     // ==========================================
@@ -255,12 +255,12 @@ public class WorkforceService {
     @Transactional(readOnly = true)
     public List<WorkforceDtos.OperatorQualificationDto> listQualifications(UUID tenantId, UUID userId, UUID skillId) {
         if (userId != null) {
-            return qualificationRepository.findAllByTenantIdAndUserId(tenantId, userId).stream().map(this::toQualDto).toList();
+            return qualificationRepository.findAllByTenantIdAndUserId(tenantId, userId).stream().map(WorkforceMapper::toQualification).toList();
         }
         if (skillId != null) {
-            return qualificationRepository.findAllByTenantIdAndSkillId(tenantId, skillId).stream().map(this::toQualDto).toList();
+            return qualificationRepository.findAllByTenantIdAndSkillId(tenantId, skillId).stream().map(WorkforceMapper::toQualification).toList();
         }
-        return qualificationRepository.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream().map(this::toQualDto).toList();
+        return qualificationRepository.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream().map(WorkforceMapper::toQualification).toList();
     }
 
     public WorkforceDtos.OperatorQualificationDto upsertQualification(
@@ -297,7 +297,7 @@ public class WorkforceService {
         }
 
         WorkforceOperatorQualificationEntity saved = qualificationRepository.save(entity);
-        return toQualDto(saved);
+        return WorkforceMapper.toQualification(saved);
     }
 
     // ==========================================
@@ -307,7 +307,7 @@ public class WorkforceService {
     @Transactional(readOnly = true)
     public List<WorkforceDtos.ShiftDto> listShifts(UUID tenantId) {
         return shiftRepository.findAllByTenantIdOrderByStartTimeAsc(tenantId)
-                .stream().map(this::toShiftDto).toList();
+                .stream().map(WorkforceMapper::toShift).toList();
     }
 
     public WorkforceDtos.ShiftDto createShift(UUID tenantId, WorkforceDtos.CreateShiftRequest req) {
@@ -323,7 +323,7 @@ public class WorkforceService {
                 req.breakMinutes() >= 0 ? req.breakMinutes() : 45
         );
         WorkforceShiftEntity saved = shiftRepository.save(entity);
-        return toShiftDto(saved);
+        return WorkforceMapper.toShift(saved);
     }
 
     public WorkforceDtos.ShiftDto updateShift(UUID tenantId, UUID shiftId, WorkforceDtos.UpdateShiftRequest req) {
@@ -352,7 +352,7 @@ public class WorkforceService {
             entity.setActive(req.isActive());
         }
         WorkforceShiftEntity saved = shiftRepository.save(entity);
-        return toShiftDto(saved);
+        return WorkforceMapper.toShift(saved);
     }
 
     // ==========================================
@@ -362,11 +362,11 @@ public class WorkforceService {
     @Transactional(readOnly = true)
     public List<WorkforceDtos.RosterAssignmentDto> getRoster(UUID tenantId, LocalDate date, LocalDate fromDate, LocalDate toDate) {
         if (fromDate != null && toDate != null) {
-            return rosterRepository.findRosterBetween(tenantId, fromDate, toDate).stream().map(this::toRosterDto).toList();
+            return rosterRepository.findRosterBetween(tenantId, fromDate, toDate).stream().map(WorkforceMapper::toRoster).toList();
         }
         LocalDate target = date != null ? date : LocalDate.now();
         return rosterRepository.findAllByTenantIdAndRosterDateOrderByShiftStartTimeAsc(tenantId, target)
-                .stream().map(this::toRosterDto).toList();
+                .stream().map(WorkforceMapper::toRoster).toList();
     }
 
     public WorkforceDtos.RosterAssignmentDto createRosterAssignment(UUID tenantId, WorkforceDtos.CreateRosterAssignmentRequest req) {
@@ -399,7 +399,7 @@ public class WorkforceService {
         entity.setNotes(req.notes());
 
         WorkforceRosterAssignmentEntity saved = rosterRepository.save(entity);
-        return toRosterDto(saved);
+        return WorkforceMapper.toRoster(saved);
     }
 
     public WorkforceDtos.RosterAssignmentDto clockIn(UUID tenantId, UUID rosterId) {
@@ -408,7 +408,7 @@ public class WorkforceService {
         entity.setAttendanceStatus("PRESENT");
         entity.setClockInTime(Instant.now());
         WorkforceRosterAssignmentEntity saved = rosterRepository.save(entity);
-        return toRosterDto(saved);
+        return WorkforceMapper.toRoster(saved);
     }
 
     public WorkforceDtos.RosterAssignmentDto clockOut(UUID tenantId, UUID rosterId) {
@@ -424,7 +424,7 @@ public class WorkforceService {
         }
 
         WorkforceRosterAssignmentEntity saved = rosterRepository.save(entity);
-        return toRosterDto(saved);
+        return WorkforceMapper.toRoster(saved);
     }
 
     // ==========================================
@@ -523,46 +523,6 @@ public class WorkforceService {
                 Math.round(rate * 10.0) / 10.0,
                 skills,
                 quals
-        );
-    }
-
-    // ==========================================
-    // MAPPER HELPERS
-    // ==========================================
-
-    private WorkforceDtos.SkillDto toSkillDto(WorkforceSkillEntity e) {
-        return new WorkforceDtos.SkillDto(
-                e.getId(), e.getTenantId(), e.getSkillCode(), e.getName(),
-                e.getCategory(), e.getDescription(), e.getMinCertHours(), e.getCreatedAt()
-        );
-    }
-
-    private WorkforceDtos.OperatorQualificationDto toQualDto(WorkforceOperatorQualificationEntity e) {
-        return new WorkforceDtos.OperatorQualificationDto(
-                e.getId(), e.getTenantId(), e.getUser().getId(), e.getUser().getDisplayName(), e.getUser().getEmail(),
-                e.getSkill().getId(), e.getSkill().getSkillCode(), e.getSkill().getName(), e.getSkill().getCategory(),
-                e.getQualificationLevel(), e.getCertifiedAt(), e.getExpiresAt(), e.getStatus(), e.getNotes()
-        );
-    }
-
-    private WorkforceDtos.ShiftDto toShiftDto(WorkforceShiftEntity e) {
-        return new WorkforceDtos.ShiftDto(
-                e.getId(), e.getTenantId(), e.getShiftCode(), e.getName(),
-                e.getStartTime(), e.getEndTime(), e.getBreakMinutes(), e.isActive()
-        );
-    }
-
-    private WorkforceDtos.RosterAssignmentDto toRosterDto(WorkforceRosterAssignmentEntity e) {
-        return new WorkforceDtos.RosterAssignmentDto(
-                e.getId(), e.getTenantId(),
-                e.getShift().getId(), e.getShift().getShiftCode(), e.getShift().getName(),
-                e.getShift().getStartTime(), e.getShift().getEndTime(),
-                e.getUser().getId(), e.getUser().getDisplayName(), e.getUser().getEmail(),
-                e.getWorkCenter() != null ? e.getWorkCenter().getId() : null,
-                e.getWorkCenter() != null ? e.getWorkCenter().getCode() : null,
-                e.getWorkCenter() != null ? e.getWorkCenter().getName() : null,
-                e.getRosterDate(), e.getPlannedHours(), e.getAttendanceStatus(),
-                e.getClockInTime(), e.getClockOutTime(), e.getActualHours(), e.getNotes()
         );
     }
 }

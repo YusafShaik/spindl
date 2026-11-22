@@ -5,9 +5,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -17,9 +16,9 @@ import java.util.UUID;
 public class MaintenanceController {
 
     private final MaintenanceService service;
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
 
-    public MaintenanceController(MaintenanceService service, DevelopmentTenant tenant) {
+    public MaintenanceController(MaintenanceService service, CurrentTenant tenant) {
         this.service = service;
         this.tenant = tenant;
     }
@@ -54,15 +53,15 @@ public class MaintenanceController {
     }
 
     @PatchMapping("/assets/{id}/status")
-    public MaintenanceDtos.AssetView setAssetStatus(@PathVariable UUID id, @RequestBody Map<String, String> body) {
-        String status = body.get("status");
+    public MaintenanceDtos.AssetView setAssetStatus(@PathVariable UUID id, @RequestBody MaintenanceDtos.AssetStatusRequest body) {
+        String status = body.status();
         return service.setAssetStatus(tenant.currentTenantId(), id, status);
     }
 
     @PatchMapping("/assets/{id}/meter")
-    public MaintenanceDtos.AssetView updateMeterHours(@PathVariable UUID id, @RequestBody Map<String, BigDecimal> body) {
-        BigDecimal meter = body.get("meterHours");
-        return service.updateMeterHours(tenant.currentTenantId(), id, meter != null ? meter : BigDecimal.ZERO);
+    public MaintenanceDtos.AssetView updateMeterHours(@PathVariable UUID id, @RequestBody MaintenanceDtos.MeterHoursRequest body) {
+        java.math.BigDecimal meter = body.meterHours();
+        return service.updateMeterHours(tenant.currentTenantId(), id, meter != null ? meter : java.math.BigDecimal.ZERO);
     }
 
     // ==========================================
@@ -107,8 +106,8 @@ public class MaintenanceController {
     }
 
     @PatchMapping("/work-orders/{id}/assign")
-    public MaintenanceDtos.WorkOrderView assignWorkOrder(@PathVariable UUID id, @RequestBody Map<String, String> body) {
-        String userIdStr = body.get("assignedTechnicianUserId");
+    public MaintenanceDtos.WorkOrderView assignWorkOrder(@PathVariable UUID id, @RequestBody MaintenanceDtos.AssignTechnicianRequest body) {
+        String userIdStr = body.assignedTechnicianUserId();
         UUID userId = userIdStr != null && !userIdStr.isBlank() ? UUID.fromString(userIdStr) : null;
         return service.assignWorkOrder(tenant.currentTenantId(), id, userId);
     }
@@ -119,8 +118,8 @@ public class MaintenanceController {
     }
 
     @PostMapping("/work-orders/{id}/cancel")
-    public MaintenanceDtos.WorkOrderView cancelWorkOrder(@PathVariable UUID id, @RequestBody(required = false) Map<String, String> body) {
-        String notes = body != null ? body.get("notes") : null;
+    public MaintenanceDtos.WorkOrderView cancelWorkOrder(@PathVariable UUID id, @RequestBody(required = false) MaintenanceDtos.CancelWorkOrderRequest body) {
+        String notes = body != null ? body.notes() : null;
         return service.cancelWorkOrder(tenant.currentTenantId(), id, notes);
     }
 }

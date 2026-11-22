@@ -41,16 +41,19 @@ class ItemServiceTest {
         ItemEntity entity = new ItemEntity(tenantId, "SKU-1", "Test Item", "General", 10, "PCS", new BigDecimal("100.00"), 5);
         when(items.findAllByTenantIdAndActiveTrueOrderByName(tenantId)).thenReturn(List.of(entity));
 
-        List<ItemController.ItemView> result = itemService.list(tenantId);
+        List<ItemDtos.ItemView> result = itemService.list(tenantId);
 
         assertEquals(1, result.size());
         assertEquals("SKU-1", result.get(0).sku());
         assertEquals("Test Item", result.get(0).name());
+        assertEquals("₹ 100", result.get(0).price());
+        assertEquals("TI", result.get(0).mark());
+        assertEquals("In stock", result.get(0).state());
     }
 
     @Test
     void createThrowsWhenSkuExists() {
-        ItemController.ItemRequest request = new ItemController.ItemRequest(
+        ItemDtos.ItemRequest request = new ItemDtos.ItemRequest(
                 "SKU-EXISTS", "Item Name", "Category", 5, "PCS", new BigDecimal("50.00"), 2, "FINISHED"
         );
         when(items.existsByTenantIdAndSkuIgnoreCase(tenantId, "SKU-EXISTS")).thenReturn(true);
@@ -66,7 +69,7 @@ class ItemServiceTest {
 
     @Test
     void createSavesItemAndOpeningMovement() {
-        ItemController.ItemRequest request = new ItemController.ItemRequest(
+        ItemDtos.ItemRequest request = new ItemDtos.ItemRequest(
                 "SKU-NEW", "New Item", "Category", 10, "PCS", new BigDecimal("50.00"), 2, "FINISHED"
         );
         when(items.existsByTenantIdAndSkuIgnoreCase(tenantId, "SKU-NEW")).thenReturn(false);
@@ -74,7 +77,7 @@ class ItemServiceTest {
         ItemEntity savedEntity = new ItemEntity(tenantId, "SKU-NEW", "New Item", "Category", 10, "PCS", new BigDecimal("50.00"), 2);
         when(items.save(any(ItemEntity.class))).thenReturn(savedEntity);
 
-        ItemController.ItemView result = itemService.create(tenantId, request);
+        ItemDtos.ItemView result = itemService.create(tenantId, request);
 
         assertNotNull(result);
         assertEquals("SKU-NEW", result.sku());
@@ -85,7 +88,7 @@ class ItemServiceTest {
     @Test
     void updateThrowsWhenNotFound() {
         UUID id = UUID.randomUUID();
-        ItemController.ItemUpdate request = new ItemController.ItemUpdate(
+        ItemDtos.ItemUpdate request = new ItemDtos.ItemUpdate(
                 "Updated Name", "Category", "PCS", new BigDecimal("60.00"), true, "FINISHED"
         );
         when(items.findByTenantIdAndId(tenantId, id)).thenReturn(Optional.empty());

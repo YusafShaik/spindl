@@ -1,10 +1,10 @@
 package si.spindl.catalog;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.NotFoundException;
 import si.spindl.inventory.InventoryMovementEntity;
 import si.spindl.inventory.InventoryMovementRepository;
 
@@ -19,17 +19,17 @@ public class ItemService {
     private final InventoryMovementRepository movements;
 
     @Transactional(readOnly = true)
-    public List<ItemController.ItemView> list(UUID tenantId) {
+    public List<ItemDtos.ItemView> list(UUID tenantId) {
         return items.findAllByTenantIdAndActiveTrueOrderByName(tenantId)
                 .stream()
-                .map(ItemController.ItemView::from)
+                .map(ItemMapper::toView)
                 .toList();
     }
 
     @Transactional
-    public ItemController.ItemView create(UUID tenantId, ItemController.ItemRequest request) {
+    public ItemDtos.ItemView create(UUID tenantId, ItemDtos.ItemRequest request) {
         if (items.existsByTenantIdAndSkuIgnoreCase(tenantId, request.sku())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "SKU already exists");
+            throw new ConflictException("SKU already exists");
         }
         ItemEntity saved = items.save(new ItemEntity(
                 tenantId,
@@ -48,25 +48,25 @@ public class ItemService {
         if (request.openingStock() > 0) {
             movements.save(new InventoryMovementEntity(tenantId, saved, request.openingStock(), "Opening balance", "OPENING-" + saved.getSku()));
         }
-        return ItemController.ItemView.from(saved);
+        return ItemMapper.toView(saved);
     }
 
     @Transactional
-    public ItemController.ItemView update(UUID tenantId, UUID id, ItemController.ItemUpdate request) {
+    public ItemDtos.ItemView update(UUID tenantId, UUID id, ItemDtos.ItemUpdate request) {
         ItemEntity item = items.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+                .orElseThrow(NotFoundException::new);
         item.update(request.name().trim(), request.category().trim(), request.unit().trim(), request.unitPrice(), request.active());
         if (request.itemType() != null) {
             item.updateType(request.itemType().trim().toUpperCase(Locale.ROOT));
         }
-        return ItemController.ItemView.from(items.save(item));
+        return ItemMapper.toView(items.save(item));
     }
 
     @Transactional
-    public ItemController.ItemView setLowStockThreshold(UUID tenantId, UUID id, ItemController.LowStockThresholdRequest request) {
+    public ItemDtos.ItemView setLowStockThreshold(UUID tenantId, UUID id, ItemDtos.LowStockThresholdRequest request) {
         ItemEntity item = items.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+                .orElseThrow(NotFoundException::new);
         item.setLowStockThreshold(request.lowStockThreshold());
-        return ItemController.ItemView.from(items.save(item));
+        return ItemMapper.toView(items.save(item));
     }
 }

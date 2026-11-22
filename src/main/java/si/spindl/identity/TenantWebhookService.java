@@ -1,11 +1,14 @@
 package si.spindl.identity;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.ForbiddenException;
+import si.spindl.common.exception.NotFoundException;
+import si.spindl.config.SpindlProperties;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
@@ -24,6 +27,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import si.spindl.identity.TenantWebhookDtos.CreateEndpointRequest;
+import si.spindl.identity.TenantWebhookDtos.EndpointView;
+import si.spindl.identity.TenantWebhookDtos.DeliveryView;
+import si.spindl.identity.TenantWebhookDtos.CreatedEndpoint;
 
 @Service
 public class TenantWebhookService {
@@ -40,7 +47,7 @@ public class TenantWebhookService {
     private final TenantWebhookDeliveryRepository deliveries;
     private final TenantMembershipRepository memberships;
     private final TenantAuditEventRepository audit;
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
     private final SecretKeySpec encryptionKey;
     private final SecureRandom random = new SecureRandom();
 
@@ -49,14 +56,15 @@ public class TenantWebhookService {
             TenantWebhookDeliveryRepository deliveries,
             TenantMembershipRepository memberships,
             TenantAuditEventRepository audit,
-            DevelopmentTenant tenant,
-            @Value("${spindl.security.encryption-key:${spindl.security.jwt-secret}}") String masterSecret
+            CurrentTenant tenant,
+            SpindlProperties properties
     ) {
         this.endpoints = endpoints;
         this.deliveries = deliveries;
         this.memberships = memberships;
         this.audit = audit;
         this.tenant = tenant;
+        String masterSecret = properties.encryptionKey();
         try {
             this.encryptionKey = new SecretKeySpec(
                     MessageDigest.getInstance("SHA-256").digest(masterSecret.getBytes(StandardCharsets.UTF_8)),
@@ -146,7 +154,7 @@ public class TenantWebhookService {
                 Map.of("name", endpoint.getName(), "events", endpoint.getEventTypes())
         ));
 
-        return new CreatedEndpoint(EndpointView.from(endpoint, 0), secret);
+        return new CreatedEndpoint(TenantWebhookMapper.toEndpointView(endpoint, 0), secret);
     }
 
     @Transactional
@@ -154,7 +162,7 @@ public class TenantWebhookService {
         UUID tenantId = tenant.currentTenantId();
         requireAdmin(tenantId, actor);
         var endpoint = endpoints.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Webhook endpoint not found"));
+                .orElseThrow(() -> new NotFoundException("Webhook endpoint not found"));
         if (!endpoint.isActive()) {
             return;
         }
@@ -175,14 +183,14 @@ public class TenantWebhookService {
         requireAdmin(tenantId, actor);
 
         var delivery = deliveries.findByTenantIdAndId(tenantId, id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Webhook delivery not found"));
+                .orElseThrow(() -> new NotFoundException("Webhook delivery not found"));
         if (!"DEAD".equals(delivery.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only dead-letter deliveries can be replayed");
+            throw new ConflictException("Only dead-letter deliveries can be replayed");
         }
         var endpoint = endpoints.findByTenantIdAndId(tenantId, delivery.getEndpointId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "The webhook endpoint no longer exists"));
+                .orElseThrow(() -> new ConflictException("The webhook endpoint no longer exists"));
         if (!endpoint.isActive()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Reactivate the webhook endpoint before replaying this delivery");
+            throw new ConflictException("Reactivate the webhook endpoint before replaying this delivery");
         }
 
         delivery.replay();
@@ -315,20 +323,20 @@ public class TenantWebhookService {
             }
             return uri;
         } catch (Exception exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Webhook destination must be a public HTTPS URL without credentials or fragments");
+            throw new BadRequestException("Webhook destination must be a public HTTPS URL without credentials or fragments");
         }
     }
 
     private void requireAdmin(UUID tenantId, UUID actor) {
         String role = memberships.findActiveRole(tenantId, actor)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Active workspace membership is required"));
+                .orElseThrow(() -> new ForbiddenException("Active workspace membership is required"));
         if (!Set.of("OWNER", "ADMIN").contains(role)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only workspace owners and admins can manage webhooks");
+            throw new ForbiddenException("Only workspace owners and admins can manage webhooks");
         }
     }
 
     private ResponseStatusException badRequest(String message) {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        return new BadRequestException(message);
     }
 
     public List<String> supportedEvents(UUID actor) {
@@ -336,42 +344,7 @@ public class TenantWebhookService {
         return EVENT_TYPES.stream().sorted().toList();
     }
 
-    public record CreateEndpointRequest(String name, String targetUrl, List<String> eventTypes) {}
 
-    public record EndpointView(
-            UUID id,
-            String name,
-            String targetUrl,
-            List<String> eventTypes,
-            boolean active,
-            Instant createdAt,
-            long deadLetterCount
-    ) {
-        static EndpointView from(TenantWebhookEndpointEntity endpoint, long dead) {
-            return new EndpointView(
-                    endpoint.getId(),
-                    endpoint.getName(),
-                    endpoint.getTargetUrl(),
-                    endpoint.getEventTypes(),
-                    endpoint.isActive(),
-                    endpoint.getCreatedAt(),
-                    dead
-            );
-        }
-    }
 
-    public record DeliveryView(
-            UUID id,
-            String endpointName,
-            String eventType,
-            String status,
-            int attempts,
-            Instant nextAttemptAt,
-            Integer responseStatus,
-            String lastError,
-            Instant createdAt,
-            Instant deliveredAt
-    ) {}
 
-    public record CreatedEndpoint(EndpointView endpoint, String signingSecret) {}
 }

@@ -1,5 +1,6 @@
 package si.spindl.identity;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -10,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,34 +22,34 @@ import java.util.List;
 public class TenantSettingsController {
     private final TenantSettingsService service;
     private final SubscriptionQuotaService subscriptionQuotas;
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
     private final TenantPlanChangeRequestService planRequests;
 
-    public TenantSettingsController(TenantSettingsService service, SubscriptionQuotaService subscriptionQuotas, DevelopmentTenant tenant,TenantPlanChangeRequestService planRequests) {
+    public TenantSettingsController(TenantSettingsService service, SubscriptionQuotaService subscriptionQuotas, CurrentTenant tenant,TenantPlanChangeRequestService planRequests) {
         this.service = service; this.subscriptionQuotas=subscriptionQuotas; this.tenant=tenant;this.planRequests=planRequests;
     }
 
     @GetMapping
-    public TenantSettingsService.TenantSettings settings() { return service.settings(); }
+    public TenantSettingsDtos.TenantSettings settings() { return service.settings(); }
 
     @PutMapping
-    public TenantSettingsService.TenantSettings update(@AuthenticationPrincipal Jwt jwt,
-                                                       @Valid @RequestBody TenantSettingsService.UpdateTenantSettingsRequest request) {
-        return service.update(UUID.fromString(jwt.getSubject()), request);
+    public TenantSettingsDtos.TenantSettings update(@AuthenticationPrincipal Jwt jwt,
+                                                       @Valid @RequestBody TenantSettingsDtos.UpdateTenantSettingsRequest request) {
+        return service.update(AuthenticatedActor.userId(jwt), request);
     }
 
     @GetMapping("/plan")
-    public SubscriptionQuotaService.PlanSummary plan() { return subscriptionQuotas.current(tenant.currentTenantId()); }
+    public SubscriptionQuotaDtos.PlanSummary plan() { return subscriptionQuotas.current(tenant.currentTenantId()); }
 
     @PostMapping("/plan-preview")
-    public SubscriptionQuotaService.PlanChangePreview previewPlan(@jakarta.validation.Valid @RequestBody PlanPreviewRequest request) {
+    public SubscriptionQuotaDtos.PlanChangePreview previewPlan(@jakarta.validation.Valid @RequestBody PlanPreviewRequest request) {
         return subscriptionQuotas.preview(tenant.currentTenantId(),request.planCode());
     }
     @GetMapping("/plan-requests")
-    public List<TenantPlanChangeRequestService.RequestView> planRequests(){return planRequests.list(tenant.currentTenantId());}
+    public List<TenantPlanChangeRequestDtos.RequestView> planRequests(){return planRequests.list(tenant.currentTenantId());}
     @PostMapping("/plan-requests")
-    public TenantPlanChangeRequestService.RequestView requestPlan(@AuthenticationPrincipal Jwt jwt,@jakarta.validation.Valid @RequestBody TenantPlanChangeRequestService.CreateRequest request){return planRequests.create(tenant.currentTenantId(),UUID.fromString(jwt.getSubject()),request.planCode());}
+    public TenantPlanChangeRequestDtos.RequestView requestPlan(@AuthenticationPrincipal Jwt jwt,@jakarta.validation.Valid @RequestBody TenantPlanChangeRequestDtos.CreateRequest request){return planRequests.create(tenant.currentTenantId(),AuthenticatedActor.userId(jwt),request.planCode());}
     @DeleteMapping("/plan-requests/{id}")
-    public TenantPlanChangeRequestService.RequestView cancelPlanRequest(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return planRequests.cancel(tenant.currentTenantId(),UUID.fromString(jwt.getSubject()),id);}
+    public TenantPlanChangeRequestDtos.RequestView cancelPlanRequest(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return planRequests.cancel(tenant.currentTenantId(),AuthenticatedActor.userId(jwt),id);}
     public record PlanPreviewRequest(@jakarta.validation.constraints.NotBlank String planCode) {}
 }

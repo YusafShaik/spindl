@@ -1,8 +1,10 @@
 package si.spindl.imports;
 
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.PayloadTooLargeException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -16,7 +18,8 @@ import si.spindl.inventory.WarehouseStockEntity;
 import si.spindl.inventory.WarehouseStockRepository;
 import si.spindl.party.CustomerEntity;
 import si.spindl.party.CustomerRepository;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
+import si.spindl.identity.TenantCustomFieldDtos;
 import si.spindl.identity.TenantCustomFieldService;
 import si.spindl.identity.TenantCustomFieldRepository;
 import si.spindl.identity.TenantCustomFieldValueRepository;
@@ -36,6 +39,10 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.*;
+import si.spindl.imports.CsvImportDtos.ImportError;
+import si.spindl.imports.CsvImportDtos.PreviewResult;
+import si.spindl.imports.CsvImportDtos.BatchView;
+import si.spindl.imports.CsvImportDtos.CommitResult;
 
 @Service
 public class CsvImportService {
@@ -48,7 +55,7 @@ public class CsvImportService {
     private final ItemRepository items;
     private final InventoryMovementRepository movements;
     private final ImportBatchRepository batches;
-    private final DevelopmentTenant tenant;
+    private final CurrentTenant tenant;
     private final TenantCustomFieldService customFields;
     private final TenantCustomFieldRepository customFieldDefinitions;
     private final TenantCustomFieldValueRepository customFieldValues;
@@ -61,7 +68,7 @@ public class CsvImportService {
     private final InvoiceRepository invoices;
     private final WarehouseRepository warehouses;
     private final WarehouseStockRepository warehouseStock;
-    public CsvImportService(CustomerRepository customers,ItemRepository items,InventoryMovementRepository movements,ImportBatchRepository batches,DevelopmentTenant tenant,TenantCustomFieldService customFields,TenantCustomFieldRepository customFieldDefinitions,TenantCustomFieldValueRepository customFieldValues,TenantAuditEventRepository audit,SupplierRepository suppliers,WorkOrderRepository workOrders,PurchaseOrderRepository purchaseOrders,SalesQuoteRepository quotes,SalesOrderRepository salesOrders,InvoiceRepository invoices,WarehouseRepository warehouses,WarehouseStockRepository warehouseStock){this.customers=customers;this.items=items;this.movements=movements;this.batches=batches;this.tenant=tenant;this.customFields=customFields;this.customFieldDefinitions=customFieldDefinitions;this.customFieldValues=customFieldValues;this.audit=audit;this.suppliers=suppliers;this.workOrders=workOrders;this.purchaseOrders=purchaseOrders;this.quotes=quotes;this.salesOrders=salesOrders;this.invoices=invoices;this.warehouses=warehouses;this.warehouseStock=warehouseStock;}
+    public CsvImportService(CustomerRepository customers,ItemRepository items,InventoryMovementRepository movements,ImportBatchRepository batches,CurrentTenant tenant,TenantCustomFieldService customFields,TenantCustomFieldRepository customFieldDefinitions,TenantCustomFieldValueRepository customFieldValues,TenantAuditEventRepository audit,SupplierRepository suppliers,WorkOrderRepository workOrders,PurchaseOrderRepository purchaseOrders,SalesQuoteRepository quotes,SalesOrderRepository salesOrders,InvoiceRepository invoices,WarehouseRepository warehouses,WarehouseStockRepository warehouseStock){this.customers=customers;this.items=items;this.movements=movements;this.batches=batches;this.tenant=tenant;this.customFields=customFields;this.customFieldDefinitions=customFieldDefinitions;this.customFieldValues=customFieldValues;this.audit=audit;this.suppliers=suppliers;this.workOrders=workOrders;this.purchaseOrders=purchaseOrders;this.quotes=quotes;this.salesOrders=salesOrders;this.invoices=invoices;this.warehouses=warehouses;this.warehouseStock=warehouseStock;}
 
     @Transactional(readOnly=true)
     public PreviewResult preview(String resource,byte[] file){return validate(normalizeResource(resource),file).preview();}
@@ -75,19 +82,19 @@ public class CsvImportService {
         Map<UUID,String> keyByFieldId=new HashMap<>();definitions.forEach(field->keyByFieldId.put(field.getId(),field.getFieldKey()));
         int rowCount;
         if(type.equals("CUSTOMERS")){
-            var page=customers.findAllByTenantIdAndActiveTrueOrderByName(tenantId,PageRequest.of(0,10001));if(page.getTotalElements()>10000)throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Export is limited to 10,000 active records; narrow the export and try again");
+            var page=customers.findAllByTenantIdAndActiveTrueOrderByName(tenantId,PageRequest.of(0,10001));if(page.getTotalElements()>10000)throw new PayloadTooLargeException("Export is limited to 10,000 active records; narrow the export and try again");
             var records=page.getContent();rowCount=records.size();var customValues=loadExportValues(tenantId,resourceCode,records.stream().map(CustomerEntity::getId).toList(),keyByFieldId,definitions);
             for(CustomerEntity record:records){List<String> row=new ArrayList<>(List.of(record.getCode(),record.getName(),record.getEmail(),record.getStatus(),record.getCustomerType(),Objects.toString(record.getContactName(),""),Objects.toString(record.getPhone(),""),Objects.toString(record.getAddressLine1(),""),Objects.toString(record.getAddressLine2(),""),Objects.toString(record.getCity(),""),Objects.toString(record.getRegion(),""),Objects.toString(record.getPostalCode(),""),Objects.toString(record.getCountryCode(),""),Objects.toString(record.getTaxId(),""),Integer.toString(record.getPaymentTermsDays()),record.getCreditLimit().toPlainString(),Objects.toString(record.getTags(),""),Boolean.toString(record.isCreditHold())));appendCustomValues(row,definitions,customValues.get(record.getId()));List<Boolean> safe=new ArrayList<>(List.of(true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false,true,false));definitions.forEach(field->safe.add(!Set.of("NUMBER","BOOLEAN").contains(field.getFieldType())));appendCsvRow(csv,row,safe);}
         }else if(type.equals("ITEMS")){
-            var page=items.findAllByTenantIdAndActiveTrueOrderByName(tenantId,PageRequest.of(0,10001));if(page.getTotalElements()>10000)throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Export is limited to 10,000 active records; narrow the export and try again");
+            var page=items.findAllByTenantIdAndActiveTrueOrderByName(tenantId,PageRequest.of(0,10001));if(page.getTotalElements()>10000)throw new PayloadTooLargeException("Export is limited to 10,000 active records; narrow the export and try again");
             var records=page.getContent();rowCount=records.size();var customValues=loadExportValues(tenantId,resourceCode,records.stream().map(ItemEntity::getId).toList(),keyByFieldId,definitions);
             for(ItemEntity record:records){List<String> row=new ArrayList<>(List.of(record.getSku(),record.getName(),record.getCategory(),Integer.toString(record.getOnHand()),record.getUnit(),record.getUnitPrice().toPlainString(),Integer.toString(record.getLowStockThreshold()),record.getItemType()));appendCustomValues(row,definitions,customValues.get(record.getId()));List<Boolean> safe=new ArrayList<>(List.of(true,true,true,false,true,false,false,true));definitions.forEach(field->safe.add(!Set.of("NUMBER","BOOLEAN").contains(field.getFieldType())));appendCsvRow(csv,row,safe);}
         }else if(type.equals("SUPPLIERS")){
-            var page=suppliers.findAllByTenantIdAndActiveTrueOrderByName(tenantId,PageRequest.of(0,10001));if(page.getTotalElements()>10000)throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Export is limited to 10,000 active records; narrow the export and try again");
+            var page=suppliers.findAllByTenantIdAndActiveTrueOrderByName(tenantId,PageRequest.of(0,10001));if(page.getTotalElements()>10000)throw new PayloadTooLargeException("Export is limited to 10,000 active records; narrow the export and try again");
             var records=page.getContent();rowCount=records.size();var customValues=loadExportValues(tenantId,resourceCode,records.stream().map(SupplierEntity::getId).toList(),keyByFieldId,definitions);
             for(SupplierEntity record:records){List<String> row=new ArrayList<>(List.of(record.getCode(),record.getName(),record.getEmail(),Objects.toString(record.getContactName(),""),Objects.toString(record.getPhone(),""),Objects.toString(record.getAddressLine1(),""),Objects.toString(record.getAddressLine2(),""),Objects.toString(record.getCity(),""),Objects.toString(record.getRegion(),""),Objects.toString(record.getPostalCode(),""),Objects.toString(record.getCountryCode(),""),Objects.toString(record.getTaxId(),""),Integer.toString(record.getPaymentTermsDays()),Integer.toString(record.getLeadTimeDays()),Objects.toString(record.getRating(),""),Objects.toString(record.getNotes(),"")));appendCustomValues(row,definitions,customValues.get(record.getId()));List<Boolean> safe=new ArrayList<>(List.of(true,true,true,true,true,true,true,true,true,true,true,true,false,false,false,true));definitions.forEach(field->safe.add(!Set.of("NUMBER","BOOLEAN").contains(field.getFieldType())));appendCsvRow(csv,row,safe);}
         }else if(type.equals("WORK_ORDERS")){
-            var page=workOrders.findPageByTenantIdOrderByCreatedAtDesc(tenantId,PageRequest.of(0,10001));if(page.getTotalElements()>10000)throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Export is limited to 10,000 work orders; narrow the export and try again");
+            var page=workOrders.findPageByTenantIdOrderByCreatedAtDesc(tenantId,PageRequest.of(0,10001));if(page.getTotalElements()>10000)throw new PayloadTooLargeException("Export is limited to 10,000 work orders; narrow the export and try again");
             var records=page.getContent();rowCount=records.size();var customValues=loadExportValues(tenantId,resourceCode,records.stream().map(si.spindl.manufacturing.WorkOrderEntity::getId).toList(),keyByFieldId,definitions);
             for(var record:records){List<String> row=new ArrayList<>(List.of(record.getOrderNumber(),record.getBomId().toString(),record.getFinishedItemId().toString(),record.getOutputWarehouse().getId().toString(),Integer.toString(record.getTargetQuantity()),Integer.toString(record.getGoodQuantity()),Integer.toString(record.getScrapQuantity()),record.getStatus(),record.getPriority(),Objects.toString(record.getPlannedStart(),""),Objects.toString(record.getDueDate(),""),record.getCreatedAt().toString()));appendCustomValues(row,definitions,customValues.get(record.getId()));List<Boolean> safe=new ArrayList<>(List.of(true,true,true,true,false,false,false,true,true,false,false,false));definitions.forEach(field->safe.add(!Set.of("NUMBER","BOOLEAN").contains(field.getFieldType())));appendCsvRow(csv,row,safe);}
         }else if(type.equals("PURCHASE_ORDERS")){
@@ -119,15 +126,15 @@ public class CsvImportService {
     @Transactional
     public CommitResult commit(String resource,String idempotencyKey,byte[] file,UUID actorId){
         String type=normalizeResource(resource);
-        if(idempotencyKey==null||idempotencyKey.isBlank()||idempotencyKey.length()>120)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A valid Idempotency-Key header is required (max 120 characters)");
-        if(file==null||file.length==0||file.length>MAX_BYTES)return CommitResult.rejected(validate(type,file));
+        if(idempotencyKey==null||idempotencyKey.isBlank()||idempotencyKey.length()>120)throw new BadRequestException("A valid Idempotency-Key header is required (max 120 characters)");
+        if(file==null||file.length==0||file.length>MAX_BYTES)return rejectedCommit(validate(type,file));
         String hash=sha256(file);
         UUID tenantId=tenant.currentTenantId();
         ImportBatchEntity prior=batches.findByTenantIdAndResourceTypeAndIdempotencyKey(tenantId,type,idempotencyKey).orElse(null);
-        if(prior!=null){if(!prior.getContentSha256().equals(hash))throw new ResponseStatusException(HttpStatus.CONFLICT,"Idempotency key was reused with a different file");return CommitResult.replayed(prior);}
+        if(prior!=null){if(!prior.getContentSha256().equals(hash))throw new ConflictException("Idempotency key was reused with a different file");return replayedCommit(prior);}
         Validation validation=validate(type,file);
-        if(!validation.errors().isEmpty())return CommitResult.rejected(validation);
-        if(validation.rows().isEmpty())return CommitResult.rejected(validation.withError(new ImportError(1,"File has no data rows")));
+        if(!validation.errors().isEmpty())return rejectedCommit(validation);
+        if(validation.rows().isEmpty())return rejectedCommit(validation.withError(new ImportError(1,"File has no data rows")));
         try{
             if(type.equals("CUSTOMERS")){
                 List<CustomerEntity> rows=validation.rows().stream().map(row->{CustomerRow c=(CustomerRow)row;CustomerEntity e=new CustomerEntity(tenantId,c.code(),c.name(),c.email(),c.status(),actorId);e.applyProfile(c.customerType(),c.contactName(),c.phone(),c.addressLine1(),c.addressLine2(),c.city(),c.region(),c.postalCode(),c.countryCode(),c.taxId(),c.paymentTermsDays(),c.creditLimit(),c.tags(),c.creditHold(),actorId);return e;}).toList();
@@ -156,8 +163,8 @@ public class CsvImportService {
                 for(SupplierEntity supplier:saved)customFields.saveImportedValues(tenantId,actorId,"suppliers",supplier.getId(),customValues.get(supplier.getCode()).customValues());
             }
             ImportBatchEntity batch=batches.saveAndFlush(new ImportBatchEntity(tenantId,type,idempotencyKey,hash,validation.rows().size()));
-            return CommitResult.created(batch);
-        }catch(DataIntegrityViolationException exception){throw new ResponseStatusException(HttpStatus.CONFLICT,"A customer code or item SKU now exists; refresh the preview and resolve duplicates");}
+            return createdCommit(batch);
+        }catch(DataIntegrityViolationException exception){throw new ConflictException("A customer code or item SKU now exists; refresh the preview and resolve duplicates");}
     }
 
     private Validation validate(String type,byte[] file){
@@ -179,7 +186,7 @@ public class CsvImportService {
         if(!errors.isEmpty())return new Validation(csv.records().size()-1,List.of(),errors,previewRows(header,csv.records().stream().skip(1).limit(10).toList()));
         if(csv.records().size()-1>MAX_ROWS)return Validation.invalid(csv.records().size()-1,new ImportError(1,"Import is limited to 500 data rows"));
         Map<String,Integer> indexes=new HashMap<>();for(int i=0;i<header.size();i++)indexes.put(header.get(i),i);
-        List<TenantCustomFieldService.ImportField> customDefinitions=customFields.importFields(tenant.currentTenantId(),resourceCode(type));
+        List<TenantCustomFieldDtos.ImportField> customDefinitions=customFields.importFields(tenant.currentTenantId(),resourceCode(type));
         List<ImportRow> validRows=new ArrayList<>();Set<String> seen=new HashSet<>();int total=csv.records().size()-1;
         for(int recordIndex=1;recordIndex<csv.records().size();recordIndex++){
             List<String> values=csv.records().get(recordIndex);int rowNumber=recordIndex+1;
@@ -240,10 +247,10 @@ public class CsvImportService {
     private static BigDecimal optionalDecimal(Map<String,String> row,String key,BigDecimal fallback){String value=optional(row,key);return value.isEmpty()?fallback:new BigDecimal(value);}
     private static int integer(String value,String field){try{return Integer.parseInt(value);}catch(RuntimeException exception){throw new IllegalArgumentException(field);}}
     private static List<Map<String,String>> previewRows(List<String> headers,List<List<String>> records){return records.stream().filter(row->row.stream().anyMatch(value->!value.isBlank())).map(values->{Map<String,String> result=new LinkedHashMap<>();for(int i=0;i<Math.min(headers.size(),values.size());i++)result.put(headers.get(i),values.get(i));return result;}).toList();}
-    private static String normalizeResource(String resource){String type=resource==null?"":resource.trim().toUpperCase(Locale.ROOT);if(!Set.of("CUSTOMERS","ITEMS","SUPPLIERS").contains(type))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Imports support CUSTOMERS, ITEMS, and SUPPLIERS");return type;}
-    private static String normalizeExportResource(String resource){String type=resource==null?"":resource.trim().toUpperCase(Locale.ROOT);if(!Set.of("CUSTOMERS","ITEMS","SUPPLIERS","WORK_ORDERS","PURCHASE_ORDERS","QUOTES","SALES_ORDERS","INVOICES").contains(type))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Choose a supported export resource");return type;}
+    private static String normalizeResource(String resource){String type=resource==null?"":resource.trim().toUpperCase(Locale.ROOT);if(!Set.of("CUSTOMERS","ITEMS","SUPPLIERS").contains(type))throw new BadRequestException("Imports support CUSTOMERS, ITEMS, and SUPPLIERS");return type;}
+    private static String normalizeExportResource(String resource){String type=resource==null?"":resource.trim().toUpperCase(Locale.ROOT);if(!Set.of("CUSTOMERS","ITEMS","SUPPLIERS","WORK_ORDERS","PURCHASE_ORDERS","QUOTES","SALES_ORDERS","INVOICES").contains(type))throw new BadRequestException("Choose a supported export resource");return type;}
     private static String resourceCode(String type){return switch(type){case "CUSTOMERS"->"customers";case "ITEMS"->"items";case "SUPPLIERS"->"suppliers";case "WORK_ORDERS"->"work_orders";case "PURCHASE_ORDERS"->"purchase_orders";case "QUOTES"->"quotes";case "SALES_ORDERS"->"sales_orders";case "INVOICES"->"invoices";default->throw new IllegalArgumentException("Unsupported import/export resource");};}
-    private ResponseStatusException exportLimit(){return new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Export is limited to 10,000 records; narrow the export and try again");}
+    private ResponseStatusException exportLimit(){return new PayloadTooLargeException("Export is limited to 10,000 records; narrow the export and try again");}
     private static String sha256(byte[] bytes){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));}catch(Exception exception){throw new IllegalStateException(exception);}}
 
     private static CsvRecords parse(String content){
@@ -275,17 +282,12 @@ public class CsvImportService {
         Validation withError(ImportError error){List<ImportError> updated=new ArrayList<>(errors);updated.add(error);return new Validation(totalRows,rows,updated,sampleRows);}
         PreviewResult preview(){return new PreviewResult(totalRows,rows.size(),errors,sampleRows);}
     }
-    public record ImportError(int row,String message){}
-    public record PreviewResult(int totalRows,int validRows,List<ImportError> errors,List<Map<String,String>> sampleRows){}
-    public record BatchView(UUID id,String resourceType,String contentSha256,int rowsImported,java.time.Instant createdAt){}
+    private CommitResult createdCommit(ImportBatchEntity batch){return new CommitResult(true,false,batch.getResourceType(),batch.getRowsImported(),batch.getId(),batch.getCreatedAt(),List.of());}
+    private CommitResult replayedCommit(ImportBatchEntity batch){return new CommitResult(true,true,batch.getResourceType(),batch.getRowsImported(),batch.getId(),batch.getCreatedAt(),List.of());}
+    private CommitResult rejectedCommit(Validation result){return new CommitResult(false,false,"",0,null,null,result.errors());}
     @Transactional(readOnly=true)
     public List<BatchView> listBatches(UUID tenantId){
         return batches.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream()
                 .map(b->new BatchView(b.getId(),b.getResourceType(),b.getContentSha256(),b.getRowsImported(),b.getCreatedAt())).toList();
-    }
-    public record CommitResult(boolean imported,boolean replayed,String resourceType,int rowsImported,UUID batchId,java.time.Instant createdAt,List<ImportError> errors){
-        static CommitResult created(ImportBatchEntity batch){return new CommitResult(true,false,batch.getResourceType(),batch.getRowsImported(),batch.getId(),batch.getCreatedAt(),List.of());}
-        static CommitResult replayed(ImportBatchEntity batch){return new CommitResult(true,true,batch.getResourceType(),batch.getRowsImported(),batch.getId(),batch.getCreatedAt(),List.of());}
-        static CommitResult rejected(Validation result){return new CommitResult(false,false,"",0,null,null,result.errors());}
     }
 }

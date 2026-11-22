@@ -1,10 +1,9 @@
 package si.spindl.identity;
 
-import org.springframework.http.HttpStatus;
+import si.spindl.common.exception.TooManyRequestsException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.UUID;
@@ -42,7 +41,7 @@ public class ApiUsageQuotaService {
             long refreshed = currentMonthUsage(tenantId);
             cachedTotals.put(tenantId, refreshed);
             if (refreshed >= limit) {
-                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "This workspace has reached its monthly API request allowance. Review the plan and usage in Settings.");
+                throw new TooManyRequestsException("This workspace has reached its monthly API request allowance. Review the plan and usage in Settings.");
             }
         } else if (currentPending >= 50) {
             flushTenant(tenantId);

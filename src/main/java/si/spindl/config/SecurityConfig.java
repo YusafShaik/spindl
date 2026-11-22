@@ -1,10 +1,10 @@
 package si.spindl.config;
 
+import si.spindl.common.security.AuthenticatedActor;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.OctetSequenceKey;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -24,6 +24,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import si.spindl.common.security.AuthenticatedActor;
 import si.spindl.identity.AuthSessionRepository;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
@@ -41,8 +42,9 @@ import java.nio.charset.StandardCharsets;
 @org.springframework.scheduling.annotation.EnableScheduling
 public class SecurityConfig {
     @Bean
-    SecretKey jwtSecretKey(@Value("${spindl.security.jwt-secret}") String secret) {
-        byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
+    SecretKey jwtSecretKey(SpindlProperties properties) {
+        String secret = properties.getSecurity().getJwtSecret();
+        byte[] bytes = secret == null ? new byte[0] : secret.getBytes(StandardCharsets.UTF_8);
         if (bytes.length < 32) throw new IllegalStateException("SPINDL_JWT_SECRET must be at least 32 bytes");
         return new SecretKeySpec(bytes, "HmacSHA256");
     }
@@ -60,7 +62,7 @@ public class SecurityConfig {
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer("spindl"), (Jwt jwt) -> {
             try {
                 boolean active = sessions.existsByIdAndUserIdAndTenantIdAndRevokedAtIsNullAndExpiresAtAfter(
-                        java.util.UUID.fromString(jwt.getId()), java.util.UUID.fromString(jwt.getSubject()),
+                        java.util.UUID.fromString(jwt.getId()), AuthenticatedActor.userId(jwt),
                         java.util.UUID.fromString(jwt.getClaimAsString("tenant_id")), java.time.Instant.now());
                 return active ? OAuth2TokenValidatorResult.success()
                         : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Session is no longer active", null));

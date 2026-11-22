@@ -1,11 +1,11 @@
 package si.spindl.identity;
 
+import si.spindl.common.exception.BadRequestException;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.http.HttpStatus;
+import si.spindl.config.SpindlProperties;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -28,9 +28,9 @@ public class PasswordResetService {
 
     public PasswordResetService(AppUserRepository users, PasswordResetTokenRepository resetTokens, AuthSessionRepository sessions,
                                 PasswordEncoder passwordEncoder, ObjectProvider<ResetEmailSender> emailSender,
-                                @org.springframework.beans.factory.annotation.Value("${spindl.frontend-url}") String frontendUrl) {
+                                SpindlProperties properties) {
         this.users = users; this.resetTokens = resetTokens; this.sessions = sessions; this.passwordEncoder = passwordEncoder;
-        this.emailSender = emailSender; this.frontendUrl = frontendUrl;
+        this.emailSender = emailSender; this.frontendUrl = properties.getFrontendUrl();
     }
 
     @Transactional
@@ -49,9 +49,9 @@ public class PasswordResetService {
     @Transactional
     public void complete(String rawToken, String newPassword) {
         var reset = resetTokens.findByTokenHashForUpdate(sha256(rawToken)).orElse(null);
-        if (reset == null || !reset.isUsable()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reset link is invalid or expired");
+        if (reset == null || !reset.isUsable()) throw new BadRequestException("Reset link is invalid or expired");
         var user = users.findById(reset.getUserId()).filter(AppUserEntity::isActive)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reset link is invalid or expired"));
+                .orElseThrow(() -> new BadRequestException("Reset link is invalid or expired"));
         user.changePassword(passwordEncoder.encode(newPassword));
         reset.consume();
         sessions.findAllByUserIdAndRevokedAtIsNull(user.getId()).forEach(AuthSessionEntity::revoke);

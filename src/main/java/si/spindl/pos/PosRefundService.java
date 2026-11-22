@@ -1,5 +1,9 @@
 package si.spindl.pos;
 
+import si.spindl.common.exception.BadRequestException;
+import si.spindl.common.exception.ConflictException;
+import si.spindl.common.exception.ForbiddenException;
+import si.spindl.common.exception.NotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -10,7 +14,6 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,7 +25,7 @@ import si.spindl.identity.TenantMembershipBranchRepository;
 import si.spindl.identity.TenantMembershipRepository;
 import si.spindl.quality.QualityLotEntity;
 import si.spindl.quality.QualityLotRepository;
-import si.spindl.tenant.DevelopmentTenant;
+import si.spindl.tenant.CurrentTenant;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -33,12 +36,18 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
+import si.spindl.pos.PosRefundDtos.RefundLineRequest;
+import si.spindl.pos.PosRefundDtos.RefundTenderRequest;
+import si.spindl.pos.PosRefundDtos.RefundRequest;
+import si.spindl.pos.PosRefundDtos.RefundLineView;
+import si.spindl.pos.PosRefundDtos.RefundTenderView;
+import si.spindl.pos.PosRefundDtos.RefundView;
 
 @Service
 public class PosRefundService {
     private static final Set<String> DISPOSITIONS=Set.of("RESTOCK","QUARANTINE","SCRAP");
-    private final DevelopmentTenant tenant;private final TenantMembershipRepository memberships;private final TenantMembershipBranchRepository branches;private final PosSaleRepository sales;private final PosRegisterSessionRepository sessions;private final PosSaleLineRepository saleLines;private final PosRefundRepository refunds;private final PosRefundLineRepository refundLines;private final PosRefundTenderRepository refundTenders;private final WarehouseStockRepository warehouseStock;private final ItemRepository items;private final InventoryMovementRepository movements;private final QualityLotRepository qualityLots;private final TenantAuditEventRepository audit;
-    public PosRefundService(DevelopmentTenant tenant,TenantMembershipRepository memberships,TenantMembershipBranchRepository branches,PosSaleRepository sales,PosRegisterSessionRepository sessions,PosSaleLineRepository saleLines,PosRefundRepository refunds,PosRefundLineRepository refundLines,PosRefundTenderRepository refundTenders,WarehouseStockRepository warehouseStock,ItemRepository items,InventoryMovementRepository movements,QualityLotRepository qualityLots,TenantAuditEventRepository audit){this.tenant=tenant;this.memberships=memberships;this.branches=branches;this.sales=sales;this.sessions=sessions;this.saleLines=saleLines;this.refunds=refunds;this.refundLines=refundLines;this.refundTenders=refundTenders;this.warehouseStock=warehouseStock;this.items=items;this.movements=movements;this.qualityLots=qualityLots;this.audit=audit;}
+    private final CurrentTenant tenant;private final TenantMembershipRepository memberships;private final TenantMembershipBranchRepository branches;private final PosSaleRepository sales;private final PosRegisterSessionRepository sessions;private final PosSaleLineRepository saleLines;private final PosRefundRepository refunds;private final PosRefundLineRepository refundLines;private final PosRefundTenderRepository refundTenders;private final WarehouseStockRepository warehouseStock;private final ItemRepository items;private final InventoryMovementRepository movements;private final QualityLotRepository qualityLots;private final TenantAuditEventRepository audit;
+    public PosRefundService(CurrentTenant tenant,TenantMembershipRepository memberships,TenantMembershipBranchRepository branches,PosSaleRepository sales,PosRegisterSessionRepository sessions,PosSaleLineRepository saleLines,PosRefundRepository refunds,PosRefundLineRepository refundLines,PosRefundTenderRepository refundTenders,WarehouseStockRepository warehouseStock,ItemRepository items,InventoryMovementRepository movements,QualityLotRepository qualityLots,TenantAuditEventRepository audit){this.tenant=tenant;this.memberships=memberships;this.branches=branches;this.sales=sales;this.sessions=sessions;this.saleLines=saleLines;this.refunds=refunds;this.refundLines=refundLines;this.refundTenders=refundTenders;this.warehouseStock=warehouseStock;this.items=items;this.movements=movements;this.qualityLots=qualityLots;this.audit=audit;}
 
     @Transactional
     public RefundView refund(UUID actor,UUID saleId,RefundRequest request){UUID tenantId=tenant.currentTenantId();requireManager(tenantId,actor);String key=request.idempotencyKey().trim();String hash=payloadHash(request);PosRefundEntity prior=refunds.findByTenantIdAndIdempotencyKey(tenantId,key).orElse(null);if(prior!=null){if(!prior.getSale().getId().equals(saleId)||!prior.getPayloadHash().equals(hash))throw conflict("Idempotency key was reused with different return details");checkScope(tenantId,actor,prior.getSale());return view(prior);}
@@ -58,19 +67,13 @@ public class PosRefundService {
     public List<RefundView> list(UUID actor,UUID saleId){UUID tenantId=tenant.currentTenantId();requireManager(tenantId,actor);PosSaleEntity sale=sales.findByTenantIdAndId(tenantId,saleId).orElseThrow(()->notFound("POS receipt not found"));checkScope(tenantId,actor,sale);return refunds.findAllByTenantIdAndSaleIdOrderByCreatedAtDesc(tenantId,saleId).stream().map(this::view).toList();}
     private RefundView view(PosRefundEntity refund){return view(refund,refundLines.findAllByTenantIdAndRefundId(refund.getTenantId(),refund.getId()),refundTenders.findAllByTenantIdAndRefundId(refund.getTenantId(),refund.getId()));}
     private RefundView view(PosRefundEntity refund,List<PosRefundLineEntity> lines,List<PosRefundTenderEntity> tenders){return new RefundView(refund.getId(),refund.getSale().getId(),refund.getSale().getReceiptNumber(),refund.getRefundNumber(),refund.getReason(),refund.getSubtotal(),refund.getTaxTotal(),refund.getTotal(),refund.getCreatedAt(),lines.stream().map(line->new RefundLineView(line.getSku(),line.getItemName(),line.getQuantity(),line.getDisposition(),line.getSubtotal(),line.getTaxTotal(),line.getTotal())).toList(),tenders.stream().map(tender->new RefundTenderView(tender.getMethod(),tender.getAmount(),tender.getReference())).toList());}
-    private void checkScope(UUID tenantId,UUID actor,PosSaleEntity sale){if(!branches.findActiveBranchIds(tenantId,actor).contains(sale.getSession().getRegister().getWarehouse().getBranchId()))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"This receipt is outside your assigned store scope");}
-    private void checkSessionScope(UUID tenantId,UUID actor,PosRegisterSessionEntity session){if(!branches.findActiveBranchIds(tenantId,actor).contains(session.getRegister().getWarehouse().getBranchId()))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Refund register is outside your assigned store scope");}
-    private void requireManager(UUID tenantId,UUID actor){String role=memberships.findActiveRole(tenantId,actor).orElse("");if(!Set.of("OWNER","ADMIN","MANAGER").contains(role))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"A store manager must approve POS refunds");}
+    private void checkScope(UUID tenantId,UUID actor,PosSaleEntity sale){if(!branches.findActiveBranchIds(tenantId,actor).contains(sale.getSession().getRegister().getWarehouse().getBranchId()))throw new ForbiddenException("This receipt is outside your assigned store scope");}
+    private void checkSessionScope(UUID tenantId,UUID actor,PosRegisterSessionEntity session){if(!branches.findActiveBranchIds(tenantId,actor).contains(session.getRegister().getWarehouse().getBranchId()))throw new ForbiddenException("Refund register is outside your assigned store scope");}
+    private void requireManager(UUID tenantId,UUID actor){String role=memberships.findActiveRole(tenantId,actor).orElse("");if(!Set.of("OWNER","ADMIN","MANAGER").contains(role))throw new ForbiddenException("A store manager must approve POS refunds");}
     private BigDecimal money(BigDecimal value){try{return value.setScale(2,RoundingMode.UNNECESSARY);}catch(ArithmeticException exception){throw badRequest("Money values must use no more than two decimal places");}}
     private String payloadHash(RefundRequest request){String canonical=request.sessionId()+"|"+request.reason().trim()+"|"+request.lines().stream().map(line->line.saleLineId()+":"+line.quantity()+":"+line.disposition().trim().toUpperCase(Locale.ROOT)).sorted().collect(Collectors.joining(","))+"|"+request.tenders().stream().map(tender->tender.method().trim().toUpperCase(Locale.ROOT)+":"+money(tender.amount()).toPlainString()+":"+Objects.toString(blankToNull(tender.reference()),"")).sorted().collect(Collectors.joining(","));try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));}catch(java.security.NoSuchAlgorithmException exception){throw new IllegalStateException("Unable to fingerprint POS refund",exception);}}
     private String refundNumber(){return "PCR-"+DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.of("UTC")).format(Instant.now())+"-"+UUID.randomUUID().toString().substring(0,8).toUpperCase(Locale.ROOT);}
     private String blankToNull(String value){return value==null||value.isBlank()?null:value.trim();}
-    private ResponseStatusException badRequest(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}private ResponseStatusException conflict(String message){return new ResponseStatusException(HttpStatus.CONFLICT,message);}private ResponseStatusException notFound(String message){return new ResponseStatusException(HttpStatus.NOT_FOUND,message);}
+    private ResponseStatusException badRequest(String message){return new BadRequestException(message);}private ResponseStatusException conflict(String message){return new ConflictException(message);}private ResponseStatusException notFound(String message){return new NotFoundException(message);}
     private record CalculatedLine(PosSaleLineEntity line,int quantity,String disposition,BigDecimal subtotal,BigDecimal taxTotal){}
-    public record RefundLineRequest(@NotNull UUID saleLineId,@Positive int quantity,@NotBlank @Pattern(regexp="(?i)RESTOCK|QUARANTINE|SCRAP") String disposition){}
-    public record RefundTenderRequest(@NotBlank @Pattern(regexp="(?i)CASH|CARD|UPI|OTHER") String method,@NotNull @DecimalMin("0.01") @Digits(integer=12,fraction=2) BigDecimal amount,@Size(max=120) String reference){}
-    public record RefundRequest(@NotBlank @Size(max=120) String idempotencyKey,@NotNull UUID sessionId,@NotBlank @Size(max=300) String reason,@NotEmpty List<@Valid RefundLineRequest> lines,@NotEmpty List<@Valid RefundTenderRequest> tenders){}
-    public record RefundLineView(String sku,String itemName,int quantity,String disposition,BigDecimal subtotal,BigDecimal taxTotal,BigDecimal total){}
-    public record RefundTenderView(String method,BigDecimal amount,String reference){}
-    public record RefundView(UUID id,UUID saleId,String receiptNumber,String refundNumber,String reason,BigDecimal subtotal,BigDecimal taxTotal,BigDecimal total,Instant createdAt,List<RefundLineView> lines,List<RefundTenderView> tenders){}
 }

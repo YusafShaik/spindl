@@ -22,7 +22,5 @@ public final class PurchaseRequisitionDtos {
     public record ConvertLineRequest(@NotNull UUID requisitionLineId,@NotNull @DecimalMin("0.00") @Digits(integer=12,fraction=2) BigDecimal unitPrice){}
     public record ConvertRequest(@NotBlank @Size(max=120) String idempotencyKey,@NotNull UUID supplierId,@NotEmpty List<@Valid ConvertLineRequest> lines){}
     public record LineView(UUID id,UUID itemId,String sku,String itemName,int quantity){}
-    public record View(UUID id,String requisitionNumber,String status,UUID requestedBy,LocalDate needByDate,String notes,UUID approvedBy,Instant approvedAt,Instant createdAt,UUID purchaseOrderId,String purchaseOrderNumber,String rejectionReason,List<LineView> lines){
-        static View from(PurchaseRequisitionEntity requisition){var order=requisition.getPurchaseOrder();return new View(requisition.getId(),requisition.getRequisitionNumber(),requisition.getStatus(),requisition.getRequestedBy(),requisition.getNeedByDate(),requisition.getNotes(),requisition.getApprovedBy(),requisition.getApprovedAt(),requisition.getCreatedAt(),order==null?null:order.getId(),order==null?null:order.getOrderNumber(),requisition.getRejectionReason(),requisition.getLines().stream().map(line->new LineView(line.getId(),line.getItem().getId(),line.getItem().getSku(),line.getItem().getName(),line.getQuantity())).toList());}
-    }
+    public record View(UUID id,String requisitionNumber,String status,UUID requestedBy,LocalDate needByDate,String notes,UUID approvedBy,Instant approvedAt,Instant createdAt,UUID purchaseOrderId,String purchaseOrderNumber,String rejectionReason,List<LineView> lines) {}
 }

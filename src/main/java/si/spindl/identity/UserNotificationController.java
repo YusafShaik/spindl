@@ -1,5 +1,6 @@
 package si.spindl.identity;
 
+import si.spindl.common.security.AuthenticatedActor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,19 +20,19 @@ public class UserNotificationController {
     public UserNotificationController(UserNotificationService service) { this.service = service; }
 
     @GetMapping
-    public UserNotificationService.Inbox inbox(@AuthenticationPrincipal Jwt jwt,
+    public UserNotificationDtos.Inbox inbox(@AuthenticationPrincipal Jwt jwt,
                                                 @RequestParam(defaultValue = "30") int size) {
-        return service.inbox(UUID.fromString(jwt.getSubject()), size);
+        return service.inbox(AuthenticatedActor.userId(jwt), size);
     }
 
     @PatchMapping("/{id}/read")
-    public UserNotificationService.UserNotificationView markRead(@AuthenticationPrincipal Jwt jwt,
+    public UserNotificationDtos.UserNotificationView markRead(@AuthenticationPrincipal Jwt jwt,
                                                                   @PathVariable UUID id) {
-        return service.markRead(UUID.fromString(jwt.getSubject()), id);
+        return service.markRead(AuthenticatedActor.userId(jwt), id);
     }
 
     @PatchMapping("/read-all")
-    public UserNotificationService.Inbox markAllRead(@AuthenticationPrincipal Jwt jwt) {
-        return service.markAllRead(UUID.fromString(jwt.getSubject()));
+    public UserNotificationDtos.Inbox markAllRead(@AuthenticationPrincipal Jwt jwt) {
+        return service.markAllRead(AuthenticatedActor.userId(jwt));
     }
 }

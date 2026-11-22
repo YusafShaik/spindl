@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
+import jakarta.validation.constraints.NotNull;
 
 public final class TeamDtos {
     private TeamDtos() {}

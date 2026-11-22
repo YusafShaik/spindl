@@ -1,5 +1,6 @@
 package si.spindl.identity;
 
+import si.spindl.common.security.AuthenticatedActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -15,12 +16,12 @@ import java.util.UUID;
 public class TenantWebhookController {
     private final TenantWebhookService service;
     public TenantWebhookController(TenantWebhookService service){this.service=service;}
-    @GetMapping public List<TenantWebhookService.EndpointView> list(@AuthenticationPrincipal Jwt jwt){return service.list(actor(jwt));}
-    @GetMapping("/deliveries") public List<TenantWebhookService.DeliveryView> deliveries(@AuthenticationPrincipal Jwt jwt){return service.deliveryHistory(actor(jwt));}
+    @GetMapping public List<TenantWebhookDtos.EndpointView> list(@AuthenticationPrincipal Jwt jwt){return service.list(actor(jwt));}
+    @GetMapping("/deliveries") public List<TenantWebhookDtos.DeliveryView> deliveries(@AuthenticationPrincipal Jwt jwt){return service.deliveryHistory(actor(jwt));}
     @GetMapping("/events") public List<String> events(@AuthenticationPrincipal Jwt jwt){return service.supportedEvents(actor(jwt));}
-    @PostMapping("/deliveries/{id}/replay") public TenantWebhookService.DeliveryView replay(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.replay(actor(jwt),id);}
-    @PostMapping @ResponseStatus(HttpStatus.CREATED) public TenantWebhookService.CreatedEndpoint create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateWebhookRequest request){return service.create(actor(jwt),new TenantWebhookService.CreateEndpointRequest(request.name(),request.targetUrl(),request.eventTypes()));}
+    @PostMapping("/deliveries/{id}/replay") public TenantWebhookDtos.DeliveryView replay(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.replay(actor(jwt),id);}
+    @PostMapping @ResponseStatus(HttpStatus.CREATED) public TenantWebhookDtos.CreatedEndpoint create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateWebhookRequest request){return service.create(actor(jwt),new TenantWebhookDtos.CreateEndpointRequest(request.name(),request.targetUrl(),request.eventTypes()));}
     @DeleteMapping("/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void deactivate(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){service.deactivate(actor(jwt),id);}
-    private UUID actor(Jwt jwt){return UUID.fromString(jwt.getSubject());}
+    private UUID actor(Jwt jwt){return AuthenticatedActor.userId(jwt);}
     public record CreateWebhookRequest(@NotBlank @Size(max=120) String name,@NotBlank @Size(max=2048) String targetUrl,@NotEmpty List<@NotBlank String> eventTypes){}
 }
