@@ -47,6 +47,8 @@ CREATE INDEX idx_mrp_planned_orders_tenant_run ON mrp_planned_orders (tenant_id,
 CREATE INDEX idx_mrp_planned_orders_item ON mrp_planned_orders (tenant_id, item_id);
 CREATE INDEX idx_mrp_planned_orders_status ON mrp_planned_orders (tenant_id, status);
 
+DO $spindl_seed$
+BEGIN
 -- Seed Initial MRP Calculation Run & Planned Orders for demo tenant '86346062-7d9c-40e4-be16-2007ab592625'
 INSERT INTO mrp_runs (
     id, tenant_id, run_number, status, planning_horizon_weeks, total_recommendations,
@@ -131,3 +133,8 @@ INSERT INTO mrp_planned_orders (
     'PENDING',
     CURRENT_TIMESTAMP - INTERVAL '2 hours'
 ) ON CONFLICT DO NOTHING;
+EXCEPTION
+  WHEN foreign_key_violation THEN
+    RAISE NOTICE 'Skipping demo seed in V78__mrp_planning_engine.sql; referenced rows are not present';
+END
+$spindl_seed$;

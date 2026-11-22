@@ -214,7 +214,7 @@ public class TeamService {
 
     private String sha256(String token) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8))); }
-        catch (Exception e) { throw new IllegalStateException("SHA-256 is unavailable", e); }
+        catch (Exception e) { throw new si.spindl.common.exception.InfrastructureException("SHA-256 is unavailable", e); }
     }
 
     private String maskEmail(String email) {

@@ -3,6 +3,7 @@ package si.spindl.workforce;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import si.spindl.common.exception.NotFoundException;
 import si.spindl.identity.AppUserEntity;
 import si.spindl.identity.AppUserRepository;
 import si.spindl.identity.TenantMembershipEntity;
@@ -179,7 +180,7 @@ public class WorkforceService {
 
     public void deleteQualification(UUID tenantId, UUID qualificationId) {
         WorkforceOperatorQualificationEntity qual = qualificationRepository.findByTenantIdAndId(tenantId, qualificationId)
-                .orElseThrow(() -> new IllegalArgumentException("Qualification not found: " + qualificationId));
+                .orElseThrow(() -> new NotFoundException("Qualification not found: " + qualificationId));
         qualificationRepository.delete(qual);
     }
 
@@ -269,12 +270,12 @@ public class WorkforceService {
             WorkforceDtos.UpsertQualificationRequest req
     ) {
         if (!membershipRepository.existsByTenantIdAndUserIdAndActiveTrue(tenantId, req.userId())) {
-            throw new IllegalArgumentException("User not found: " + req.userId());
+            throw new NotFoundException("User not found: " + req.userId());
         }
         AppUserEntity user = userRepository.findById(req.userId())
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + req.userId()));
+                .orElseThrow(() -> new NotFoundException("User not found: " + req.userId()));
         WorkforceSkillEntity skill = skillRepository.findByTenantIdAndId(tenantId, req.skillId())
-                .orElseThrow(() -> new IllegalArgumentException("Skill not found: " + req.skillId()));
+                .orElseThrow(() -> new NotFoundException("Skill not found: " + req.skillId()));
 
         WorkforceOperatorQualificationEntity entity = qualificationRepository
                 .findByTenantIdAndUserIdAndSkillId(tenantId, req.userId(), req.skillId())
@@ -328,7 +329,7 @@ public class WorkforceService {
 
     public WorkforceDtos.ShiftDto updateShift(UUID tenantId, UUID shiftId, WorkforceDtos.UpdateShiftRequest req) {
         WorkforceShiftEntity entity = shiftRepository.findByTenantIdAndId(tenantId, shiftId)
-                .orElseThrow(() -> new IllegalArgumentException("Shift not found: " + shiftId));
+                .orElseThrow(() -> new NotFoundException("Shift not found: " + shiftId));
         if (req.shiftCode() != null && !req.shiftCode().isBlank() && !req.shiftCode().trim().equalsIgnoreCase(entity.getShiftCode())) {
             String newCode = req.shiftCode().trim().toUpperCase();
             if (shiftRepository.existsByTenantIdAndShiftCode(tenantId, newCode)) {
@@ -371,12 +372,12 @@ public class WorkforceService {
 
     public WorkforceDtos.RosterAssignmentDto createRosterAssignment(UUID tenantId, WorkforceDtos.CreateRosterAssignmentRequest req) {
         WorkforceShiftEntity shift = shiftRepository.findByTenantIdAndId(tenantId, req.shiftId())
-                .orElseThrow(() -> new IllegalArgumentException("Shift not found: " + req.shiftId()));
+                .orElseThrow(() -> new NotFoundException("Shift not found: " + req.shiftId()));
         if (!membershipRepository.existsByTenantIdAndUserIdAndActiveTrue(tenantId, req.userId())) {
-            throw new IllegalArgumentException("User not found: " + req.userId());
+            throw new NotFoundException("User not found: " + req.userId());
         }
         AppUserEntity user = userRepository.findById(req.userId())
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + req.userId()));
+                .orElseThrow(() -> new NotFoundException("User not found: " + req.userId()));
 
         WorkforceRosterAssignmentEntity entity = rosterRepository
                 .findByTenantIdAndUserIdAndRosterDate(tenantId, req.userId(), req.rosterDate())
@@ -404,7 +405,7 @@ public class WorkforceService {
 
     public WorkforceDtos.RosterAssignmentDto clockIn(UUID tenantId, UUID rosterId) {
         WorkforceRosterAssignmentEntity entity = rosterRepository.findByTenantIdAndId(tenantId, rosterId)
-                .orElseThrow(() -> new IllegalArgumentException("Roster assignment not found"));
+                .orElseThrow(() -> new NotFoundException("Roster assignment not found"));
         entity.setAttendanceStatus("PRESENT");
         entity.setClockInTime(Instant.now());
         WorkforceRosterAssignmentEntity saved = rosterRepository.save(entity);
@@ -413,7 +414,7 @@ public class WorkforceService {
 
     public WorkforceDtos.RosterAssignmentDto clockOut(UUID tenantId, UUID rosterId) {
         WorkforceRosterAssignmentEntity entity = rosterRepository.findByTenantIdAndId(tenantId, rosterId)
-                .orElseThrow(() -> new IllegalArgumentException("Roster assignment not found"));
+                .orElseThrow(() -> new NotFoundException("Roster assignment not found"));
         Instant now = Instant.now();
         entity.setClockOutTime(now);
 
@@ -437,10 +438,10 @@ public class WorkforceService {
             WorkforceDtos.SkillGuardVerificationRequest req
     ) {
         if (!membershipRepository.existsByTenantIdAndUserIdAndActiveTrue(tenantId, req.operatorUserId())) {
-            throw new IllegalArgumentException("Operator not found");
+            throw new NotFoundException("Operator not found");
         }
         AppUserEntity user = userRepository.findById(req.operatorUserId())
-                .orElseThrow(() -> new IllegalArgumentException("Operator not found"));
+                .orElseThrow(() -> new NotFoundException("Operator not found"));
 
         if (req.requiredSkillCode() == null || req.requiredSkillCode().isBlank()) {
             return new WorkforceDtos.SkillGuardVerificationResponse(

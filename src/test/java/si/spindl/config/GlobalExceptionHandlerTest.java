@@ -1,6 +1,7 @@
 package si.spindl.config;
 
 import org.junit.jupiter.api.Test;
+import si.spindl.common.exception.InfrastructureException;
 import si.spindl.common.exception.NotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -85,5 +86,19 @@ class GlobalExceptionHandlerTest {
         assertEquals(bareRaw.getStatus(), bare.getStatus());
         assertEquals(bareRaw.getTitle(), bare.getTitle());
         assertEquals(bareRaw.getDetail(), bare.getDetail());
+    }
+
+    @Test
+    void infrastructureFailuresAreServerErrorsAndStateConflictsStayConflicts() {
+        ProblemDetail conflict = handler.handleIllegalStateException(new IllegalStateException("Only draft quotes can be sent"));
+        assertEquals(HttpStatus.CONFLICT.value(), conflict.getStatus());
+        assertEquals("State Conflict", conflict.getTitle());
+        assertEquals("Only draft quotes can be sent", conflict.getDetail());
+
+        InfrastructureException failure = new InfrastructureException("SHA-256 is unavailable");
+        ProblemDetail server = handler.handleApiException(failure);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.value(), server.getStatus());
+        assertEquals("500 INTERNAL_SERVER_ERROR", server.getTitle());
+        assertEquals("SHA-256 is unavailable", server.getDetail());
     }
 }

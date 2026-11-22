@@ -108,7 +108,7 @@ public class CustomerCreditNoteService {
     }
 
     private List<NormalizedLine> normalize(List<CreditLineRequest> inputs){if(inputs==null||inputs.isEmpty())throw badRequest("At least one invoice line is required");Set<UUID> seen=new HashSet<>();List<NormalizedLine> result=new ArrayList<>();for(CreditLineRequest input:inputs){String disposition=input.disposition().trim().toUpperCase(Locale.ROOT);if(!DISPOSITIONS.contains(disposition))throw badRequest("Disposition must be RESTOCK, QUARANTINE, or SCRAP");if(!seen.add(input.invoiceLineId()))throw badRequest("Each invoice line can appear only once per credit note");result.add(new NormalizedLine(input.invoiceLineId(),input.quantity(),disposition));}result.sort(Comparator.comparing(line->line.invoiceLineId.toString()));return result;}
-    private String hash(String input){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8)));}catch(Exception exception){throw new IllegalStateException(exception);}}
+    private String hash(String input){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8)));}catch(Exception exception){throw new si.spindl.common.exception.InfrastructureException("SHA-256 is unavailable", exception);}}
     private ResponseStatusException notFound(String message){return new NotFoundException(message);}
     private ResponseStatusException badRequest(String message){return new BadRequestException(message);}
     private ResponseStatusException conflict(String message){return new ConflictException(message);}

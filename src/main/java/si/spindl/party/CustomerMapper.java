@@ -10,14 +10,14 @@ public final class CustomerMapper {
     private CustomerMapper() {
     }
 
-    public static CustomerDtos.CustomerView toView(CustomerEntity customer, long orderCount, BigDecimal balance) {
+    public static CustomerDtos.CustomerView toView(CustomerEntity customer, long orderCount, BigDecimal balance, String currencyCode) {
         return new CustomerDtos.CustomerView(
                 customer.getId(),
                 customer.getCode(),
                 customer.getName(),
                 customer.getEmail(),
                 orderCount,
-                MoneyFormat.inr(balance),
+                MoneyFormat.format(balance, currencyCode),
                 customer.getStatus(),
                 DisplayMark.fromName(customer.getName()),
                 "lavender",

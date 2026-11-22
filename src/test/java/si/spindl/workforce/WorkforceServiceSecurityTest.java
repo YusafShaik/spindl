@@ -11,6 +11,9 @@ import si.spindl.manufacturing.WorkCenterRepository;
 import java.util.Optional;
 import java.util.UUID;
 
+import si.spindl.common.exception.NotFoundException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
@@ -64,11 +67,12 @@ class WorkforceServiceSecurityTest {
                 foreignUserId, skillId, "OPERATOR", null, "ACTIVE", "notes"
         );
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
+        NotFoundException ex = assertThrows(
+                NotFoundException.class,
                 () -> workforceService.upsertQualification(tenantId, null, req)
         );
-        assertTrue(ex.getMessage().contains("User not found"));
+        assertEquals(404, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("User not found"));
     }
 
     @Test
@@ -89,11 +93,12 @@ class WorkforceServiceSecurityTest {
                 shiftId, foreignUserId, null, java.time.LocalDate.now(), null, "notes"
         );
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
+        NotFoundException ex = assertThrows(
+                NotFoundException.class,
                 () -> workforceService.createRosterAssignment(tenantId, req)
         );
-        assertTrue(ex.getMessage().contains("User not found"));
+        assertEquals(404, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("User not found"));
     }
 
     @Test
@@ -108,11 +113,12 @@ class WorkforceServiceSecurityTest {
                 foreignUserId, UUID.randomUUID(), "WELDING", "OPERATOR"
         );
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
+        NotFoundException ex = assertThrows(
+                NotFoundException.class,
                 () -> workforceService.verifySkillGuard(tenantId, req)
         );
-        assertTrue(ex.getMessage().contains("Operator not found"));
+        assertEquals(404, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("Operator not found"));
     }
 
     @Test
@@ -126,11 +132,12 @@ class WorkforceServiceSecurityTest {
                 "NIGHT", "Night Shift", java.time.LocalTime.of(22, 0), java.time.LocalTime.of(6, 0), 30, true
         );
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
+        NotFoundException ex = assertThrows(
+                NotFoundException.class,
                 () -> workforceService.updateShift(tenantId, foreignShiftId, req)
         );
-        assertTrue(ex.getMessage().contains("Shift not found"));
+        assertEquals(404, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("Shift not found"));
     }
 
     @Test
@@ -140,11 +147,12 @@ class WorkforceServiceSecurityTest {
 
         when(qualificationRepository.findByTenantIdAndId(tenantId, foreignQualId)).thenReturn(Optional.empty());
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
+        NotFoundException ex = assertThrows(
+                NotFoundException.class,
                 () -> workforceService.deleteQualification(tenantId, foreignQualId)
         );
-        assertTrue(ex.getMessage().contains("Qualification not found"));
+        assertEquals(404, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("Qualification not found"));
     }
 
     @Test

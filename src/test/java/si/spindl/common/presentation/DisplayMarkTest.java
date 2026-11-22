@@ -28,4 +28,12 @@ class DisplayMarkTest {
         assertEquals("₹ 100", MoneyFormat.inr(new BigDecimal("100.00")));
         assertEquals("₹ 100.5", MoneyFormat.inr(new BigDecimal("100.50")));
     }
+
+    @Test
+    void formatsTheRequestedCurrencyAndDefaultsBlankCodesToInr() {
+        assertEquals("$ 100", MoneyFormat.format(new BigDecimal("100.00"), "USD"));
+        assertEquals("€ 100", MoneyFormat.format(new BigDecimal("100.00"), "eur"));
+        assertEquals("₹ 100", MoneyFormat.format(new BigDecimal("100.00"), " "));
+        assertEquals("ZZZ 100", MoneyFormat.format(new BigDecimal("100.00"), "ZZZ"));
+    }
 }

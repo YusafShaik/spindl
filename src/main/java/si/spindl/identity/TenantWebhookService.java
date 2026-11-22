@@ -71,7 +71,7 @@ public class TenantWebhookService {
                     "AES"
             );
         } catch (Exception exception) {
-            throw new IllegalStateException("Unable to initialize webhook secret encryption", exception);
+            throw new si.spindl.common.exception.InfrastructureException("Unable to initialize webhook secret encryption", exception);
         }
     }
 
@@ -242,7 +242,7 @@ public class TenantWebhookService {
             cipher.init(Cipher.DECRYPT_MODE, encryptionKey, new GCMParameterSpec(128, iv));
             return new String(cipher.doFinal(value), StandardCharsets.UTF_8);
         } catch (Exception exception) {
-            throw new IllegalStateException("Unable to decrypt webhook signing key", exception);
+            throw new si.spindl.common.exception.InfrastructureException("Unable to decrypt webhook signing key", exception);
         }
     }
 
@@ -258,7 +258,7 @@ public class TenantWebhookService {
             System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
             return Base64.getEncoder().encodeToString(combined);
         } catch (Exception exception) {
-            throw new IllegalStateException("Unable to encrypt webhook signing key", exception);
+            throw new si.spindl.common.exception.InfrastructureException("Unable to encrypt webhook signing key", exception);
         }
     }
 
