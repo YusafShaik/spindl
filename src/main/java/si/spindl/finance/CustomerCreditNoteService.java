@@ -23,6 +23,7 @@ import java.time.Year;
 import java.util.*;
 
 import static si.spindl.finance.CustomerCreditNoteDtos.*;
+import si.spindl.finance.CustomerCreditNoteMapper;
 
 @Service
 public class CustomerCreditNoteService {
@@ -42,10 +43,10 @@ public class CustomerCreditNoteService {
     public CustomerCreditNoteService(CurrentTenant tenant,InvoiceRepository invoices,CustomerCreditNoteRepository notes,CustomerCreditRefundRepository refunds,ItemRepository items,WarehouseStockRepository stock,InventoryMovementRepository movements,QualityLotRepository qualityLots,TenantAuditEventRepository audit,TenantWebhookService webhooks){this.tenant=tenant;this.invoices=invoices;this.notes=notes;this.refunds=refunds;this.items=items;this.stock=stock;this.movements=movements;this.qualityLots=qualityLots;this.audit=audit;this.webhooks=webhooks;}
 
     @Transactional(readOnly=true)
-    public List<CreditNoteView> list(){return notes.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(CreditNoteView::from).toList();}
+    public List<CreditNoteView> list(){return notes.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(CustomerCreditNoteMapper::toCreditNoteView).toList();}
 
     @Transactional(readOnly=true)
-    public CreditNoteView get(UUID id){return notes.findByTenantIdAndId(tenant.currentTenantId(),id).map(CreditNoteView::from).orElseThrow(()->notFound("Credit note not found"));}
+    public CreditNoteView get(UUID id){return notes.findByTenantIdAndId(tenant.currentTenantId(),id).map(CustomerCreditNoteMapper::toCreditNoteView).orElseThrow(()->notFound("Credit note not found"));}
 
     @Transactional
     public CreditNoteView create(UUID actorId,UUID invoiceId,CreateCreditRequest request){
@@ -56,7 +57,7 @@ public class CustomerCreditNoteService {
         List<NormalizedLine> lines=normalize(request.lines());
         String hash=hash(reason+"\n"+lines.stream().map(line->line.invoiceLineId+":"+line.quantity+":"+line.disposition).reduce((a,b)->a+"\n"+b).orElse(""));
         CustomerCreditNoteEntity prior=notes.findByTenantIdAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
-        if(prior!=null){if(!prior.matches(invoiceId,hash))throw conflict("Idempotency key was reused with different credit details");return CreditNoteView.from(prior);}
+        if(prior!=null){if(!prior.matches(invoiceId,hash))throw conflict("Idempotency key was reused with different credit details");return CustomerCreditNoteMapper.toCreditNoteView(prior);}
 
         Map<UUID,InvoiceLineEntity> invoiceLines=new HashMap<>();invoice.getLines().forEach(line->invoiceLines.put(line.getId(),line));
         BigDecimal subtotal=BigDecimal.ZERO,taxTotal=BigDecimal.ZERO;
@@ -88,7 +89,7 @@ public class CustomerCreditNoteService {
             note.addLine(line,qty,value.input.disposition,value.subtotal,value.tax,value.total);
             if(!value.input.disposition.equals("SCRAP"))movements.save(new InventoryMovementEntity(tenantId,item,warehouse,qty,"Customer return - "+value.input.disposition,creditNumber,creditNumber+":"+line.getId()));
         }
-        try{invoice.recordCredit(total);CustomerCreditNoteEntity saved=notes.saveAndFlush(note);audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOMER_CREDIT_NOTE_ISSUED","customer_credit_note",saved.getId(),Map.of("creditNumber",creditNumber,"invoiceNumber",invoice.getInvoiceNumber(),"total",total,"refundDue",refundDue,"reason",reason)));webhooks.enqueue(tenantId,"CUSTOMER_CREDIT_NOTE_ISSUED",Map.of("creditNoteId",saved.getId().toString(),"creditNumber",creditNumber,"invoiceId",invoice.getId().toString(),"invoiceNumber",invoice.getInvoiceNumber(),"total",total,"refundDue",refundDue));return CreditNoteView.from(saved);}
+        try{invoice.recordCredit(total);CustomerCreditNoteEntity saved=notes.saveAndFlush(note);audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOMER_CREDIT_NOTE_ISSUED","customer_credit_note",saved.getId(),Map.of("creditNumber",creditNumber,"invoiceNumber",invoice.getInvoiceNumber(),"total",total,"refundDue",refundDue,"reason",reason)));webhooks.enqueue(tenantId,"CUSTOMER_CREDIT_NOTE_ISSUED",Map.of("creditNoteId",saved.getId().toString(),"creditNumber",creditNumber,"invoiceId",invoice.getId().toString(),"invoiceNumber",invoice.getInvoiceNumber(),"total",total,"refundDue",refundDue));return CustomerCreditNoteMapper.toCreditNoteView(saved);}
         catch(DataIntegrityViolationException exception){throw conflict("Credit request already exists; retry with its idempotency key");}
         catch(IllegalArgumentException exception){throw conflict(exception.getMessage());}
     }
@@ -100,9 +101,9 @@ public class CustomerCreditNoteService {
         BigDecimal amount;try{amount=request.amount().setScale(2,java.math.RoundingMode.UNNECESSARY);}catch(ArithmeticException exception){throw badRequest("Refund amount must have no more than two decimal places");}
         String reference=request.reference()==null||request.reference().isBlank()?null:request.reference().trim();
         CustomerCreditRefundEntity prior=refunds.findByTenantIdAndNoteAndIdempotencyKey(tenantId,noteId,request.idempotencyKey()).orElse(null);
-        if(prior!=null){if(!prior.matches(noteId,amount,method,reference))throw conflict("Idempotency key was reused with different refund details");return CreditNoteView.from(notes.findByTenantIdAndId(tenantId,noteId).orElse(note));}
+        if(prior!=null){if(!prior.matches(noteId,amount,method,reference))throw conflict("Idempotency key was reused with different refund details");return CustomerCreditNoteMapper.toCreditNoteView(notes.findByTenantIdAndId(tenantId,noteId).orElse(note));}
         if(amount.signum()<=0||amount.compareTo(note.getRefundBalance())>0)throw conflict("Refund must be positive and cannot exceed the remaining refund due");
-        try{CustomerCreditRefundEntity refund=new CustomerCreditRefundEntity(tenantId,note,request.idempotencyKey(),amount,method,reference);note.addRefund(refund);refunds.save(refund);notes.saveAndFlush(note);audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOMER_CREDIT_REFUNDED","customer_credit_note",noteId,Map.of("creditNumber",note.getCreditNumber(),"amount",amount,"method",method)));return CreditNoteView.from(notes.findByTenantIdAndId(tenantId,noteId).orElse(note));}
+        try{CustomerCreditRefundEntity refund=new CustomerCreditRefundEntity(tenantId,note,request.idempotencyKey(),amount,method,reference);note.addRefund(refund);refunds.save(refund);notes.saveAndFlush(note);audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOMER_CREDIT_REFUNDED","customer_credit_note",noteId,Map.of("creditNumber",note.getCreditNumber(),"amount",amount,"method",method)));return CustomerCreditNoteMapper.toCreditNoteView(notes.findByTenantIdAndId(tenantId,noteId).orElse(note));}
         catch(DataIntegrityViolationException exception){throw conflict("Refund request already exists; retry with its idempotency key");}
     }
 

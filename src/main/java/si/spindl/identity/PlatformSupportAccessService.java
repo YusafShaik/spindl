@@ -13,6 +13,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import si.spindl.identity.PlatformSupportAccessDtos.CreateRequest;
+import si.spindl.identity.PlatformSupportAccessDtos.ReviewRequest;
+import si.spindl.identity.PlatformSupportAccessDtos.SupportRequestView;
+import si.spindl.identity.PlatformSupportAccessDtos.ModuleDiagnostic;
+import si.spindl.identity.PlatformSupportAccessDtos.Diagnostics;
 
 @Service
 public class PlatformSupportAccessService {
@@ -34,24 +39,24 @@ public class PlatformSupportAccessService {
         try{
             var request=requests.saveAndFlush(new PlatformSupportAccessRequestEntity(tenantId,requesterId,requesterEmail.toLowerCase(java.util.Locale.ROOT),cleanReason,durationMinutes));
             audit.save(new TenantAuditEventEntity(tenantId,requesterId,"PLATFORM_SUPPORT_REQUESTED","support_access",request.getId(),Map.of("requestId",request.getId().toString(),"durationMinutes",durationMinutes)));
-            return SupportRequestView.from(request,tenantName(tenantId));
+            return PlatformSupportAccessMapper.toSupportRequestView(request,tenantName(tenantId));
         }catch(DataIntegrityViolationException concurrent){throw new ConflictException("A support request was submitted at the same time; refresh and retry");}
     }
 
     @Transactional(readOnly=true)
-    public List<SupportRequestView> tenantQueue(UUID tenantId){return requests.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream().map(request->SupportRequestView.from(request,tenantName(tenantId))).toList();}
+    public List<SupportRequestView> tenantQueue(UUID tenantId){return requests.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream().map(request->PlatformSupportAccessMapper.toSupportRequestView(request,tenantName(tenantId))).toList();}
 
     @Transactional(readOnly=true)
-    public List<SupportRequestView> platformQueue(UUID supportActorId){return requests.findAllByStatusInOrderByCreatedAtAsc(List.of("REQUESTED","APPROVED")).stream().filter(request->request.getRequestedBy().equals(supportActorId)).map(request->SupportRequestView.from(request,tenantName(request.getTenantId()))).toList();}
+    public List<SupportRequestView> platformQueue(UUID supportActorId){return requests.findAllByStatusInOrderByCreatedAtAsc(List.of("REQUESTED","APPROVED")).stream().filter(request->request.getRequestedBy().equals(supportActorId)).map(request->PlatformSupportAccessMapper.toSupportRequestView(request,tenantName(request.getTenantId()))).toList();}
 
     @Transactional
-    public SupportRequestView approve(UUID tenantId,UUID id,UUID reviewerId,String note){var request=tenantRequest(tenantId,id);if(request.getStatus().equals("APPROVED")&&request.hasActiveConsent(Instant.now()))throw new ConflictException("Support access is already active");if(!"REQUESTED".equals(request.getStatus()))throw new ConflictException("This support request is no longer pending");request.approve(reviewerId,clean(note));audit(request,reviewerId,"PLATFORM_SUPPORT_CONSENT_GRANTED",request.getReviewNote());return SupportRequestView.from(request,tenantName(tenantId));}
+    public SupportRequestView approve(UUID tenantId,UUID id,UUID reviewerId,String note){var request=tenantRequest(tenantId,id);if(request.getStatus().equals("APPROVED")&&request.hasActiveConsent(Instant.now()))throw new ConflictException("Support access is already active");if(!"REQUESTED".equals(request.getStatus()))throw new ConflictException("This support request is no longer pending");request.approve(reviewerId,clean(note));audit(request,reviewerId,"PLATFORM_SUPPORT_CONSENT_GRANTED",request.getReviewNote());return PlatformSupportAccessMapper.toSupportRequestView(request,tenantName(tenantId));}
 
     @Transactional
-    public SupportRequestView reject(UUID tenantId,UUID id,UUID reviewerId,String note){String reason=clean(note);if(reason==null)throw new BadRequestException("Add a reason for rejecting this request");var request=tenantRequest(tenantId,id);if(!"REQUESTED".equals(request.getStatus()))throw new ConflictException("This support request is no longer pending");request.reject(reviewerId,reason);audit(request,reviewerId,"PLATFORM_SUPPORT_CONSENT_REJECTED",reason);return SupportRequestView.from(request,tenantName(tenantId));}
+    public SupportRequestView reject(UUID tenantId,UUID id,UUID reviewerId,String note){String reason=clean(note);if(reason==null)throw new BadRequestException("Add a reason for rejecting this request");var request=tenantRequest(tenantId,id);if(!"REQUESTED".equals(request.getStatus()))throw new ConflictException("This support request is no longer pending");request.reject(reviewerId,reason);audit(request,reviewerId,"PLATFORM_SUPPORT_CONSENT_REJECTED",reason);return PlatformSupportAccessMapper.toSupportRequestView(request,tenantName(tenantId));}
 
     @Transactional
-    public SupportRequestView revoke(UUID tenantId,UUID id,UUID reviewerId,String note){var request=tenantRequest(tenantId,id);if(!request.hasActiveConsent(Instant.now()))throw new ConflictException("There is no active support access to revoke");request.revoke(reviewerId,clean(note));audit(request,reviewerId,"PLATFORM_SUPPORT_CONSENT_REVOKED",request.getReviewNote());return SupportRequestView.from(request,tenantName(tenantId));}
+    public SupportRequestView revoke(UUID tenantId,UUID id,UUID reviewerId,String note){var request=tenantRequest(tenantId,id);if(!request.hasActiveConsent(Instant.now()))throw new ConflictException("There is no active support access to revoke");request.revoke(reviewerId,clean(note));audit(request,reviewerId,"PLATFORM_SUPPORT_CONSENT_REVOKED",request.getReviewNote());return PlatformSupportAccessMapper.toSupportRequestView(request,tenantName(tenantId));}
 
     @Transactional
     public Diagnostics diagnostics(UUID requestId,UUID supportActorId,String supportEmail){
@@ -72,9 +77,4 @@ public class PlatformSupportAccessService {
     private String tenantName(UUID tenantId){return tenants.findSummaryById(tenantId).map(TenantRepository.TenantSummary::getDisplayName).orElse("Workspace unavailable");}
     private String clean(String value){if(value==null||value.isBlank())return null;String result=value.trim();if(result.length()>500)throw new BadRequestException("Text must be 500 characters or less");return result;}
 
-    public record CreateRequest(UUID tenantId,String reason,int durationMinutes){}
-    public record ReviewRequest(String note){}
-    public record SupportRequestView(UUID id,UUID tenantId,String tenantName,UUID requestedBy,String requesterEmail,String reason,int durationMinutes,String status,Instant expiresAt,UUID reviewedBy,Instant reviewedAt,String reviewNote,Instant createdAt){static SupportRequestView from(PlatformSupportAccessRequestEntity request,String name){return new SupportRequestView(request.getId(),request.getTenantId(),name,request.getRequestedBy(),request.getRequesterEmail(),request.getReason(),request.getDurationMinutes(),request.getStatus(),request.getExpiresAt(),request.getReviewedBy(),request.getReviewedAt(),request.getReviewNote(),request.getCreatedAt());}}
-    public record ModuleDiagnostic(String code,boolean entitled,boolean enabled){}
-    public record Diagnostics(UUID consentRequestId,UUID tenantId,String workspace,String accountStatus,String timezone,String countryCode,String currencyCode,String planCode,int planVersion,String subscriptionStatus,long activeSeats,long pendingInvitations,int seatLimit,long storageUsedBytes,int storageLimitMb,long apiCallsUsed,long apiCallsLimit,Instant consentExpiresAt,List<ModuleDiagnostic> modules){}
 }

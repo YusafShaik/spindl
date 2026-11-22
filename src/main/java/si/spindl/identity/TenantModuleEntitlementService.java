@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import si.spindl.identity.TenantModuleEntitlementDtos.ModuleView;
 
 @Service
 public class TenantModuleEntitlementService {
@@ -98,6 +99,4 @@ public class TenantModuleEntitlementService {
                 row.isEntitled(), row.isEnabled(), row.getSourcePlan(), row.getPlanVersion());
     }
 
-    public record ModuleView(String code, String name, boolean required, List<String> dependencies,
-                             boolean entitled, boolean enabled, String sourcePlan, int planVersion) {}
 }

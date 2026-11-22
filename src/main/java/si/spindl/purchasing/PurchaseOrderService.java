@@ -22,6 +22,7 @@ import si.spindl.quality.QualityLotRepository;
 import si.spindl.identity.TenantMembershipRepository;
 import si.spindl.identity.TenantAuditEventEntity;
 import si.spindl.identity.TenantAuditEventRepository;
+import si.spindl.reports.WorkflowStudioDtos;
 import si.spindl.reports.WorkflowStudioService;
 import si.spindl.identity.TenantWebhookService;
 
@@ -52,10 +53,10 @@ public class PurchaseOrderService {
     }
 
     @Transactional(readOnly=true)
-    public List<PurchaseOrderView> list(){return orders.findAllByTenantIdOrderByCreatedAtDesc(tenant.currentTenantId()).stream().map(PurchaseOrderView::from).toList();}
+    public List<PurchaseOrderView> list(){return orders.findAllByTenantIdOrderByCreatedAtDesc(tenant.currentTenantId()).stream().map(PurchaseOrderMapper::toPurchaseOrderView).toList();}
 
     @Transactional(readOnly=true)
-    public PurchaseOrderView get(UUID id){return PurchaseOrderView.from(findOrder(id));}
+    public PurchaseOrderView get(UUID id){return PurchaseOrderMapper.toPurchaseOrderView(findOrder(id));}
 
     @Transactional(readOnly=true)
     public List<ReorderSuggestion> reorderSuggestions(){
@@ -84,7 +85,7 @@ public class PurchaseOrderService {
             ItemEntity item=items.findByTenantIdAndId(tenantId,line.itemId()).filter(ItemEntity::isActive).orElseThrow(()->new BadRequestException("An item is missing or inactive"));
             order.addLine(item,line.quantity(),line.unitPrice());
         }
-        return PurchaseOrderView.from(orders.save(order));
+        return PurchaseOrderMapper.toPurchaseOrderView(orders.save(order));
     }
 
     @Transactional
@@ -92,9 +93,9 @@ public class PurchaseOrderService {
         UUID tenantId=tenant.currentTenantId();
         PurchaseOrderEntity order=orders.findForUpdateByTenantIdAndId(tenantId,id).orElseThrow(()->new NotFoundException());
         String actorRole=memberships.findActiveRole(tenantId,actorId).orElseThrow(()->new ForbiddenException("Active workspace membership is required"));
-        WorkflowStudioService.Policy policy=workflows.activePolicy(tenantId);
+        WorkflowStudioDtos.Policy policy=workflows.activePolicy(tenantId);
         if(!actorRole.equals(policy.approverRole())&&!Set.of("OWNER","ADMIN").contains(actorRole))throw new ForbiddenException("Your workspace role cannot approve this purchase order");
-        if(approvals.findByTenantIdAndPurchaseOrderIdAndApproverUserId(tenantId,id,actorId).isPresent())return PurchaseOrderView.from(order);
+        if(approvals.findByTenantIdAndPurchaseOrderIdAndApproverUserId(tenantId,id,actorId).isPresent())return PurchaseOrderMapper.toPurchaseOrderView(order);
         if(!order.getStatus().equals("draft")&&!order.getStatus().equals("pending_approval"))throw new ConflictException("Only draft or pending purchase orders can be approved");
         if(order.getStatus().equals("draft")){
             int required=order.getTotal().compareTo(policy.amountThreshold())>=0?policy.requiredApprovals():1;
@@ -110,7 +111,7 @@ public class PurchaseOrderService {
         Map<String,Object> eventData=Map.of("purchaseOrderId",id.toString(),"orderNumber",order.getOrderNumber(),"approvalCount",received,"requiredApprovals",order.getApprovalRequiredCount(),"status",order.getStatus());
         webhooks.enqueue(tenantId,"PURCHASE_ORDER_APPROVAL_RECORDED",eventData);
         if(order.getStatus().equals("approved"))webhooks.enqueue(tenantId,"PURCHASE_ORDER_APPROVED",eventData);
-        return PurchaseOrderView.from(order);
+        return PurchaseOrderMapper.toPurchaseOrderView(order);
     }
 
     @Transactional
@@ -118,7 +119,7 @@ public class PurchaseOrderService {
         UUID tenantId=tenant.currentTenantId();
         PurchaseOrderEntity order=orders.findForUpdateByTenantIdAndId(tenantId,id).orElseThrow(()->new NotFoundException());
         GoodsReceiptEntity previous=receipts.findByTenantIdAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
-        if(previous!=null){if(!previous.getPurchaseOrder().getId().equals(id))throw new ConflictException("Idempotency key was used for another purchase order");return ReceiptView.from(previous);}
+        if(previous!=null){if(!previous.getPurchaseOrder().getId().equals(id))throw new ConflictException("Idempotency key was used for another purchase order");return PurchaseOrderMapper.toReceiptView(previous);}
         if(!order.getStatus().equals("approved")&&!order.getStatus().equals("partially_received"))throw new ConflictException("Purchase order must be approved before receiving");
         if(request.lines().stream().map(ReceiveLine::purchaseOrderLineId).distinct().count()!=request.lines().size())throw new BadRequestException("A purchase order line can only be received once per receipt");
 
@@ -144,7 +145,7 @@ public class PurchaseOrderService {
         }
         order.refreshReceiptStatus();
         orders.save(order);
-        try{return ReceiptView.from(receipts.saveAndFlush(receipt));}
+        try{return PurchaseOrderMapper.toReceiptView(receipts.saveAndFlush(receipt));}
         catch(DataIntegrityViolationException exception){throw new ConflictException("This receipt request was already posted; retry with its idempotency key");}
     }
 
@@ -155,7 +156,7 @@ public class PurchaseOrderService {
         String reason=request.reason().trim();
         if(request.lines().stream().map(ReturnLine::purchaseOrderLineId).distinct().count()!=request.lines().size())throw new BadRequestException("A purchase order line can only be returned once per return");
         PurchaseReturnEntity prior=returns.findByTenantIdAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
-        if(prior!=null){if(!prior.matches(id,reason,request.lines()))throw new ConflictException("Idempotency key was reused with different return details");return ReturnView.from(prior);}
+        if(prior!=null){if(!prior.matches(id,reason,request.lines()))throw new ConflictException("Idempotency key was reused with different return details");return PurchaseOrderMapper.toReturnView(prior);}
         if(!order.getStatus().equals("received")&&!order.getStatus().equals("partially_received"))throw new ConflictException("Purchase order must have received goods before a return can be posted");
         Map<UUID,PurchaseOrderLineEntity> orderLines=new HashMap<>();order.getLines().forEach(line->orderLines.put(line.getId(),line));
         List<ReturnLine> inputs=new ArrayList<>(request.lines());
@@ -175,7 +176,7 @@ public class PurchaseOrderService {
             movements.save(new InventoryMovementEntity(tenantId,item,-input.quantity(),"Purchase return",returnNumber));
         }
         orders.save(order);
-        try{return ReturnView.from(returns.saveAndFlush(purchaseReturn));}
+        try{return PurchaseOrderMapper.toReturnView(returns.saveAndFlush(purchaseReturn));}
         catch(DataIntegrityViolationException exception){throw new ConflictException("This return request already exists; retry with its idempotency key");}
     }
 

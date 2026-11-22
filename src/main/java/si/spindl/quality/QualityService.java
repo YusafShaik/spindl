@@ -16,6 +16,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import si.spindl.quality.QualityDtos.SetInspectionRequest;
+import si.spindl.quality.QualityDtos.InspectRequest;
+import si.spindl.quality.QualityDtos.ItemQualityView;
+import si.spindl.quality.QualityDtos.QualityLotView;
 
 @Service
 public class QualityService {
@@ -40,8 +44,4 @@ public class QualityService {
     private ItemQualityView itemView(ItemEntity item){return new ItemQualityView(item.getId(),item.getSku(),item.getName(),item.getUnit(),item.isQualityInspectionRequired(),item.getOnHand(),item.getQualityHoldQuantity(),item.getAvailableQuantity());}
     private QualityLotView view(QualityLotEntity lot){ItemEntity item=lot.getItem();return new QualityLotView(lot.getId(),item.getId(),item.getSku(),item.getName(),lot.getWarehouse().getCode(),lot.getWarehouse().getName(),lot.getSourceType(),lot.getSourceReference(),lot.getQuantity(),lot.getRemainingQuantity(),lot.getPassedQuantity(),lot.getRejectedQuantity(),lot.getStatus(),lot.getCreatedAt());}
     private ResponseStatusException notFound(String text){return new NotFoundException(text);}private ResponseStatusException conflict(String text){return new ConflictException(text);}
-    public record SetInspectionRequest(boolean required){}
-    public record InspectRequest(@NotBlank String outcome,@Min(1) int quantity,@Size(max=500) String notes,@NotBlank @Size(max=120) String idempotencyKey){}
-    public record ItemQualityView(UUID id,String sku,String name,String unit,boolean inspectionRequired,int onHand,int heldQuantity,int availableQuantity){}
-    public record QualityLotView(UUID id,UUID itemId,String sku,String itemName,String warehouseCode,String warehouseName,String sourceType,String sourceReference,int quantity,int remainingQuantity,int passedQuantity,int rejectedQuantity,String status,java.time.Instant createdAt){}
 }

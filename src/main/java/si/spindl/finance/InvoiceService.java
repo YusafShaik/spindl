@@ -25,6 +25,8 @@ import java.util.Set;
 import java.util.UUID;
 
 import static si.spindl.finance.InvoiceDtos.*;
+import si.spindl.finance.InvoiceDtos.FinanceSettingsView;
+import si.spindl.finance.InvoiceDtos.TaxSummaryView;
 
 @Service
 public class InvoiceService {
@@ -46,7 +48,7 @@ public class InvoiceService {
 
     @Transactional(readOnly=true)
     public List<InvoiceView> list() {
-        return invoices.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(InvoiceView::from).toList();
+        return invoices.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(InvoiceMapper::toInvoiceView).toList();
     }
 
     @Transactional
@@ -57,7 +59,7 @@ public class InvoiceService {
         InvoiceEntity prior = invoices.findByTenantIdAndIdempotencyKey(tenantId, request.idempotencyKey()).orElse(null);
         if (prior != null) {
             if (!prior.getSalesOrder().getId().equals(orderId)) throw new ConflictException("Idempotency key was used for another sales order");
-            return InvoiceView.from(prior);
+            return InvoiceMapper.toInvoiceView(prior);
         }
         List<SalesOrderLineEntity> billable = order.getLines().stream().filter(line -> line.getInvoiceableQuantity() > 0).toList();
         if (billable.isEmpty()) throw new ConflictException("There are no shipped quantities left to invoice");
@@ -73,7 +75,7 @@ public class InvoiceService {
             invoice.addLine(tenantId, line, quantity,taxRate);
         });
         try {
-            InvoiceEntity saved=invoices.saveAndFlush(invoice);webhooks.enqueue(tenantId,"INVOICE_ISSUED",java.util.Map.of("invoiceId",saved.getId().toString(),"invoiceNumber",saved.getInvoiceNumber(),"customerId",saved.getCustomer().getId().toString(),"salesOrderId",orderId.toString(),"total",saved.getTotal()));return InvoiceView.from(saved);
+            InvoiceEntity saved=invoices.saveAndFlush(invoice);webhooks.enqueue(tenantId,"INVOICE_ISSUED",java.util.Map.of("invoiceId",saved.getId().toString(),"invoiceNumber",saved.getInvoiceNumber(),"customerId",saved.getCustomer().getId().toString(),"salesOrderId",orderId.toString(),"total",saved.getTotal()));return InvoiceMapper.toInvoiceView(saved);
         } catch (DataIntegrityViolationException exception) {
             throw new ConflictException("Invoice request already exists; retry with its idempotency key");
         }
@@ -90,14 +92,14 @@ public class InvoiceService {
         if (paymentWithKey != null) {
             if (!paymentWithKey.matches(invoiceId, request.amount(), method, request.reference()))
                 throw new ConflictException("Idempotency key was reused with different payment details");
-            return InvoiceView.from(invoice);
+            return InvoiceMapper.toInvoiceView(invoice);
         }
         InvoicePaymentEntity existingPayment = invoice.getPayments().stream()
                 .filter(payment -> request.idempotencyKey().equals(payment.getIdempotencyKey())).findFirst().orElse(null);
         if (existingPayment != null) {
             if (!existingPayment.matches(invoiceId, request.amount(), method, request.reference()))
                 throw new ConflictException("Idempotency key was reused with different payment details");
-            return InvoiceView.from(invoice);
+            return InvoiceMapper.toInvoiceView(invoice);
         }
         if (request.amount().signum() <= 0 || request.amount().compareTo(invoice.getBalance()) > 0)
             throw new ConflictException("Payment must be positive and cannot exceed the remaining balance");
@@ -110,7 +112,7 @@ public class InvoiceService {
             throw new ConflictException("Payment request already exists; retry with its idempotency key");
         }
         webhooks.enqueue(tenantId,"INVOICE_PAYMENT_RECORDED",java.util.Map.of("invoiceId",invoice.getId().toString(),"invoiceNumber",invoice.getInvoiceNumber(),"amount",request.amount(),"method",method,"balance",invoice.getBalance()));
-        return InvoiceView.from(invoice);
+        return InvoiceMapper.toInvoiceView(invoice);
     }
 
     @Transactional(readOnly=true)
@@ -127,8 +129,6 @@ public class InvoiceService {
 
     private String csv(String value){return "\""+value.replace("\"","\"\"")+"\"";}
 
-    public record FinanceSettingsView(String taxCode,BigDecimal taxRate,String invoicePrefix,long nextInvoiceNumber){}
-    public record TaxSummaryView(String period,String taxCode,BigDecimal taxRate,BigDecimal subtotal,BigDecimal taxAmount,BigDecimal grossTotal){}
 
     @Transactional
     public int reassignCustomer(UUID tenantId, UUID sourceId, si.spindl.party.CustomerEntity target) {

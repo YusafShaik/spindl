@@ -20,6 +20,13 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
+import si.spindl.crm.LeadDtos.CreateLeadRequest;
+import si.spindl.crm.LeadDtos.StageRequest;
+import si.spindl.crm.LeadDtos.CreateActivityRequest;
+import si.spindl.crm.LeadDtos.ConvertLeadRequest;
+import si.spindl.crm.LeadDtos.ActivityView;
+import si.spindl.crm.LeadDtos.LeadView;
+import si.spindl.crm.LeadDtos.LeadConversionView;
 
 @Service
 public class LeadService {
@@ -42,18 +49,11 @@ public class LeadService {
 
     private void authorize(UUID actorId,UUID tenantId,LeadEntity lead,String action){String role=memberships.findActiveRole(tenantId,actorId).orElseThrow(()->new ForbiddenException("Workspace membership is inactive"));if(permissions.allows(tenantId,role,"crm","leads",action,"ALL"))return;if(permissions.allows(tenantId,role,"crm","leads",action,"OWN")&&lead.getOwnerUserId().equals(actorId))return;if(permissions.allows(tenantId,role,"crm","leads",action,"TEAM")){if(lead.getOwnerUserId().equals(actorId)||memberships.findAllByTenantIdAndManagerUserIdAndActiveTrueOrderByCreatedAtAsc(tenantId,actorId).stream().anyMatch(member->member.getUserId().equals(lead.getOwnerUserId())))return;}if(permissions.allows(tenantId,role,"crm","leads",action,"BRANCH")&&memberBranches.hasActiveAssignment(tenantId,actorId,lead.getBranchId()))return;throw new ForbiddenException("You do not have permission to access this lead");}
 
-    private LeadView view(UUID tenantId,LeadEntity lead){var rows=activities.findAllByTenantIdAndLeadIdOrderByCreatedAtDesc(tenantId,lead.getId()).stream().map(a->new ActivityView(a.getId(),a.getActivityType(),a.getBody(),a.getDueAt(),a.getCompletedAt(),a.getCreatedAt(),a.getActorUserId())).toList();return new LeadView(lead.getId(),lead.getName(),lead.getCompany(),lead.getEmail(),lead.getPhone(),lead.getSource(),lead.getStage(),lead.getOwnerUserId(),lead.getBranchId(),lead.getExpectedValue(),lead.getNextActivityTitle(),lead.getNextActivityAt(),lead.getConvertedCustomerId(),lead.getCreatedAt(),lead.getUpdatedAt(),rows);}
+    private LeadView view(UUID tenantId,LeadEntity lead){var rows=activities.findAllByTenantIdAndLeadIdOrderByCreatedAtDesc(tenantId,lead.getId()).stream().map(LeadMapper::toActivity).toList();return LeadMapper.toLead(lead,rows);}
     private LeadEntity find(UUID tenantId,UUID id){return leads.findByTenantIdAndId(tenantId,id).orElseThrow(()->notFound("Lead not found"));}
     private String normalize(String value){return value==null||value.isBlank()?null:value.trim();}
     private ResponseStatusException notFound(String message){return new NotFoundException(message);}private ResponseStatusException conflict(String message){return new ConflictException(message);}private ResponseStatusException badRequest(String message){return new BadRequestException(message);}
 
-    public record CreateLeadRequest(@NotBlank @Size(max=180) String name,@Size(max=180) String company,@Email @Size(max=254) String email,@Size(max=40) String phone,@Size(max=80) String source,UUID ownerUserId,@DecimalMin("0.00") BigDecimal expectedValue,@Size(max=180) String nextActivityTitle,Instant nextActivityAt,UUID branchId){}
-    public record StageRequest(@NotBlank String stage){}
-    public record CreateActivityRequest(@NotBlank String activityType,@NotBlank @Size(max=2000) String body,@FutureOrPresent Instant dueAt){}
-    public record ConvertLeadRequest(@FutureOrPresent LocalDate quoteValidUntil,@Size(max=1000) String quoteNotes,List<@Valid QuoteLineRequest> quoteLines){}
-    public record ActivityView(UUID id,String activityType,String body,Instant dueAt,Instant completedAt,Instant createdAt,UUID actorUserId){}
-    public record LeadView(UUID id,String name,String company,String email,String phone,String source,String stage,UUID ownerUserId,UUID branchId,BigDecimal expectedValue,String nextActivityTitle,Instant nextActivityAt,UUID convertedCustomerId,Instant createdAt,Instant updatedAt,List<ActivityView> activities){}
-    public record LeadConversionView(UUID leadId,UUID customerId,String customerName,boolean customerCreated,UUID quoteId,String quoteNumber){}
 
     @Transactional
     public int reassignConvertedCustomer(UUID tenantId, UUID sourceId, UUID targetId) {

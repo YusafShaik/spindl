@@ -93,7 +93,7 @@ class CustomerMergeServiceTest {
         when(customFieldService.moveCustomerValues(tenantId, sourceId, targetId, actorId)).thenReturn(5);
         when(attachmentService.moveCustomerAttachments(tenantId, sourceId, targetId)).thenReturn(6);
 
-        CustomerMergeService.MergeResult result = mergeService.merge(actorId, sourceId, targetId);
+        CustomerMergeDtos.MergeResult result = mergeService.merge(actorId, sourceId, targetId);
 
         assertEquals(sourceId, result.archivedCustomerId());
         assertEquals(targetId, result.survivingCustomerId());

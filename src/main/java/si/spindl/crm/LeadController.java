@@ -13,10 +13,10 @@ import java.util.UUID;
 public class LeadController {
     private final LeadService service;
     public LeadController(LeadService service){this.service=service;}
-    @GetMapping public List<LeadService.LeadView> list(@AuthenticationPrincipal Jwt jwt){return service.list(AuthenticatedActor.userId(jwt));}
-    @GetMapping("/{id}") public LeadService.LeadView get(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.get(AuthenticatedActor.userId(jwt),id);}
-    @PostMapping @ResponseStatus(HttpStatus.CREATED) public LeadService.LeadView create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody LeadService.CreateLeadRequest request){return service.create(AuthenticatedActor.userId(jwt),request);}
-    @PatchMapping("/{id}/stage") public LeadService.LeadView stage(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody LeadService.StageRequest request){return service.stage(AuthenticatedActor.userId(jwt),id,request);}
-    @PostMapping("/{id}/activities") public LeadService.LeadView activity(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody LeadService.CreateActivityRequest request){return service.addActivity(AuthenticatedActor.userId(jwt),id,request);}
-    @PostMapping("/{id}/convert") public LeadService.LeadConversionView convert(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody LeadService.ConvertLeadRequest request){return service.convert(AuthenticatedActor.userId(jwt),id,request);}
+    @GetMapping public List<LeadDtos.LeadView> list(@AuthenticationPrincipal Jwt jwt){return service.list(AuthenticatedActor.userId(jwt));}
+    @GetMapping("/{id}") public LeadDtos.LeadView get(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.get(AuthenticatedActor.userId(jwt),id);}
+    @PostMapping @ResponseStatus(HttpStatus.CREATED) public LeadDtos.LeadView create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody LeadDtos.CreateLeadRequest request){return service.create(AuthenticatedActor.userId(jwt),request);}
+    @PatchMapping("/{id}/stage") public LeadDtos.LeadView stage(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody LeadDtos.StageRequest request){return service.stage(AuthenticatedActor.userId(jwt),id,request);}
+    @PostMapping("/{id}/activities") public LeadDtos.LeadView activity(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody LeadDtos.CreateActivityRequest request){return service.addActivity(AuthenticatedActor.userId(jwt),id,request);}
+    @PostMapping("/{id}/convert") public LeadDtos.LeadConversionView convert(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody LeadDtos.ConvertLeadRequest request){return service.convert(AuthenticatedActor.userId(jwt),id,request);}
 }

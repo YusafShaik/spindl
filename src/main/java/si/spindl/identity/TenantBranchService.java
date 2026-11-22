@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import si.spindl.identity.TenantBranchDtos.SaveBranchRequest;
+import si.spindl.identity.TenantBranchDtos.BranchView;
 
 @Service
 @RequiredArgsConstructor
@@ -36,7 +38,7 @@ public class TenantBranchService {
                 ? branches.findAllByTenantIdOrderByDefaultBranchDescNameAsc(tenantId)
                 : branches.findAllByTenantIdAndActiveTrueOrderByDefaultBranchDescNameAsc(tenantId).stream()
                 .filter(branch -> assignments.hasActiveAssignment(tenantId, actorId, branch.getId())).toList();
-        return rows.stream().map(BranchView::from).toList();
+        return rows.stream().map(TenantBranchMapper::toBranchView).toList();
     }
 
     @Transactional
@@ -47,7 +49,7 @@ public class TenantBranchService {
         }
         var branch = branches.save(new TenantBranchEntity(tenantId, code, clean(request.name(), 120, "Branch name"), cleanOptional(request.legalName(), 180), cleanOptional(request.taxRegistration(), 80), false));
         eventPublisher.publishEvent(new DomainAuditEvent(tenantId, actorId, "TENANT_BRANCH_CREATED", "branch", branch.getId(), Map.of("code", code)));
-        return BranchView.from(branch);
+        return TenantBranchMapper.toBranchView(branch);
     }
 
     @Transactional
@@ -59,7 +61,7 @@ public class TenantBranchService {
         }
         branch.update(code, clean(request.name(), 120, "Branch name"), cleanOptional(request.legalName(), 180), cleanOptional(request.taxRegistration(), 80));
         eventPublisher.publishEvent(new DomainAuditEvent(tenantId, actorId, "TENANT_BRANCH_UPDATED", "branch", id, Map.of("code", code)));
-        return BranchView.from(branch);
+        return TenantBranchMapper.toBranchView(branch);
     }
 
     @Transactional
@@ -70,7 +72,7 @@ public class TenantBranchService {
         }
         branch.setActive(active);
         eventPublisher.publishEvent(new DomainAuditEvent(tenantId, actorId, active ? "TENANT_BRANCH_ACTIVATED" : "TENANT_BRANCH_DEACTIVATED", "branch", id, Map.of()));
-        return BranchView.from(branch);
+        return TenantBranchMapper.toBranchView(branch);
     }
 
     private TenantBranchEntity find(UUID tenantId, UUID id) {
@@ -100,15 +102,9 @@ public class TenantBranchService {
         return value.trim();
     }
 
-    public record SaveBranchRequest(String code, String name, String legalName, String taxRegistration) {}
     private static class SetRoles {
         static boolean admin(String role) {
             return "OWNER".equals(role) || "ADMIN".equals(role);
-        }
-    }
-    public record BranchView(UUID id, String code, String name, String legalName, String taxRegistration, boolean active, boolean defaultBranch) {
-        static BranchView from(TenantBranchEntity b) {
-            return new BranchView(b.getId(), b.getCode(), b.getName(), b.getLegalName(), b.getTaxRegistration(), b.isActive(), b.isDefaultBranch());
         }
     }
 }

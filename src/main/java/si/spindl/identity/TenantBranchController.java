@@ -23,22 +23,22 @@ public class TenantBranchController {
     private final CurrentTenant tenant;
 
     @GetMapping
-    public List<TenantBranchService.BranchView> list(@AuthenticationPrincipal Jwt jwt) {
+    public List<TenantBranchDtos.BranchView> list(@AuthenticationPrincipal Jwt jwt) {
         return service.list(tenant.currentTenantId(), AuthenticatedActor.userId(jwt));
     }
 
     @PostMapping
-    public TenantBranchService.BranchView create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody BranchRequest request) {
+    public TenantBranchDtos.BranchView create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody BranchRequest request) {
         return service.create(tenant.currentTenantId(), AuthenticatedActor.userId(jwt), request.dto());
     }
 
     @PutMapping("/{id}")
-    public TenantBranchService.BranchView update(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, @Valid @RequestBody BranchRequest request) {
+    public TenantBranchDtos.BranchView update(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, @Valid @RequestBody BranchRequest request) {
         return service.update(tenant.currentTenantId(), AuthenticatedActor.userId(jwt), id, request.dto());
     }
 
     @PatchMapping("/{id}/active")
-    public TenantBranchService.BranchView active(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, @RequestBody Map<String, Boolean> request) {
+    public TenantBranchDtos.BranchView active(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, @RequestBody Map<String, Boolean> request) {
         Boolean active = request.get("active");
         if (active == null) {
             throw new BadRequestException("The active field is required");
@@ -47,8 +47,8 @@ public class TenantBranchController {
     }
 
     public record BranchRequest(@NotBlank @Size(max = 40) String code, @NotBlank @Size(max = 120) String name, @Size(max = 180) String legalName, @Size(max = 80) String taxRegistration) {
-        TenantBranchService.SaveBranchRequest dto() {
-            return new TenantBranchService.SaveBranchRequest(code, name, legalName, taxRegistration);
+        TenantBranchDtos.SaveBranchRequest dto() {
+            return new TenantBranchDtos.SaveBranchRequest(code, name, legalName, taxRegistration);
         }
     }
 }

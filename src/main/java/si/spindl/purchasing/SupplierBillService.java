@@ -25,14 +25,14 @@ public class SupplierBillService {
     public SupplierBillService(SupplierBillRepository bills,PurchaseOrderRepository orders,CurrentTenant tenant){this.bills=bills;this.orders=orders;this.tenant=tenant;}
 
     @Transactional(readOnly=true)
-    public List<BillView> list(){return bills.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(BillView::from).toList();}
+    public List<BillView> list(){return bills.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(SupplierBillMapper::toBillView).toList();}
 
     @Transactional
     public BillView issue(UUID orderId,IssueRequest request){
         UUID tenantId=tenant.currentTenantId();
         PurchaseOrderEntity order=orders.findForUpdateByTenantIdAndId(tenantId,orderId).orElseThrow(()->new NotFoundException());
         SupplierBillEntity prior=bills.findByTenantIdAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
-        if(prior!=null){if(!prior.getPurchaseOrder().getId().equals(orderId))throw new ConflictException("Idempotency key was used for another purchase order");return BillView.from(prior);}
+        if(prior!=null){if(!prior.getPurchaseOrder().getId().equals(orderId))throw new ConflictException("Idempotency key was used for another purchase order");return SupplierBillMapper.toBillView(prior);}
         if(!order.getStatus().equals("received")&&!order.getStatus().equals("partially_received"))throw new ConflictException("Receive goods before creating a supplier bill");
         List<PurchaseOrderLineEntity> billable=order.getLines().stream().filter(line->line.getBillableQuantity()>0).toList();
         if(billable.isEmpty())throw new ConflictException("There are no accepted quantities left to bill");
@@ -41,7 +41,7 @@ public class SupplierBillService {
         String number="BILL-"+Year.now()+"-"+UUID.randomUUID().toString().substring(0,8).toUpperCase(Locale.ROOT);
         SupplierBillEntity bill=new SupplierBillEntity(tenantId,order.getSupplier(),order,number,request.idempotencyKey(),dueDate,total);
         billable.forEach(line->{int quantity=line.getBillableQuantity();line.billAccepted(quantity);bill.addLine(tenantId,line,quantity);});
-        try{return BillView.from(bills.saveAndFlush(bill));}catch(DataIntegrityViolationException exception){throw new ConflictException("Bill request already exists; retry with its idempotency key");}
+        try{return SupplierBillMapper.toBillView(bills.saveAndFlush(bill));}catch(DataIntegrityViolationException exception){throw new ConflictException("Bill request already exists; retry with its idempotency key");}
     }
 
     @Transactional
@@ -51,11 +51,11 @@ public class SupplierBillService {
         String method=request.method().trim().toUpperCase(Locale.ROOT);
         if(!METHODS.contains(method))throw new BadRequestException("Payment method must be cash, UPI, bank_transfer, card, or cheque");
         SupplierBillPaymentEntity prior=bills.findPaymentByTenantAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
-        if(prior!=null){if(!prior.matches(billId,request.amount(),method,request.reference()))throw new ConflictException("Idempotency key was reused with different payment details");return BillView.from(bill);}
+        if(prior!=null){if(!prior.matches(billId,request.amount(),method,request.reference()))throw new ConflictException("Idempotency key was reused with different payment details");return SupplierBillMapper.toBillView(bill);}
         if(request.amount().signum()<=0||request.amount().compareTo(bill.getBalance())>0)throw new ConflictException("Payment must be positive and cannot exceed the remaining balance");
         bill.recordPayment(request.amount());
         bill.addPayment(new SupplierBillPaymentEntity(tenantId,bill,request.idempotencyKey(),request.amount(),method,request.reference()));
         try{bills.saveAndFlush(bill);}catch(DataIntegrityViolationException exception){throw new ConflictException("Payment already posted; retry with its idempotency key");}
-        return BillView.from(bill);
+        return SupplierBillMapper.toBillView(bill);
     }
 }

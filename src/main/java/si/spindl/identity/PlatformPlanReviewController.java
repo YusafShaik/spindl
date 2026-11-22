@@ -22,15 +22,15 @@ public class PlatformPlanReviewController {
     public PlatformPlanReviewController(TenantPlanChangeRequestService service){this.service=service;}
 
     @GetMapping
-    public List<TenantPlanChangeRequestService.PlatformRequestView> queue(){return service.platformQueue();}
+    public List<TenantPlanChangeRequestDtos.PlatformRequestView> queue(){return service.platformQueue();}
 
     @PostMapping("/{id}/approve")
-    public TenantPlanChangeRequestService.PlatformRequestView approve(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody(required=false) ReviewRequest request){
+    public TenantPlanChangeRequestDtos.PlatformRequestView approve(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody(required=false) ReviewRequest request){
         return service.approve(id,AuthenticatedActor.userId(jwt),jwt.getClaimAsString("email"),request==null?null:request.note());
     }
 
     @PostMapping("/{id}/reject")
-    public TenantPlanChangeRequestService.PlatformRequestView reject(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody ReviewRequest request){
+    public TenantPlanChangeRequestDtos.PlatformRequestView reject(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody ReviewRequest request){
         return service.reject(id,AuthenticatedActor.userId(jwt),jwt.getClaimAsString("email"),request.note());
     }
 

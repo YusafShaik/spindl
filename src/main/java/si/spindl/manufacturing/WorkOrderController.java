@@ -1,5 +1,6 @@
 package si.spindl.manufacturing;
 import si.spindl.common.security.AuthenticatedActor;
+import si.spindl.common.security.JwtRoleGate;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,5 +28,5 @@ public class WorkOrderController {
     @PostMapping("/{id}/resume") public ManufacturingDtos.WorkOrderView resume(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return protectCost(jwt,service.resume(tenant.currentTenantId(),AuthenticatedActor.userId(jwt),id));}
     @PostMapping("/{id}/cancel") public ManufacturingDtos.WorkOrderView cancel(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return protectCost(jwt,service.cancel(tenant.currentTenantId(),AuthenticatedActor.userId(jwt),id));}
     @PostMapping("/{id}/close") public ManufacturingDtos.WorkOrderView close(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return protectCost(jwt,service.close(tenant.currentTenantId(),AuthenticatedActor.userId(jwt),id));}
-    private ManufacturingDtos.WorkOrderView protectCost(Jwt jwt,ManufacturingDtos.WorkOrderView view){var roles=jwt.getClaimAsStringList("roles");return roles!=null&&roles.stream().anyMatch(role->java.util.Set.of("OWNER","ADMIN","MANAGER","COST_ANALYST").contains(role))?view:view.withoutCostDetails();}
+    private ManufacturingDtos.WorkOrderView protectCost(Jwt jwt,ManufacturingDtos.WorkOrderView view){return JwtRoleGate.hasAny(jwt, "OWNER", "ADMIN", "MANAGER", "COST_ANALYST")?view:view.withoutCostDetails();}
 }

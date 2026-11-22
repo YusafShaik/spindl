@@ -84,7 +84,7 @@ public class EngineeringService {
         return ecos.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream()
                 .filter(e -> status == null || status.isBlank() || "ALL".equalsIgnoreCase(status) || e.getStatus().equalsIgnoreCase(status))
                 .filter(e -> severity == null || severity.isBlank() || "ALL".equalsIgnoreCase(severity) || e.getChangeSeverity().equalsIgnoreCase(severity))
-                .map(EngineeringDtos.EcoSummaryView::from)
+                .map(EngineeringMapper::toEcoSummaryView)
                 .toList();
     }
 
@@ -93,7 +93,7 @@ public class EngineeringService {
                 .orElseThrow(() -> new NotFoundException("Engineering Change Order not found"));
         var lines = diffLines.findAllByTenantIdAndEcoIdOrderById(tenantId, id);
         var signs = signOffs.findAllByTenantIdAndEcoIdOrderByCreatedAtAsc(tenantId, id);
-        return EngineeringDtos.EcoDetailView.of(eco, lines, signs);
+        return EngineeringMapper.toEcoDetailView(eco, lines, signs);
     }
 
     // ==========================================
@@ -172,7 +172,7 @@ public class EngineeringService {
                 Map.of("ecoNumber", eco.getEcoNumber(), "finishedSku", finished.getSku(), "targetRevision", targetRev)
         ));
 
-        return EngineeringDtos.EcoDetailView.from(eco);
+        return EngineeringMapper.toEcoDetailView(eco);
     }
 
     // ==========================================
@@ -218,7 +218,7 @@ public class EngineeringService {
 
         var lines = diffLines.findAllByTenantIdAndEcoIdOrderById(tenantId, ecoId);
         var signs = signOffs.findAllByTenantIdAndEcoIdOrderByCreatedAtAsc(tenantId, ecoId);
-        return EngineeringDtos.EcoDetailView.of(eco, lines, signs);
+        return EngineeringMapper.toEcoDetailView(eco, lines, signs);
     }
 
     // ==========================================
@@ -347,6 +347,6 @@ public class EngineeringService {
         ));
 
         var finalSigns = signOffs.findAllByTenantIdAndEcoIdOrderByCreatedAtAsc(tenantId, ecoId);
-        return EngineeringDtos.EcoDetailView.of(eco, currentDiffs, finalSigns);
+        return EngineeringMapper.toEcoDetailView(eco, currentDiffs, finalSigns);
     }
 }

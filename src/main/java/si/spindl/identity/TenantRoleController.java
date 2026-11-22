@@ -17,13 +17,13 @@ public class TenantRoleController {
     private final CurrentTenant tenant;
     public TenantRoleController(TenantRoleService roles,CurrentTenant tenant){this.roles=roles;this.tenant=tenant;}
 
-    @GetMapping public List<TenantRoleService.RoleView> list(){return roles.list(tenant.currentTenantId());}
+    @GetMapping public List<TenantRoleDtos.RoleView> list(){return roles.list(tenant.currentTenantId());}
     @PostMapping @ResponseStatus(HttpStatus.CREATED)
-    public TenantRoleService.RoleView create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody TenantRoleService.SaveRoleRequest request){
+    public TenantRoleDtos.RoleView create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody TenantRoleDtos.SaveRoleRequest request){
         return roles.create(tenant.currentTenantId(),AuthenticatedActor.userId(jwt),request);
     }
     @PutMapping("/{code}")
-    public TenantRoleService.RoleView update(@AuthenticationPrincipal Jwt jwt,@PathVariable String code,@Valid @RequestBody TenantRoleService.SaveRoleRequest request){
+    public TenantRoleDtos.RoleView update(@AuthenticationPrincipal Jwt jwt,@PathVariable String code,@Valid @RequestBody TenantRoleDtos.SaveRoleRequest request){
         return roles.update(tenant.currentTenantId(),AuthenticatedActor.userId(jwt),code,request);
     }
     @DeleteMapping("/{code}")

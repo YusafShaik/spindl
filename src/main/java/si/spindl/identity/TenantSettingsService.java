@@ -18,6 +18,8 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import si.spindl.identity.TenantSettingsDtos.UpdateTenantSettingsRequest;
+import si.spindl.identity.TenantSettingsDtos.TenantSettings;
 
 @Service
 public class TenantSettingsService {
@@ -32,7 +34,7 @@ public class TenantSettingsService {
     }
 
     @Transactional(readOnly = true)
-    public TenantSettings settings() { return TenantSettings.from(findTenant()); }
+    public TenantSettings settings() { return TenantSettingsMapper.toTenantSettings(findTenant()); }
 
     @Transactional
     public TenantSettings update(UUID actorId, UpdateTenantSettingsRequest request) {
@@ -54,7 +56,7 @@ public class TenantSettingsService {
         details.put("timezone", timezone); details.put("countryCode", country); details.put("currencyCode", currency);
         details.put("fiscalYearStartMonth", request.fiscalYearStartMonth());
         audit.save(new TenantAuditEventEntity(organization.getId(), actorId, "TENANT_PROFILE_UPDATED", "tenant", organization.getId(), details));
-        return TenantSettings.from(organization);
+        return TenantSettingsMapper.toTenantSettings(organization);
     }
 
     private TenantEntity findTenant() {
@@ -62,21 +64,5 @@ public class TenantSettingsService {
                 .orElseThrow(() -> new NotFoundException("Workspace not found"));
     }
 
-    public record UpdateTenantSettingsRequest(
-            @NotBlank @Size(min = 2, max = 180) String displayName,
-            @Size(max = 180) String legalName,
-            @NotBlank @Size(max = 64) String timezone,
-            @NotBlank @Pattern(regexp = "[A-Za-z]{2}") String countryCode,
-            @NotBlank @Pattern(regexp = "[A-Za-z]{3}") String currencyCode,
-            @Min(1) @Max(12) int fiscalYearStartMonth) {}
 
-    public record TenantSettings(UUID id, String slug, String displayName, String legalName,
-                                 String timezone, String countryCode, String currencyCode,
-                                 int fiscalYearStartMonth, String status, Instant gracePeriodEndsAt) {
-        static TenantSettings from(TenantEntity tenant) {
-            return new TenantSettings(tenant.getId(), tenant.getSlug(), tenant.getDisplayName(), tenant.getLegalName(),
-                    tenant.getTimezone(), tenant.getCountryCode(), tenant.getCurrencyCode(),
-                    tenant.getFiscalYearStartMonth(), tenant.getStatus(), tenant.getGracePeriodEndsAt());
-        }
-    }
 }

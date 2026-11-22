@@ -10,6 +10,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import si.spindl.identity.TenantRoleDtos.SaveRoleRequest;
+import si.spindl.identity.TenantRoleDtos.GrantRequest;
+import si.spindl.identity.TenantRoleDtos.RoleView;
 
 @Service
 public class TenantRoleService {
@@ -117,7 +120,4 @@ public class TenantRoleService {
         return new RoleView(role.getId(),role.getRoleCode(),role.getDisplayName(),role.getDescription(),role.isSystemRole(),grants.stream()
                 .map(grant->new GrantRequest(grant.getModule(),grant.getResource(),grant.getAction(),grant.getPermissionScope())).toList());
     }
-    public record SaveRoleRequest(String roleCode,String displayName,String description,String cloneFrom,List<GrantRequest> permissions){}
-    public record GrantRequest(String module,String resource,String action,String scope){}
-    public record RoleView(UUID id,String roleCode,String displayName,String description,boolean systemRole,List<GrantRequest> permissions){}
 }

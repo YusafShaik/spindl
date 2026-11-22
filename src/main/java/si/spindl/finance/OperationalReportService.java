@@ -8,6 +8,7 @@ import si.spindl.tenant.CurrentTenant;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import si.spindl.finance.OperationalReportDtos.AgingRow;
 
 @Service
 public class OperationalReportService {
@@ -26,5 +27,4 @@ public class OperationalReportService {
     private void validate(LocalDate from,LocalDate to){if(from!=null&&to!=null&&from.isAfter(to))throw new BadRequestException("From date must not be after the due date filter");}
     private String csv(List<AgingRow> rows){String header="reference,counterparty,due_date,age_bucket,original_amount,paid_or_credited,balance\r\n";return header+rows.stream().map(row->String.join(",",cell(row.reference()),cell(row.counterparty()),row.dueDate().toString(),row.ageBucket(),row.originalAmount().toPlainString(),row.paidOrCredited().toPlainString(),row.balance().toPlainString())).collect(java.util.stream.Collectors.joining("\r\n"));}
     private String cell(String value){String safe=value==null?"":value.replaceAll("^[\\s]*([=+@-])","'$1");return "\""+safe.replace("\"","\"\"")+"\"";}
-    public record AgingRow(String reference,String counterparty,LocalDate dueDate,BigDecimal originalAmount,BigDecimal paidOrCredited,BigDecimal balance,String ageBucket){}
 }

@@ -36,6 +36,12 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
+import si.spindl.pos.PosRefundDtos.RefundLineRequest;
+import si.spindl.pos.PosRefundDtos.RefundTenderRequest;
+import si.spindl.pos.PosRefundDtos.RefundRequest;
+import si.spindl.pos.PosRefundDtos.RefundLineView;
+import si.spindl.pos.PosRefundDtos.RefundTenderView;
+import si.spindl.pos.PosRefundDtos.RefundView;
 
 @Service
 public class PosRefundService {
@@ -70,10 +76,4 @@ public class PosRefundService {
     private String blankToNull(String value){return value==null||value.isBlank()?null:value.trim();}
     private ResponseStatusException badRequest(String message){return new BadRequestException(message);}private ResponseStatusException conflict(String message){return new ConflictException(message);}private ResponseStatusException notFound(String message){return new NotFoundException(message);}
     private record CalculatedLine(PosSaleLineEntity line,int quantity,String disposition,BigDecimal subtotal,BigDecimal taxTotal){}
-    public record RefundLineRequest(@NotNull UUID saleLineId,@Positive int quantity,@NotBlank @Pattern(regexp="(?i)RESTOCK|QUARANTINE|SCRAP") String disposition){}
-    public record RefundTenderRequest(@NotBlank @Pattern(regexp="(?i)CASH|CARD|UPI|OTHER") String method,@NotNull @DecimalMin("0.01") @Digits(integer=12,fraction=2) BigDecimal amount,@Size(max=120) String reference){}
-    public record RefundRequest(@NotBlank @Size(max=120) String idempotencyKey,@NotNull UUID sessionId,@NotBlank @Size(max=300) String reason,@NotEmpty List<@Valid RefundLineRequest> lines,@NotEmpty List<@Valid RefundTenderRequest> tenders){}
-    public record RefundLineView(String sku,String itemName,int quantity,String disposition,BigDecimal subtotal,BigDecimal taxTotal,BigDecimal total){}
-    public record RefundTenderView(String method,BigDecimal amount,String reference){}
-    public record RefundView(UUID id,UUID saleId,String receiptNumber,String refundNumber,String reason,BigDecimal subtotal,BigDecimal taxTotal,BigDecimal total,Instant createdAt,List<RefundLineView> lines,List<RefundTenderView> tenders){}
 }

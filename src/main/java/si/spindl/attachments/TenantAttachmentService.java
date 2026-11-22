@@ -31,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import si.spindl.attachments.TenantAttachmentDtos.AttachmentView;
+import si.spindl.attachments.TenantAttachmentDtos.Download;
 
 @Service
 public class TenantAttachmentService {
@@ -61,7 +63,7 @@ public class TenantAttachmentService {
     @Transactional(readOnly=true)
     public List<AttachmentView> list(UUID tenantId,String resource,UUID recordId) {
         requireParent(tenantId,resource,recordId);
-        return attachments.findAllByTenantIdAndResourceCodeAndRecordIdOrderByUploadedAtDesc(tenantId,resource,recordId).stream().map(AttachmentView::from).toList();
+        return attachments.findAllByTenantIdAndResourceCodeAndRecordIdOrderByUploadedAtDesc(tenantId,resource,recordId).stream().map(TenantAttachmentMapper::toAttachmentView).toList();
     }
 
     @Transactional
@@ -79,7 +81,7 @@ public class TenantAttachmentService {
             try(var in=Files.newInputStream(temp)){scanner.scan(in);}
             String hash=sha256(temp);
             var prior=attachments.findByTenantIdAndIdempotencyKey(tenantId,key).orElse(null);
-            if(prior!=null){if(!prior.getSha256().equals(hash)||!prior.getResourceCode().equals(resource)||!prior.getRecordId().equals(recordId))throw new ConflictException("Idempotency-Key was already used for a different file");return AttachmentView.from(prior);}
+            if(prior!=null){if(!prior.getSha256().equals(hash)||!prior.getResourceCode().equals(resource)||!prior.getRecordId().equals(recordId))throw new ConflictException("Idempotency-Key was already used for a different file");return TenantAttachmentMapper.toAttachmentView(prior);}
             usage.ensureRow(tenantId); var meter=usage.findForUpdate(tenantId).orElseThrow();
             var subscription=subscriptions.findByTenantId(tenantId).orElseThrow(()->new ConflictException("Workspace plan is unavailable"));
             var plan=plans.findByPlanCodeAndVersionAndActiveTrue(subscription.getPlanCode(),subscription.getPlanVersion()).orElseThrow(()->new ConflictException("Workspace plan is unavailable"));
@@ -96,7 +98,7 @@ public class TenantAttachmentService {
             TenantAttachmentEntity entity=new TenantAttachmentEntity(id,tenantId,resource,recordId,filename,mediaType,size,hash,storageKey,key,userId);
             attachments.save(entity); meter.addBytes(size);
             audit.save(new TenantAuditEventEntity(tenantId,userId,"ATTACHMENT_UPLOADED",resource,id,Map.of("recordId",recordId.toString(),"filename",filename,"sizeBytes",size)));
-            return AttachmentView.from(entity);
+            return TenantAttachmentMapper.toAttachmentView(entity);
         } catch(ResponseStatusException e){throw e;} catch(Exception e){throw new InternalServerException("Could not store attachment", e);}
         finally{if(temp!=null)try{Files.deleteIfExists(temp);}catch(IOException ignored){}}
     }
@@ -129,8 +131,6 @@ public class TenantAttachmentService {
     private String mediaType(MultipartFile file,String filename){String type=file.getContentType()==null?"application/octet-stream":file.getContentType().split(";",2)[0].toLowerCase();if(!TYPES.contains(type))throw new UnsupportedMediaTypeException("Only PDF, PNG, JPEG, and plain text files are supported");
         try(var in=file.getInputStream()){byte[] b=in.readNBytes(8);boolean valid=switch(type){case "application/pdf"->b.length>=5&&b[0]=='%'&&b[1]=='P'&&b[2]=='D'&&b[3]=='F'&&b[4]=='-';case "image/png"->b.length>=8&&(b[0]&255)==137&&b[1]=='P'&&b[2]=='N'&&b[3]=='G';case "image/jpeg"->b.length>=3&&(b[0]&255)==255&&(b[1]&255)==216&&(b[2]&255)==255;case "text/plain"->true;default->false;};if(!valid)throw new UnsupportedMediaTypeException("File contents do not match the declared file type");}catch(IOException e){throw new BadRequestException("Could not read upload");}return type;}
     private String sha256(Path path)throws Exception{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));}
-    public record AttachmentView(UUID id,String filename,String mediaType,long sizeBytes,String scanStatus,UUID uploadedBy,java.time.Instant uploadedAt){static AttachmentView from(TenantAttachmentEntity e){return new AttachmentView(e.getId(),e.getOriginalFilename(),e.getMediaType(),e.getSizeBytes(),e.getScanStatus(),e.getUploadedBy(),e.getUploadedAt());}}
-    public record Download(Resource resource,String filename,String mediaType,long sizeBytes){}
 
     @Transactional
     public int moveCustomerAttachments(UUID tenantId, UUID sourceId, UUID targetId) {

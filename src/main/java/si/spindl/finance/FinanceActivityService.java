@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import si.spindl.finance.FinanceActivityDtos.ActivityView;
 
 @Service
 public class FinanceActivityService {
@@ -31,10 +32,7 @@ public class FinanceActivityService {
                 .filter(row->type.equals("ALL")||type.equals(row.getType()))
                 .filter(row->start==null||!row.getOccurredAt().isBefore(start))
                 .filter(row->endExclusive==null||row.getOccurredAt().isBefore(endExclusive))
-                .map(ActivityView::from).toList();
+                .map(FinanceActivityMapper::toActivityView).toList();
     }
 
-    public record ActivityView(UUID id,String type,String reference,String counterparty,java.time.Instant occurredAt,BigDecimal amount,String status,String method,String direction){
-        static ActivityView from(FinanceActivityRow row){return new ActivityView(row.getId(),row.getType(),row.getReference(),row.getCounterparty(),row.getOccurredAt(),row.getAmount(),row.getStatus(),row.getMethod(),row.getDirection());}
-    }
 }

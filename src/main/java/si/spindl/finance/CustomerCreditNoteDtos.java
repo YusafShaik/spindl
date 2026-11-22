@@ -39,9 +39,5 @@ public final class CustomerCreditNoteDtos {
     public record CreditNoteView(UUID id, String creditNumber, String invoiceNumber, String customerName, String reason,
                                  BigDecimal subtotal, BigDecimal taxTotal, BigDecimal total, BigDecimal refundDue,
                                  BigDecimal amountRefunded, BigDecimal refundBalance, Instant issuedAt,
-                                 List<CreditNoteLineView> lines) {
-        static CreditNoteView from(CustomerCreditNoteEntity note) {
-            return new CreditNoteView(note.getId(), note.getCreditNumber(), note.getInvoice().getInvoiceNumber(), note.getInvoice().getCustomer().getName(), note.getReason(), note.getSubtotal(), note.getTaxTotal(), note.getTotal(), note.getRefundDue(), note.getAmountRefunded(), note.getRefundBalance(), note.getIssuedAt(), note.getLines().stream().map(line -> new CreditNoteLineView(line.getId(), line.getInvoiceLine().getId(), line.getSku(), line.getItemName(), line.getQuantity(), line.getDisposition(), line.getWarehouse().getName(), line.getSubtotal(), line.getTaxAmount(), line.getLineTotal())).toList());
-        }
-    }
+                                 List<CreditNoteLineView> lines) {}
 }

@@ -18,6 +18,7 @@ import si.spindl.sales.SalesService;
 import si.spindl.tenant.CurrentTenant;
 
 import java.util.*;
+import si.spindl.party.CustomerMergeDtos.MergeResult;
 
 @Service
 @RequiredArgsConstructor
@@ -80,6 +81,4 @@ public class CustomerMergeService {
         return new MergeResult(sourceId, targetId, quoteCount, orderCount, invoiceCount, leadCount, customFieldCount, attachmentCount);
     }
 
-    public record MergeResult(UUID archivedCustomerId, UUID survivingCustomerId, int quotesMoved, int ordersMoved,
-                              int invoicesMoved, int leadsReassigned, int customFieldsMoved, int attachmentsMoved) {}
 }

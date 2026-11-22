@@ -36,6 +36,21 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
+import si.spindl.pos.PosDtos.CreateRegisterRequest;
+import si.spindl.pos.PosDtos.AssignCashierRequest;
+import si.spindl.pos.PosDtos.OpenSessionRequest;
+import si.spindl.pos.PosDtos.CloseSessionRequest;
+import si.spindl.pos.PosDtos.CheckoutLineRequest;
+import si.spindl.pos.PosDtos.TenderRequest;
+import si.spindl.pos.PosDtos.VoidSaleRequest;
+import si.spindl.pos.PosDtos.CheckoutRequest;
+import si.spindl.pos.PosDtos.CashierView;
+import si.spindl.pos.PosDtos.RegisterView;
+import si.spindl.pos.PosDtos.SessionView;
+import si.spindl.pos.PosDtos.SaleLineView;
+import si.spindl.pos.PosDtos.TenderView;
+import si.spindl.pos.PosDtos.PosSettingsView;
+import si.spindl.pos.PosDtos.SaleView;
 
 @Service
 public class PosService {
@@ -60,7 +75,7 @@ public class PosService {
     public PosService(CurrentTenant tenant,PosRegisterRepository registers,PosRegisterSessionRepository sessions,PosSaleRepository sales,PosSaleLineRepository saleLines,PosSaleTenderRepository tenders,WarehouseRepository warehouses,WarehouseStockRepository warehouseStock,ItemRepository items,InventoryMovementRepository movements,CustomerRepository customers,TenantMembershipRepository memberships,TenantMembershipBranchRepository memberBranches,TenantFinanceSettingsRepository financeSettings,TenantAuditEventRepository audit,QualityLotRepository qualityLots,TeamService team){this.tenant=tenant;this.registers=registers;this.sessions=sessions;this.sales=sales;this.saleLines=saleLines;this.tenders=tenders;this.warehouses=warehouses;this.warehouseStock=warehouseStock;this.items=items;this.movements=movements;this.customers=customers;this.memberships=memberships;this.memberBranches=memberBranches;this.financeSettings=financeSettings;this.audit=audit;this.qualityLots=qualityLots;this.team=team;}
 
     @Transactional(readOnly=true)
-    public List<RegisterView> registers(UUID actor){UUID tenantId=tenant.currentTenantId();Set<UUID> branchIds=branchScope(tenantId,actor);boolean manager=isManager(tenantId,actor);return registers.findAllByTenantIdAndActiveTrueOrderByNameAsc(tenantId).stream().filter(register->branchIds.contains(register.getWarehouse().getBranchId())).filter(register->manager||actor.equals(register.getAssignedCashierUserId())).map(RegisterView::from).toList();}
+    public List<RegisterView> registers(UUID actor){UUID tenantId=tenant.currentTenantId();Set<UUID> branchIds=branchScope(tenantId,actor);boolean manager=isManager(tenantId,actor);return registers.findAllByTenantIdAndActiveTrueOrderByNameAsc(tenantId).stream().filter(register->branchIds.contains(register.getWarehouse().getBranchId())).filter(register->manager||actor.equals(register.getAssignedCashierUserId())).map(PosMapper::toRegisterView).toList();}
 
     @Transactional(readOnly=true)
     public List<CashierView> cashiers(UUID actor,UUID warehouseId){UUID tenantId=tenant.currentTenantId();requireManager(tenantId,actor);WarehouseEntity warehouse=warehouses.findByTenantIdAndIdAndActiveTrue(tenantId,warehouseId).orElseThrow(()->badRequest("Choose an active shop warehouse"));if(!branchScope(tenantId,actor).contains(warehouse.getBranchId()))throw new ForbiddenException("Warehouse is outside your assigned store scope");return team.listMembers(tenantId).stream().filter(si.spindl.identity.TeamDtos.MembershipView::active).filter(member->!"VIEWER".equals(member.role())).filter(member->member.branchIds().contains(warehouse.getBranchId())).map(member->new CashierView(UUID.fromString(member.userId()),member.name(),member.email(),member.role())).toList();}
@@ -69,13 +84,13 @@ public class PosService {
     public PosSettingsView settings(){var settings=financeSettings.findById(tenant.currentTenantId()).orElse(null);return new PosSettingsView(settings==null?"NONE":settings.getTaxCode(),settings==null?BigDecimal.ZERO:settings.getTaxRate());}
 
     @Transactional
-    public RegisterView createRegister(UUID actor,CreateRegisterRequest request){UUID tenantId=tenant.currentTenantId();requireManager(tenantId,actor);WarehouseEntity warehouse=warehouses.findByTenantIdAndIdAndActiveTrue(tenantId,request.warehouseId()).orElseThrow(()->badRequest("Choose an active shop warehouse"));if(!branchScope(tenantId,actor).contains(warehouse.getBranchId()))throw new ForbiddenException("Choose a warehouse in your assigned store scope");ensureCashierInBranch(tenantId,request.cashierUserId(),warehouse.getBranchId());String code=request.code().trim().toUpperCase(Locale.ROOT);if(registers.existsByTenantIdAndCodeIgnoreCase(tenantId,code))throw conflict("Register code already exists");try{return RegisterView.from(registers.saveAndFlush(new PosRegisterEntity(tenantId,warehouse,code,request.name().trim(),request.cashierUserId())));}catch(DataIntegrityViolationException exception){throw conflict("Register code already exists");}}
+    public RegisterView createRegister(UUID actor,CreateRegisterRequest request){UUID tenantId=tenant.currentTenantId();requireManager(tenantId,actor);WarehouseEntity warehouse=warehouses.findByTenantIdAndIdAndActiveTrue(tenantId,request.warehouseId()).orElseThrow(()->badRequest("Choose an active shop warehouse"));if(!branchScope(tenantId,actor).contains(warehouse.getBranchId()))throw new ForbiddenException("Choose a warehouse in your assigned store scope");ensureCashierInBranch(tenantId,request.cashierUserId(),warehouse.getBranchId());String code=request.code().trim().toUpperCase(Locale.ROOT);if(registers.existsByTenantIdAndCodeIgnoreCase(tenantId,code))throw conflict("Register code already exists");try{return PosMapper.toRegisterView(registers.saveAndFlush(new PosRegisterEntity(tenantId,warehouse,code,request.name().trim(),request.cashierUserId())));}catch(DataIntegrityViolationException exception){throw conflict("Register code already exists");}}
 
     @Transactional
-    public RegisterView assignCashier(UUID actor,UUID registerId,AssignCashierRequest request){UUID tenantId=tenant.currentTenantId();requireManager(tenantId,actor);PosRegisterEntity register=registers.findByTenantIdAndIdAndActiveTrue(tenantId,registerId).orElseThrow(()->notFound("Active register not found"));requireRegisterBranch(tenantId,actor,register);ensureCashierInBranch(tenantId,request.cashierUserId(),register.getWarehouse().getBranchId());register.assignCashier(request.cashierUserId());return RegisterView.from(register);}
+    public RegisterView assignCashier(UUID actor,UUID registerId,AssignCashierRequest request){UUID tenantId=tenant.currentTenantId();requireManager(tenantId,actor);PosRegisterEntity register=registers.findByTenantIdAndIdAndActiveTrue(tenantId,registerId).orElseThrow(()->notFound("Active register not found"));requireRegisterBranch(tenantId,actor,register);ensureCashierInBranch(tenantId,request.cashierUserId(),register.getWarehouse().getBranchId());register.assignCashier(request.cashierUserId());return PosMapper.toRegisterView(register);}
 
     @Transactional(readOnly=true)
-    public List<SessionView> sessions(UUID actor){UUID tenantId=tenant.currentTenantId();Set<UUID> branchIds=branchScope(tenantId,actor);boolean manager=isManager(tenantId,actor);return sessions.findAllByTenantIdOrderByOpenedAtDesc(tenantId).stream().filter(session->branchIds.contains(session.getRegister().getWarehouse().getBranchId())).filter(session->manager||actor.equals(session.getCashierUserId())).limit(100).map(SessionView::from).toList();}
+    public List<SessionView> sessions(UUID actor){UUID tenantId=tenant.currentTenantId();Set<UUID> branchIds=branchScope(tenantId,actor);boolean manager=isManager(tenantId,actor);return sessions.findAllByTenantIdOrderByOpenedAtDesc(tenantId).stream().filter(session->branchIds.contains(session.getRegister().getWarehouse().getBranchId())).filter(session->manager||actor.equals(session.getCashierUserId())).limit(100).map(PosMapper::toSessionView).toList();}
 
     @Transactional
     public SessionView open(UUID actor,OpenSessionRequest request){
@@ -85,12 +100,12 @@ public class PosService {
         var existing = sessions.findAllByTenantIdOrderByOpenedAtDesc(tenantId).stream()
                 .filter(s -> "OPEN".equals(s.getStatus()) && s.getRegister().getId().equals(register.getId()))
                 .findFirst().orElse(null);
-        if (existing != null) return SessionView.from(existing);
-        return SessionView.from(sessions.saveAndFlush(new PosRegisterSessionEntity(tenantId,register,actor,request.openingFloat() == null ? BigDecimal.ZERO : request.openingFloat())));
+        if (existing != null) return PosMapper.toSessionView(existing);
+        return PosMapper.toSessionView(sessions.saveAndFlush(new PosRegisterSessionEntity(tenantId,register,actor,request.openingFloat() == null ? BigDecimal.ZERO : request.openingFloat())));
     }
 
     @Transactional
-    public SessionView close(UUID actor,UUID sessionId,CloseSessionRequest request){UUID tenantId=tenant.currentTenantId();requireManager(tenantId,actor);PosRegisterSessionEntity session=sessions.findForUpdate(tenantId,sessionId).orElseThrow(()->notFound("Register session not found"));requireRegisterBranch(tenantId,actor,session.getRegister());if(!"OPEN".equals(session.getStatus()))return SessionView.from(session);BigDecimal expected=session.getOpeningFloat().add(sales.cashTenderedForSession(tenantId,sessionId)).subtract(sales.cashRefundedForSession(tenantId,sessionId));session.close(expected,money(request.countedCash()));audit.save(new TenantAuditEventEntity(tenantId,actor,"POS_REGISTER_SESSION_CLOSED","pos_session",sessionId,Map.of("registerCode",session.getRegister().getCode(),"expectedCash",expected,"countedCash",session.getCountedCash(),"variance",session.getCashVariance())));return SessionView.from(session);}
+    public SessionView close(UUID actor,UUID sessionId,CloseSessionRequest request){UUID tenantId=tenant.currentTenantId();requireManager(tenantId,actor);PosRegisterSessionEntity session=sessions.findForUpdate(tenantId,sessionId).orElseThrow(()->notFound("Register session not found"));requireRegisterBranch(tenantId,actor,session.getRegister());if(!"OPEN".equals(session.getStatus()))return PosMapper.toSessionView(session);BigDecimal expected=session.getOpeningFloat().add(sales.cashTenderedForSession(tenantId,sessionId)).subtract(sales.cashRefundedForSession(tenantId,sessionId));session.close(expected,money(request.countedCash()));audit.save(new TenantAuditEventEntity(tenantId,actor,"POS_REGISTER_SESSION_CLOSED","pos_session",sessionId,Map.of("registerCode",session.getRegister().getCode(),"expectedCash",expected,"countedCash",session.getCountedCash(),"variance",session.getCashVariance())));return PosMapper.toSessionView(session);}
 
     @Transactional
     public SaleView checkout(UUID actor,UUID sessionId,CheckoutRequest request){UUID tenantId=tenant.currentTenantId();String key=request.idempotencyKey().trim();String hash=payloadHash(sessionId,request);PosSaleEntity previous=sales.findByTenantIdAndIdempotencyKey(tenantId,key).orElse(null);if(previous!=null){requireRegisterBranch(tenantId,actor,previous.getSession().getRegister());return replay(previous,hash);}
@@ -150,19 +165,4 @@ public class PosService {
     private ResponseStatusException badRequest(String message){return new BadRequestException(message);} private ResponseStatusException conflict(String message){return new ConflictException(message);} private ResponseStatusException notFound(String message){return new NotFoundException(message);}
 
     private record LockedLine(ItemEntity item,int quantity,BigDecimal listPrice,BigDecimal discountPercent,BigDecimal unitPrice,BigDecimal subtotal){}
-    public record CreateRegisterRequest(@NotNull UUID warehouseId,@NotNull UUID cashierUserId,@NotBlank @Size(max=32) String code,@NotBlank @Size(max=120) String name){}
-    public record AssignCashierRequest(@NotNull UUID cashierUserId){}
-    public record OpenSessionRequest(@NotNull UUID registerId,@NotNull @DecimalMin("0.00") @Digits(integer=12,fraction=2) BigDecimal openingFloat){}
-    public record CloseSessionRequest(@NotNull @DecimalMin("0.00") @Digits(integer=12,fraction=2) BigDecimal countedCash){}
-    public record CheckoutLineRequest(@NotNull UUID itemId,@Positive int quantity,@jakarta.validation.constraints.DecimalMin("0.00") @Digits(integer=12,fraction=2) BigDecimal unitPriceOverride,@jakarta.validation.constraints.DecimalMin("0.00") @jakarta.validation.constraints.DecimalMax("99.99") @Digits(integer=3,fraction=2) BigDecimal discountPercent){}
-    public record TenderRequest(@NotBlank @Pattern(regexp="(?i)CASH|CARD|UPI|OTHER") String method,@NotNull @DecimalMin(value="0.01") @Digits(integer=12,fraction=2) BigDecimal amount,@Size(max=120) String reference){}
-    public record VoidSaleRequest(@NotBlank @Size(max=120) String idempotencyKey,@NotBlank @Size(max=300) String reason){}
-    public record CheckoutRequest(@NotBlank @Size(max=120) String idempotencyKey,UUID customerId,@NotEmpty List<@Valid CheckoutLineRequest> lines,@NotEmpty List<@Valid TenderRequest> tenders){}
-    public record CashierView(UUID userId,String name,String email,String role){}
-    public record RegisterView(UUID id,String code,String name,UUID warehouseId,String warehouseCode,String warehouseName,UUID branchId,UUID assignedCashierUserId){static RegisterView from(PosRegisterEntity entity){return new RegisterView(entity.getId(),entity.getCode(),entity.getName(),entity.getWarehouse().getId(),entity.getWarehouse().getCode(),entity.getWarehouse().getName(),entity.getWarehouse().getBranchId(),entity.getAssignedCashierUserId());}}
-    public record SessionView(UUID id,String status,BigDecimal openingFloat,BigDecimal expectedCash,BigDecimal countedCash,BigDecimal cashVariance,Instant openedAt,Instant closedAt,UUID cashierUserId,UUID registerId,String registerCode,String registerName,UUID branchId,String warehouseName){static SessionView from(PosRegisterSessionEntity entity){return new SessionView(entity.getId(),entity.getStatus(),entity.getOpeningFloat(),entity.getExpectedCash(),entity.getCountedCash(),entity.getCashVariance(),entity.getOpenedAt(),entity.getClosedAt(),entity.getCashierUserId(),entity.getRegister().getId(),entity.getRegister().getCode(),entity.getRegister().getName(),entity.getRegister().getWarehouse().getBranchId(),entity.getRegister().getWarehouse().getName());}}
-    public record SaleLineView(UUID saleLineId,String sku,String itemName,int quantity,int refundedQuantity,int refundableQuantity,BigDecimal refundedSubtotal,BigDecimal refundedTaxTotal,BigDecimal listUnitPrice,BigDecimal discountPercent,BigDecimal unitPrice,BigDecimal subtotal,BigDecimal taxTotal,BigDecimal total){}
-    public record TenderView(String method,BigDecimal amount,String reference){}
-    public record PosSettingsView(String taxCode,BigDecimal taxRate){}
-    public record SaleView(UUID id,UUID sessionId,String receiptNumber,String status,UUID customerId,BigDecimal subtotal,String taxCode,BigDecimal taxRate,BigDecimal taxTotal,BigDecimal total,BigDecimal refundedTotal,Instant postedAt,List<SaleLineView> lines,List<TenderView> tenders){}
 }

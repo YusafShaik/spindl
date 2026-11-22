@@ -13,6 +13,10 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.*;
+import si.spindl.finance.MarginReportDtos.MarginRow;
+import si.spindl.finance.MarginReportDtos.MarginReport;
+import si.spindl.finance.MarginReportDtos.ValuationRow;
+import si.spindl.finance.MarginReportDtos.ValuationReport;
 
 @Service
 public class MarginReportService {
@@ -153,20 +157,7 @@ public class MarginReportService {
         private BigDecimal cogs = BigDecimal.ZERO;
     }
 
-    public record MarginRow(String period, String sku, String itemName, int netUnits, BigDecimal netSales,
-                            BigDecimal estimatedCostOfGoods, BigDecimal estimatedGrossMargin,
-                            BigDecimal marginPercent) {
-    }
 
-    public record MarginReport(List<MarginRow> rows, int unpricedItemCount, BigDecimal unpricedSales,
-                               String costMethodNote) {
-    }
 
-    public record ValuationRow(String sku, String itemName, int onHand, BigDecimal weightedAveragePurchaseCost,
-                               BigDecimal estimatedValue) {
-    }
 
-    public record ValuationReport(List<ValuationRow> rows, BigDecimal estimatedTotalValue, int unpricedItemCount,
-                                  long unpricedUnits, String costMethodNote) {
-    }
 }

@@ -19,15 +19,15 @@ public class ImportController {
     public ImportController(CsvImportService service, si.spindl.tenant.CurrentTenant tenant){this.service=service;this.tenant=tenant;}
 
     @GetMapping("/batches")
-    public java.util.List<CsvImportService.BatchView> batches(){
+    public java.util.List<CsvImportDtos.BatchView> batches(){
         return service.listBatches(tenant.currentTenantId());
     }
 
     @PostMapping("/{resource}/preview")
-    public CsvImportService.PreviewResult preview(@PathVariable String resource,@RequestParam("file") MultipartFile file) throws IOException{return service.preview(resource,file.getBytes());}
+    public CsvImportDtos.PreviewResult preview(@PathVariable String resource,@RequestParam("file") MultipartFile file) throws IOException{return service.preview(resource,file.getBytes());}
 
     @PostMapping("/{resource}/commit")
-    public CsvImportService.CommitResult commit(@PathVariable String resource,@RequestHeader("Idempotency-Key") String idempotencyKey,@RequestParam("file") MultipartFile file,@AuthenticationPrincipal Jwt jwt) throws IOException{return service.commit(resource,idempotencyKey,file.getBytes(),AuthenticatedActor.userId(jwt));}
+    public CsvImportDtos.CommitResult commit(@PathVariable String resource,@RequestHeader("Idempotency-Key") String idempotencyKey,@RequestParam("file") MultipartFile file,@AuthenticationPrincipal Jwt jwt) throws IOException{return service.commit(resource,idempotencyKey,file.getBytes(),AuthenticatedActor.userId(jwt));}
 
     @GetMapping(value="/{resource}/export",produces="text/csv")
     public ResponseEntity<byte[]> export(@PathVariable String resource,@AuthenticationPrincipal Jwt jwt){

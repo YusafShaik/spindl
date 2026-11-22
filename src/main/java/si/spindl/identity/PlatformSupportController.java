@@ -26,13 +26,13 @@ public class PlatformSupportController {
     public PlatformSupportController(PlatformSupportAccessService service){this.service=service;}
 
     @PostMapping
-    public PlatformSupportAccessService.SupportRequestView request(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateRequest request){return service.request(request.tenantId(),AuthenticatedActor.userId(jwt),jwt.getClaimAsString("email"),request.reason(),request.durationMinutes());}
+    public PlatformSupportAccessDtos.SupportRequestView request(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateRequest request){return service.request(request.tenantId(),AuthenticatedActor.userId(jwt),jwt.getClaimAsString("email"),request.reason(),request.durationMinutes());}
 
     @GetMapping
-    public List<PlatformSupportAccessService.SupportRequestView> queue(@AuthenticationPrincipal Jwt jwt){return service.platformQueue(AuthenticatedActor.userId(jwt));}
+    public List<PlatformSupportAccessDtos.SupportRequestView> queue(@AuthenticationPrincipal Jwt jwt){return service.platformQueue(AuthenticatedActor.userId(jwt));}
 
     @GetMapping("/{id}/diagnostics")
-    public PlatformSupportAccessService.Diagnostics diagnostics(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.diagnostics(id,AuthenticatedActor.userId(jwt),jwt.getClaimAsString("email"));}
+    public PlatformSupportAccessDtos.Diagnostics diagnostics(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){return service.diagnostics(id,AuthenticatedActor.userId(jwt),jwt.getClaimAsString("email"));}
 
     public record CreateRequest(@NotNull UUID tenantId,@NotBlank @Size(max=500) String reason,@Min(5) @Max(60) int durationMinutes){}
 }

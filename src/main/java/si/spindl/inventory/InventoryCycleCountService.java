@@ -23,6 +23,10 @@ import si.spindl.tenant.CurrentTenant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import si.spindl.inventory.InventoryCycleCountDtos.CreateCycleCountRequest;
+import si.spindl.inventory.InventoryCycleCountDtos.RecordCountRequest;
+import si.spindl.inventory.InventoryCycleCountDtos.CycleCountLineView;
+import si.spindl.inventory.InventoryCycleCountDtos.CycleCountView;
 
 @Service
 public class InventoryCycleCountService {
@@ -65,8 +69,4 @@ public class InventoryCycleCountService {
     private InventoryCycleCountEntity lock(UUID actorId,UUID tenantId,UUID id,String action){InventoryCycleCountEntity count=counts.findForUpdate(tenantId,id).orElseThrow(()->new NotFoundException("Cycle count not found"));String role=memberships.findActiveRole(tenantId,actorId).orElseThrow(()->new ForbiddenException("Workspace membership is inactive"));if(permissions.allows(tenantId,role,"inventory","cycle-counts",action,"ALL"))return count;if(permissions.allows(tenantId,role,"inventory","cycle-counts",action,"OWN")&&count.getCreatedBy().equals(actorId))return count;if(permissions.allows(tenantId,role,"inventory","cycle-counts",action,"TEAM")&&(count.getCreatedBy().equals(actorId)||memberships.findAllByTenantIdAndManagerUserIdAndActiveTrueOrderByCreatedAtAsc(tenantId,actorId).stream().anyMatch(member->member.getUserId().equals(count.getCreatedBy()))))return count;if(permissions.allows(tenantId,role,"inventory","cycle-counts",action,"BRANCH")&&memberBranches.hasActiveAssignment(tenantId,actorId,count.getWarehouse().getBranchId()))return count;throw new ForbiddenException("You do not have permission to access this cycle count");}
     private ResponseStatusException conflict(String message){return new ConflictException(message);}
 
-    public record CreateCycleCountRequest(@NotBlank @Size(max=120) String name,@Size(max=500) String notes,UUID warehouseId){}
-    public record RecordCountRequest(@NotNull @jakarta.validation.constraints.Min(0) Integer countedQuantity){}
-    public record CycleCountLineView(UUID id,UUID itemId,String sku,String itemName,String unit,int systemQuantity,Integer countedQuantity,Integer variance){}
-    public record CycleCountView(UUID id,String name,String status,String notes,UUID warehouseId,String warehouseCode,String warehouseName,UUID createdBy,java.time.Instant createdAt,java.time.Instant submittedAt,java.time.Instant postedAt,List<CycleCountLineView> lines){}
 }

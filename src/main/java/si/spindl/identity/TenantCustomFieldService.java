@@ -16,6 +16,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import si.spindl.identity.TenantCustomFieldDtos.CreateFieldRequest;
+import si.spindl.identity.TenantCustomFieldDtos.ImportField;
+import si.spindl.identity.TenantCustomFieldDtos.PutValuesRequest;
+import si.spindl.identity.TenantCustomFieldDtos.FieldView;
 
 @Service
 public class TenantCustomFieldService {
@@ -35,7 +39,7 @@ public class TenantCustomFieldService {
     @Transactional(readOnly=true)
     public List<FieldView> list(UUID tenantId,String requestedResource){
         String resource=resource(requestedResource);ensureModule(tenantId,resource);
-        return fields.findAllByTenantIdAndResourceCodeOrderByCreatedAtAsc(tenantId,resource).stream().map(FieldView::from).toList();
+        return fields.findAllByTenantIdAndResourceCodeOrderByCreatedAtAsc(tenantId,resource).stream().map(TenantCustomFieldMapper::toFieldView).toList();
     }
 
     @Transactional(readOnly=true)
@@ -103,7 +107,7 @@ public class TenantCustomFieldService {
         if(request.defaultValue()!=null) validate(type,options,validation,request.defaultValue());
         var field=fields.save(new TenantCustomFieldEntity(UUID.randomUUID(),tenantId,resource,key,label,type,request.required(),options,validation,request.defaultValue(),actorId));
         audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOM_FIELD_CREATED","custom_field",field.getId(),Map.of("resource",resource,"fieldKey",key,"fieldType",type)));
-        return FieldView.from(field);
+        return TenantCustomFieldMapper.toFieldView(field);
     }
 
     @Transactional
@@ -114,7 +118,7 @@ public class TenantCustomFieldService {
             field.publish();
             audit.save(new TenantAuditEventEntity(tenantId,actorId,"CUSTOM_FIELD_PUBLISHED","custom_field",fieldId,Map.of("resource",field.getResourceCode(),"fieldKey",field.getFieldKey(),"version",field.getVersion())));
         }
-        return FieldView.from(field);
+        return TenantCustomFieldMapper.toFieldView(field);
     }
 
     @Transactional(readOnly=true)
@@ -192,12 +196,6 @@ public class TenantCustomFieldService {
     private boolean validDate(String value){try{LocalDate.parse(value);return true;}catch(Exception e){return false;}}
     private boolean validUuid(String value){try{UUID.fromString(value);return true;}catch(Exception e){return false;}}
 
-    public record CreateFieldRequest(String resourceCode,String fieldKey,String displayName,String fieldType,boolean required,List<String> options,Map<String,Object> validation,JsonNode defaultValue){}
-    public record ImportField(String fieldKey,String displayName,String fieldType,boolean required,List<String> options,Map<String,Object> validation,JsonNode defaultValue){}
-    public record PutValuesRequest(Map<String,JsonNode> values){}
-    public record FieldView(UUID id,String resourceCode,String fieldKey,String displayName,String fieldType,boolean required,List<String> options,Map<String,Object> validation,JsonNode defaultValue,boolean published,int version,java.time.Instant createdAt){
-        static FieldView from(TenantCustomFieldEntity f){return new FieldView(f.getId(),f.getResourceCode(),f.getFieldKey(),f.getDisplayName(),f.getFieldType(),f.isRequired(),f.getOptions(),f.getValidation(),f.getDefaultValue(),f.isPublished(),f.getVersion(),f.getCreatedAt());}
-    }
 
     @Transactional
     public int moveCustomerValues(UUID tenantId, UUID sourceId, UUID targetId, UUID actorId) {

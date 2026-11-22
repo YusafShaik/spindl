@@ -13,6 +13,9 @@ import java.util.UUID;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import org.springframework.scheduling.annotation.Scheduled;
+import si.spindl.identity.TenantPlanChangeRequestDtos.CreateRequest;
+import si.spindl.identity.TenantPlanChangeRequestDtos.RequestView;
+import si.spindl.identity.TenantPlanChangeRequestDtos.PlatformRequestView;
 
 @Service
 public class TenantPlanChangeRequestService {
@@ -28,7 +31,7 @@ public class TenantPlanChangeRequestService {
             TenantSubscriptionRepository subscriptions,SubscriptionPlanRepository planCatalog,TenantModuleEntitlementService moduleEntitlements,TenantRepository tenants){this.requests=requests;this.plans=plans;this.audit=audit;this.subscriptions=subscriptions;this.planCatalog=planCatalog;this.moduleEntitlements=moduleEntitlements;this.tenants=tenants;}
 
     @Transactional(readOnly=true)
-    public List<RequestView> list(UUID tenantId){return requests.findAllByTenantIdOrderByRequestedAtDesc(tenantId).stream().map(RequestView::from).toList();}
+    public List<RequestView> list(UUID tenantId){return requests.findAllByTenantIdOrderByRequestedAtDesc(tenantId).stream().map(TenantPlanChangeRequestMapper::toRequestView).toList();}
 
     @Transactional
     public RequestView create(UUID tenantId,UUID actorId,String requestedPlan){
@@ -42,7 +45,7 @@ public class TenantPlanChangeRequestService {
         try{request=requests.saveAndFlush(new TenantPlanChangeRequestEntity(tenantId,actorId,preview.currentPlanCode(),preview.currentVersion(),preview.targetPlanCode(),preview.targetVersion(),effectiveDate));}
         catch(DataIntegrityViolationException exception){throw new ConflictException("A plan change request was submitted by another workspace admin");}
         audit.save(new TenantAuditEventEntity(tenantId,actorId,"PLAN_CHANGE_REQUESTED","subscription",request.getId(),Map.of("currentPlan",request.getCurrentPlanCode(),"targetPlan",request.getTargetPlanCode(),"effectiveDate",request.getEffectiveDate().toString())));
-        return RequestView.from(request);
+        return TenantPlanChangeRequestMapper.toRequestView(request);
     }
 
     @Transactional
@@ -50,14 +53,14 @@ public class TenantPlanChangeRequestService {
         var request=requests.findByTenantIdAndIdForUpdate(tenantId,id).orElseThrow(()->new NotFoundException("Plan change request not found"));
         if(!"REQUESTED".equals(request.getStatus()))throw new ConflictException("This plan request is no longer pending");
         request.cancel();audit.save(new TenantAuditEventEntity(tenantId,actorId,"PLAN_CHANGE_REQUEST_CANCELLED","subscription",id,Map.of("targetPlan",request.getTargetPlanCode())));
-        return RequestView.from(request);
+        return TenantPlanChangeRequestMapper.toRequestView(request);
     }
 
     @Transactional(readOnly=true)
     public List<PlatformRequestView> platformQueue(){
         return requests.findAllByStatusInOrderByRequestedAtAsc(List.of("REQUESTED","APPROVED")).stream().map(request->{
             String tenantName=tenants.findSummaryById(request.getTenantId()).map(TenantRepository.TenantSummary::getDisplayName).orElse("Workspace unavailable");
-            return PlatformRequestView.from(request,tenantName);
+            return TenantPlanChangeRequestMapper.toPlatformRequestView(request,tenantName);
         }).toList();
     }
 
@@ -72,7 +75,7 @@ public class TenantPlanChangeRequestService {
         saveTenantAudit(request,reviewerId,"PLAN_CHANGE_APPROVED",reviewerEmail,cleanNote(note));
         if(!request.getEffectiveDate().isAfter(LocalDate.now(ZoneOffset.UTC)))apply(request,subscription,target,reviewerId,reviewerEmail);
         String tenantName=tenants.findSummaryById(request.getTenantId()).map(TenantRepository.TenantSummary::getDisplayName).orElse("Workspace unavailable");
-        return PlatformRequestView.from(request,tenantName);
+        return TenantPlanChangeRequestMapper.toPlatformRequestView(request,tenantName);
     }
 
     @Transactional
@@ -82,7 +85,7 @@ public class TenantPlanChangeRequestService {
         if(!"REQUESTED".equals(request.getStatus()))throw new ConflictException("This plan request has already been reviewed");
         request.reject(reviewerId,reason);saveTenantAudit(request,reviewerId,"PLAN_CHANGE_REJECTED",reviewerEmail,reason);
         String tenantName=tenants.findSummaryById(request.getTenantId()).map(TenantRepository.TenantSummary::getDisplayName).orElse("Workspace unavailable");
-        return PlatformRequestView.from(request,tenantName);
+        return TenantPlanChangeRequestMapper.toPlatformRequestView(request,tenantName);
     }
 
     @Scheduled(fixedDelayString="${spindl.plan-change-apply-delay-ms:60000}")
@@ -112,9 +115,4 @@ public class TenantPlanChangeRequestService {
     }
     private String cleanNote(String note){if(note==null||note.isBlank())return null;String value=note.trim();if(value.length()>500)throw new BadRequestException("Review note must be 500 characters or less");return value;}
 
-    public record CreateRequest(String planCode){}
-    public record RequestView(UUID id,String currentPlanCode,int currentPlanVersion,String targetPlanCode,int targetPlanVersion,LocalDate effectiveDate,String status,java.time.Instant requestedAt,java.time.Instant reviewedAt,String reviewNote,java.time.Instant appliedAt){
-        static RequestView from(TenantPlanChangeRequestEntity request){return new RequestView(request.getId(),request.getCurrentPlanCode(),request.getCurrentPlanVersion(),request.getTargetPlanCode(),request.getTargetPlanVersion(),request.getEffectiveDate(),request.getStatus(),request.getRequestedAt(),request.getReviewedAt(),request.getReviewNote(),request.getAppliedAt());}
-    }
-    public record PlatformRequestView(UUID id,UUID tenantId,String tenantName,UUID requestedBy,String currentPlanCode,int currentPlanVersion,String targetPlanCode,int targetPlanVersion,LocalDate effectiveDate,String status,java.time.Instant requestedAt,UUID reviewedBy,java.time.Instant reviewedAt,String reviewNote,java.time.Instant appliedAt){static PlatformRequestView from(TenantPlanChangeRequestEntity request,String tenantName){return new PlatformRequestView(request.getId(),request.getTenantId(),tenantName,request.getRequestedBy(),request.getCurrentPlanCode(),request.getCurrentPlanVersion(),request.getTargetPlanCode(),request.getTargetPlanVersion(),request.getEffectiveDate(),request.getStatus(),request.getRequestedAt(),request.getReviewedBy(),request.getReviewedAt(),request.getReviewNote(),request.getAppliedAt());}}
 }

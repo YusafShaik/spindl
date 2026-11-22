@@ -42,7 +42,7 @@ public class SalesService {
     }
 
     @Transactional(readOnly=true)
-    public List<QuoteView> listQuotes(){return quotes.findAllByTenantIdOrderByCreatedAtDesc(tenant.currentTenantId()).stream().map(QuoteView::from).toList();}
+    public List<QuoteView> listQuotes(){return quotes.findAllByTenantIdOrderByCreatedAtDesc(tenant.currentTenantId()).stream().map(SalesMapper::toQuoteView).toList();}
 
     @Transactional
     public QuoteView createQuote(CreateQuoteRequest request){
@@ -54,24 +54,24 @@ public class SalesService {
             ItemEntity item=items.findByTenantIdAndId(tenantId,input.itemId()).filter(ItemEntity::isActive).orElseThrow(()->new BadRequestException("An item is missing or inactive"));
             quote.addLine(tenantId,item,input.quantity(),input.unitPrice());
         }
-        return QuoteView.from(quotes.save(quote));
+        return SalesMapper.toQuoteView(quotes.save(quote));
     }
 
     @Transactional
-    public QuoteView sendQuote(UUID id){SalesQuoteEntity quote=lockQuote(id);try{quote.send();}catch(IllegalStateException e){throw new ConflictException(e.getMessage());}return QuoteView.from(quotes.save(quote));}
+    public QuoteView sendQuote(UUID id){SalesQuoteEntity quote=lockQuote(id);try{quote.send();}catch(IllegalStateException e){throw new ConflictException(e.getMessage());}return SalesMapper.toQuoteView(quotes.save(quote));}
 
     @Transactional
-    public QuoteView acceptQuote(UUID id){SalesQuoteEntity quote=lockQuote(id);try{quote.accept();}catch(IllegalStateException e){throw new ConflictException(e.getMessage());}return QuoteView.from(quotes.save(quote));}
+    public QuoteView acceptQuote(UUID id){SalesQuoteEntity quote=lockQuote(id);try{quote.accept();}catch(IllegalStateException e){throw new ConflictException(e.getMessage());}return SalesMapper.toQuoteView(quotes.save(quote));}
 
     @Transactional
-    public QuoteView rejectQuote(UUID id){SalesQuoteEntity quote=lockQuote(id);try{quote.reject();}catch(IllegalStateException e){throw new ConflictException(e.getMessage());}return QuoteView.from(quotes.save(quote));}
+    public QuoteView rejectQuote(UUID id){SalesQuoteEntity quote=lockQuote(id);try{quote.reject();}catch(IllegalStateException e){throw new ConflictException(e.getMessage());}return SalesMapper.toQuoteView(quotes.save(quote));}
 
     @Transactional
     public SalesOrderView convertQuote(UUID quoteId,ConvertQuoteRequest request){
         UUID tenantId=tenant.currentTenantId();
         SalesQuoteEntity quote=lockQuote(quoteId);
         SalesOrderEntity existing=orders.findByTenantIdAndQuoteId(tenantId,quoteId).orElse(null);
-        if(existing!=null)return SalesOrderView.from(existing);
+        if(existing!=null)return SalesMapper.toSalesOrderView(existing);
         if(!quote.getStatus().equals("accepted"))throw new ConflictException("Accept the quotation before converting it to an order");
         CustomerEntity customer=quote.getCustomer();
         if(customer.isCreditHold())throw new ConflictException("This customer is on credit hold. Ask an administrator to review the account before converting the quote.");
@@ -92,18 +92,18 @@ public class SalesService {
             allocationBalance.reserve(quoteLine.getQuantity());
             order.addLine(quoteLine,allocationWarehouse);
         }
-        return SalesOrderView.from(orders.save(order));
+        return SalesMapper.toSalesOrderView(orders.save(order));
     }
 
     @Transactional(readOnly=true)
-    public List<SalesOrderView> listOrders(){return orders.findAllByTenantIdOrderByCreatedAtDesc(tenant.currentTenantId()).stream().map(SalesOrderView::from).toList();}
+    public List<SalesOrderView> listOrders(){return orders.findAllByTenantIdOrderByCreatedAtDesc(tenant.currentTenantId()).stream().map(SalesMapper::toSalesOrderView).toList();}
 
     @Transactional
     public ShipmentView dispatch(UUID orderId,DispatchRequest request){
         UUID tenantId=tenant.currentTenantId();
         SalesOrderEntity order=orders.findForUpdateByTenantIdAndId(tenantId,orderId).orElseThrow(()->new NotFoundException());
         SalesShipmentEntity prior=shipments.findByTenantIdAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
-        if(prior!=null){if(!prior.getSalesOrder().getId().equals(orderId))throw new ConflictException("Idempotency key was used for another sales order");return ShipmentView.from(prior);}
+        if(prior!=null){if(!prior.getSalesOrder().getId().equals(orderId))throw new ConflictException("Idempotency key was used for another sales order");return SalesMapper.toShipmentView(prior);}
         if(!order.getStatus().equals("confirmed")&&!order.getStatus().equals("partially_shipped"))throw new ConflictException("Sales order has no reserved stock to dispatch");
         if(request.lines().stream().map(DispatchLine::salesOrderLineId).distinct().count()!=request.lines().size())throw new BadRequestException("A sales order line can only be dispatched once per shipment");
         Map<UUID,SalesOrderLineEntity> orderLines=new HashMap<>();order.getLines().forEach(line->orderLines.put(line.getId(),line));
@@ -121,7 +121,7 @@ public class SalesService {
             movements.save(new InventoryMovementEntity(tenantId,item,line.getWarehouse(),-input.quantity(),"Sales dispatch",shipmentNumber,null));
         }
         order.refreshDispatchStatus();orders.save(order);
-        try{return ShipmentView.from(shipments.saveAndFlush(shipment));}
+        try{return SalesMapper.toShipmentView(shipments.saveAndFlush(shipment));}
         catch(DataIntegrityViolationException e){throw new ConflictException("Shipment request already exists; retry with its idempotency key");}
     }
 

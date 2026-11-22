@@ -24,10 +24,10 @@ public class TenantAttachmentController {
     public TenantAttachmentController(TenantAttachmentService service,CurrentTenant tenant){this.service=service;this.tenant=tenant;}
 
     @GetMapping("/{resource}/{recordId}")
-    public List<TenantAttachmentService.AttachmentView> list(@PathVariable String resource,@PathVariable UUID recordId){return service.list(tenant.currentTenantId(),resource,recordId);}
+    public List<TenantAttachmentDtos.AttachmentView> list(@PathVariable String resource,@PathVariable UUID recordId){return service.list(tenant.currentTenantId(),resource,recordId);}
 
     @PostMapping(value="/{resource}/{recordId}",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
-    public TenantAttachmentService.AttachmentView upload(@AuthenticationPrincipal Jwt jwt,@PathVariable String resource,@PathVariable UUID recordId,
+    public TenantAttachmentDtos.AttachmentView upload(@AuthenticationPrincipal Jwt jwt,@PathVariable String resource,@PathVariable UUID recordId,
                                                            @RequestHeader(name="Idempotency-Key",required=false) String key,@RequestPart("file") MultipartFile file){
         return service.upload(tenant.currentTenantId(),AuthenticatedActor.userId(jwt),resource,recordId,key,file);
     }

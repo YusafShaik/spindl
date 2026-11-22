@@ -28,12 +28,12 @@ public class TenantModuleEntitlementController {
     }
 
     @GetMapping
-    public List<TenantModuleEntitlementService.ModuleView> list() {
+    public List<TenantModuleEntitlementDtos.ModuleView> list() {
         return service.list(tenant.currentTenantId());
     }
 
     @PatchMapping("/{code}")
-    public List<TenantModuleEntitlementService.ModuleView> setEnabled(@AuthenticationPrincipal Jwt jwt,
+    public List<TenantModuleEntitlementDtos.ModuleView> setEnabled(@AuthenticationPrincipal Jwt jwt,
                                                                        @PathVariable String code,
                                                                        @Valid @RequestBody ToggleModuleRequest request) {
         return service.setEnabled(tenant.currentTenantId(), AuthenticatedActor.userId(jwt), code, request.enabled());

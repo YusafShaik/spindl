@@ -41,7 +41,7 @@ public class CustomerController {
     }
 
     @PostMapping("/{sourceId}/merge")
-    public CustomerMergeService.MergeResult merge(@AuthenticationPrincipal Jwt jwt,
+    public CustomerMergeDtos.MergeResult merge(@AuthenticationPrincipal Jwt jwt,
                                                   @PathVariable UUID sourceId,
                                                   @Valid @RequestBody CustomerDtos.MergeCustomersRequest request) {
         return merges.merge(AuthenticatedActor.userId(jwt), sourceId, request.targetCustomerId());

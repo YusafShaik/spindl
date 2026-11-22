@@ -31,7 +31,7 @@ public class SupplierCreditNoteService {
     public SupplierCreditNoteService(SupplierCreditNoteRepository notes,SupplierBillRepository bills,PurchaseOrderRepository orders,ItemRepository items,InventoryMovementRepository movements,CurrentTenant tenant,WarehouseRepository warehouses,WarehouseStockRepository warehouseStock){this.notes=notes;this.bills=bills;this.orders=orders;this.items=items;this.movements=movements;this.tenant=tenant;this.warehouses=warehouses;this.warehouseStock=warehouseStock;}
 
     @Transactional(readOnly=true)
-    public List<CreditNoteView> list(){return notes.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(CreditNoteView::from).toList();}
+    public List<CreditNoteView> list(){return notes.findAllByTenantIdOrderByIssuedAtDesc(tenant.currentTenantId()).stream().map(SupplierBillMapper::toCreditNoteView).toList();}
 
     @Transactional
     public CreditNoteView credit(UUID billId,CreditRequest request){
@@ -42,7 +42,7 @@ public class SupplierCreditNoteService {
         SupplierBillEntity bill=bills.findForUpdateByTenantIdAndId(tenantId,billId).orElseThrow(()->new NotFoundException());
         String reason=request.reason().trim();
         SupplierCreditNoteEntity prior=notes.findByTenantIdAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
-        if(prior!=null){if(!prior.matches(billId,reason,request.lines()))throw new ConflictException("Idempotency key was reused with different credit details");return CreditNoteView.from(prior);}
+        if(prior!=null){if(!prior.matches(billId,reason,request.lines()))throw new ConflictException("Idempotency key was reused with different credit details");return SupplierBillMapper.toCreditNoteView(prior);}
         Map<UUID,SupplierBillLineEntity> billLines=new HashMap<>();bill.getLines().forEach(line->billLines.put(line.getId(),line));
         List<CreditLine> requested=new ArrayList<>(request.lines());
         BigDecimal total=BigDecimal.ZERO;
@@ -68,7 +68,7 @@ public class SupplierCreditNoteService {
             movements.save(new InventoryMovementEntity(tenantId,item,-input.quantity(),"Supplier credit return",number));
         }
         bill.recordCredit(total);
-        try{return CreditNoteView.from(notes.saveAndFlush(note));}
+        try{return SupplierBillMapper.toCreditNoteView(notes.saveAndFlush(note));}
         catch(DataIntegrityViolationException exception){throw new ConflictException("Credit note already exists; retry with its idempotency key");}
     }
 }

@@ -24,6 +24,9 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import si.spindl.inventory.InventoryAdjustmentDtos.AdjustmentRequest;
+import si.spindl.inventory.InventoryAdjustmentDtos.MovementView;
+import si.spindl.inventory.InventoryAdjustmentDtos.MovementSearchPage;
 
 @Service
 public class InventoryAdjustmentService {
@@ -36,14 +39,14 @@ public class InventoryAdjustmentService {
     public InventoryAdjustmentService(ItemRepository items,InventoryMovementRepository movements,CurrentTenant tenant,WarehouseRepository warehouses,WarehouseStockRepository warehouseStock){this.items=items;this.movements=movements;this.tenant=tenant;this.warehouses=warehouses;this.warehouseStock=warehouseStock;}
 
     @Transactional(readOnly=true)
-    public List<MovementView> recentMovements(){return movements.findAllByTenantIdOrderByCreatedAtDesc(tenant.currentTenantId(),PageRequest.of(0,100)).stream().map(MovementView::from).toList();}
+    public List<MovementView> recentMovements(){return movements.findAllByTenantIdOrderByCreatedAtDesc(tenant.currentTenantId(),PageRequest.of(0,100)).stream().map(InventoryAdjustmentMapper::toMovementView).toList();}
 
     @Transactional(readOnly=true)
     public MovementSearchPage searchMovements(UUID itemId,LocalDate from,LocalDate to,String query,int page,int size){
         if(from!=null&&to!=null&&from.isAfter(to))throw new BadRequestException("From date must not be after to date");
         int safePage=Math.max(0,page);int safeSize=Math.min(100,Math.max(1,size));
         var result=movements.findAll(movementSpecification(itemId,from,to,query),PageRequest.of(safePage,safeSize,Sort.by(Sort.Direction.DESC,"createdAt")));
-        return new MovementSearchPage(result.getContent().stream().map(MovementView::from).toList(),result.getNumber(),result.getSize(),result.getTotalElements(),result.getTotalPages());
+        return new MovementSearchPage(result.getContent().stream().map(InventoryAdjustmentMapper::toMovementView).toList(),result.getNumber(),result.getSize(),result.getTotalElements(),result.getTotalPages());
     }
 
     @Transactional(readOnly=true)
@@ -53,7 +56,7 @@ public class InventoryAdjustmentService {
         var first=movements.findAll(specification,PageRequest.of(0,1));
         if(first.getTotalElements()>10_000)throw new PayloadTooLargeException("Narrow the filters to export 10,000 movements or fewer");
         var result=movements.findAll(specification,PageRequest.of(0,10_000,Sort.by(Sort.Direction.DESC,"createdAt")));
-        return "created_at,warehouse,sku,item,reason,reference,quantity_change\r\n"+result.getContent().stream().map(MovementView::from).map(movement->String.join(",",
+        return "created_at,warehouse,sku,item,reason,reference,quantity_change\r\n"+result.getContent().stream().map(InventoryAdjustmentMapper::toMovementView).map(movement->String.join(",",
                 csv(movement.createdAt().toString()),csv(movement.warehouseName()),csv(movement.sku()),csv(movement.itemName()),csv(movement.reason()),csv(movement.sourceReference()),Integer.toString(movement.quantityDelta()))).collect(Collectors.joining("\r\n"));
     }
 
@@ -90,22 +93,17 @@ public class InventoryAdjustmentService {
         String reason=request.reason().trim();
         WarehouseEntity warehouse=(request.warehouseId()==null?warehouses.findByTenantIdAndIsDefaultTrueAndActiveTrue(tenantId):warehouses.findByTenantIdAndIdAndActiveTrue(tenantId,request.warehouseId())).orElseThrow(()->new BadRequestException("Choose an active warehouse"));
         InventoryMovementEntity existing=movements.findByTenantIdAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
-        if(existing!=null){if(!existing.matches(request.itemId(),warehouse.getId(),request.quantityDelta(),reason))throw new ConflictException("Idempotency key was reused with different adjustment details");return MovementView.from(existing);}
+        if(existing!=null){if(!existing.matches(request.itemId(),warehouse.getId(),request.quantityDelta(),reason))throw new ConflictException("Idempotency key was reused with different adjustment details");return InventoryAdjustmentMapper.toMovementView(existing);}
         ItemEntity item=items.findActiveForUpdate(tenantId,request.itemId()).orElseThrow(()->new NotFoundException("Active item not found"));
         existing=movements.findByTenantIdAndIdempotencyKey(tenantId,request.idempotencyKey()).orElse(null);
-        if(existing!=null){if(!existing.matches(request.itemId(),warehouse.getId(),request.quantityDelta(),reason))throw new ConflictException("Idempotency key was reused with different adjustment details");return MovementView.from(existing);}
+        if(existing!=null){if(!existing.matches(request.itemId(),warehouse.getId(),request.quantityDelta(),reason))throw new ConflictException("Idempotency key was reused with different adjustment details");return InventoryAdjustmentMapper.toMovementView(existing);}
         WarehouseStockEntity balance=warehouseStock.findForUpdate(tenantId,warehouse.getId(),item.getId()).orElseThrow(()->new ConflictException("Stock balance is missing"));
         try{balance.adjustStock(request.quantityDelta());}catch(IllegalArgumentException|ArithmeticException exception){throw new ConflictException("Adjustment exceeds stock available at "+warehouse.getName()+": "+exception.getMessage());}
         try{if(warehouse.isDefault())item.adjustStock(request.quantityDelta());else item.adjustStockInExternalWarehouse(request.quantityDelta());}catch(ArithmeticException|IllegalArgumentException exception){throw new ConflictException(exception.getMessage());}
         String reference="ADJ-"+UUID.randomUUID().toString().substring(0,12).toUpperCase(java.util.Locale.ROOT);
         InventoryMovementEntity movement=new InventoryMovementEntity(tenantId,item,warehouse,request.quantityDelta(),reason,reference,request.idempotencyKey());
-        try{return MovementView.from(movements.saveAndFlush(movement));}
+        try{return InventoryAdjustmentMapper.toMovementView(movements.saveAndFlush(movement));}
         catch(DataIntegrityViolationException exception){throw new ConflictException("Adjustment request already exists; retry with its idempotency key");}
     }
 
-    public record AdjustmentRequest(@NotNull UUID itemId,@NotNull Integer quantityDelta,@NotBlank @Size(max=80) String reason,@NotBlank @Size(max=120) String idempotencyKey,UUID warehouseId){}
-    public record MovementView(UUID id,UUID itemId,String sku,String itemName,UUID warehouseId,String warehouseCode,String warehouseName,int quantityDelta,String reason,String sourceReference,Instant createdAt){
-        static MovementView from(InventoryMovementEntity movement){WarehouseEntity warehouse=movement.getWarehouse();return new MovementView(movement.getId(),movement.getItem().getId(),movement.getItem().getSku(),movement.getItem().getName(),warehouse==null?null:warehouse.getId(),warehouse==null?null:warehouse.getCode(),warehouse==null?null:warehouse.getName(),movement.getQuantityDelta(),movement.getReason(),movement.getSourceReference(),movement.getCreatedAt());}
-    }
-    public record MovementSearchPage(List<MovementView> items,int page,int pageSize,long totalElements,int totalPages){}
 }

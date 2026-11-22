@@ -19,6 +19,7 @@ import si.spindl.inventory.WarehouseStockRepository;
 import si.spindl.party.CustomerEntity;
 import si.spindl.party.CustomerRepository;
 import si.spindl.tenant.CurrentTenant;
+import si.spindl.identity.TenantCustomFieldDtos;
 import si.spindl.identity.TenantCustomFieldService;
 import si.spindl.identity.TenantCustomFieldRepository;
 import si.spindl.identity.TenantCustomFieldValueRepository;
@@ -38,6 +39,10 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.*;
+import si.spindl.imports.CsvImportDtos.ImportError;
+import si.spindl.imports.CsvImportDtos.PreviewResult;
+import si.spindl.imports.CsvImportDtos.BatchView;
+import si.spindl.imports.CsvImportDtos.CommitResult;
 
 @Service
 public class CsvImportService {
@@ -122,14 +127,14 @@ public class CsvImportService {
     public CommitResult commit(String resource,String idempotencyKey,byte[] file,UUID actorId){
         String type=normalizeResource(resource);
         if(idempotencyKey==null||idempotencyKey.isBlank()||idempotencyKey.length()>120)throw new BadRequestException("A valid Idempotency-Key header is required (max 120 characters)");
-        if(file==null||file.length==0||file.length>MAX_BYTES)return CommitResult.rejected(validate(type,file));
+        if(file==null||file.length==0||file.length>MAX_BYTES)return rejectedCommit(validate(type,file));
         String hash=sha256(file);
         UUID tenantId=tenant.currentTenantId();
         ImportBatchEntity prior=batches.findByTenantIdAndResourceTypeAndIdempotencyKey(tenantId,type,idempotencyKey).orElse(null);
-        if(prior!=null){if(!prior.getContentSha256().equals(hash))throw new ConflictException("Idempotency key was reused with a different file");return CommitResult.replayed(prior);}
+        if(prior!=null){if(!prior.getContentSha256().equals(hash))throw new ConflictException("Idempotency key was reused with a different file");return replayedCommit(prior);}
         Validation validation=validate(type,file);
-        if(!validation.errors().isEmpty())return CommitResult.rejected(validation);
-        if(validation.rows().isEmpty())return CommitResult.rejected(validation.withError(new ImportError(1,"File has no data rows")));
+        if(!validation.errors().isEmpty())return rejectedCommit(validation);
+        if(validation.rows().isEmpty())return rejectedCommit(validation.withError(new ImportError(1,"File has no data rows")));
         try{
             if(type.equals("CUSTOMERS")){
                 List<CustomerEntity> rows=validation.rows().stream().map(row->{CustomerRow c=(CustomerRow)row;CustomerEntity e=new CustomerEntity(tenantId,c.code(),c.name(),c.email(),c.status(),actorId);e.applyProfile(c.customerType(),c.contactName(),c.phone(),c.addressLine1(),c.addressLine2(),c.city(),c.region(),c.postalCode(),c.countryCode(),c.taxId(),c.paymentTermsDays(),c.creditLimit(),c.tags(),c.creditHold(),actorId);return e;}).toList();
@@ -158,7 +163,7 @@ public class CsvImportService {
                 for(SupplierEntity supplier:saved)customFields.saveImportedValues(tenantId,actorId,"suppliers",supplier.getId(),customValues.get(supplier.getCode()).customValues());
             }
             ImportBatchEntity batch=batches.saveAndFlush(new ImportBatchEntity(tenantId,type,idempotencyKey,hash,validation.rows().size()));
-            return CommitResult.created(batch);
+            return createdCommit(batch);
         }catch(DataIntegrityViolationException exception){throw new ConflictException("A customer code or item SKU now exists; refresh the preview and resolve duplicates");}
     }
 
@@ -181,7 +186,7 @@ public class CsvImportService {
         if(!errors.isEmpty())return new Validation(csv.records().size()-1,List.of(),errors,previewRows(header,csv.records().stream().skip(1).limit(10).toList()));
         if(csv.records().size()-1>MAX_ROWS)return Validation.invalid(csv.records().size()-1,new ImportError(1,"Import is limited to 500 data rows"));
         Map<String,Integer> indexes=new HashMap<>();for(int i=0;i<header.size();i++)indexes.put(header.get(i),i);
-        List<TenantCustomFieldService.ImportField> customDefinitions=customFields.importFields(tenant.currentTenantId(),resourceCode(type));
+        List<TenantCustomFieldDtos.ImportField> customDefinitions=customFields.importFields(tenant.currentTenantId(),resourceCode(type));
         List<ImportRow> validRows=new ArrayList<>();Set<String> seen=new HashSet<>();int total=csv.records().size()-1;
         for(int recordIndex=1;recordIndex<csv.records().size();recordIndex++){
             List<String> values=csv.records().get(recordIndex);int rowNumber=recordIndex+1;
@@ -277,17 +282,12 @@ public class CsvImportService {
         Validation withError(ImportError error){List<ImportError> updated=new ArrayList<>(errors);updated.add(error);return new Validation(totalRows,rows,updated,sampleRows);}
         PreviewResult preview(){return new PreviewResult(totalRows,rows.size(),errors,sampleRows);}
     }
-    public record ImportError(int row,String message){}
-    public record PreviewResult(int totalRows,int validRows,List<ImportError> errors,List<Map<String,String>> sampleRows){}
-    public record BatchView(UUID id,String resourceType,String contentSha256,int rowsImported,java.time.Instant createdAt){}
+    private CommitResult createdCommit(ImportBatchEntity batch){return new CommitResult(true,false,batch.getResourceType(),batch.getRowsImported(),batch.getId(),batch.getCreatedAt(),List.of());}
+    private CommitResult replayedCommit(ImportBatchEntity batch){return new CommitResult(true,true,batch.getResourceType(),batch.getRowsImported(),batch.getId(),batch.getCreatedAt(),List.of());}
+    private CommitResult rejectedCommit(Validation result){return new CommitResult(false,false,"",0,null,null,result.errors());}
     @Transactional(readOnly=true)
     public List<BatchView> listBatches(UUID tenantId){
         return batches.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream()
                 .map(b->new BatchView(b.getId(),b.getResourceType(),b.getContentSha256(),b.getRowsImported(),b.getCreatedAt())).toList();
-    }
-    public record CommitResult(boolean imported,boolean replayed,String resourceType,int rowsImported,UUID batchId,java.time.Instant createdAt,List<ImportError> errors){
-        static CommitResult created(ImportBatchEntity batch){return new CommitResult(true,false,batch.getResourceType(),batch.getRowsImported(),batch.getId(),batch.getCreatedAt(),List.of());}
-        static CommitResult replayed(ImportBatchEntity batch){return new CommitResult(true,true,batch.getResourceType(),batch.getRowsImported(),batch.getId(),batch.getCreatedAt(),List.of());}
-        static CommitResult rejected(Validation result){return new CommitResult(false,false,"",0,null,null,result.errors());}
     }
 }

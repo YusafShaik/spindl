@@ -77,14 +77,14 @@ public class MrpService {
 
     public List<MrpDtos.MrpRunView> listRuns(UUID tenantId) {
         return mrpRuns.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream()
-                .map(MrpDtos.MrpRunView::from)
+                .map(MrpMapper::toMrpRunView)
                 .toList();
     }
 
     public MrpDtos.MrpRunView getRun(UUID tenantId, UUID runId) {
         MrpRunEntity run = mrpRuns.findByTenantIdAndId(tenantId, runId)
                 .orElseThrow(() -> new NotFoundException("MRP Run not found"));
-        return MrpDtos.MrpRunView.from(run);
+        return MrpMapper.toMrpRunView(run);
     }
 
     public MrpDtos.MrpMetricsView getMetrics(UUID tenantId) {
@@ -121,14 +121,14 @@ public class MrpService {
 
         return orders.stream()
                 .filter(o -> actionType == null || actionType.isBlank() || "ALL".equalsIgnoreCase(actionType) || o.getActionType().equalsIgnoreCase(actionType))
-                .map(MrpDtos.PlannedOrderView::from)
+                .map(MrpMapper::toPlannedOrderView)
                 .toList();
     }
 
     public MrpDtos.PlannedOrderView getPlannedOrder(UUID tenantId, UUID id) {
         MrpPlannedOrderEntity order = mrpPlannedOrders.findByTenantIdAndId(tenantId, id)
                 .orElseThrow(() -> new NotFoundException("Planned order not found"));
-        return MrpDtos.PlannedOrderView.from(order);
+        return MrpMapper.toPlannedOrderView(order);
     }
 
     // ==========================================
@@ -271,7 +271,7 @@ public class MrpService {
         run.recalculateTotals();
         mrpRuns.save(run);
 
-        return MrpDtos.MrpRunView.from(run);
+        return MrpMapper.toMrpRunView(run);
     }
 
     // ==========================================
@@ -284,7 +284,7 @@ public class MrpService {
                 .orElseThrow(() -> new NotFoundException("Planned order not found"));
 
         if ("CONVERTED".equalsIgnoreCase(plannedOrder.getStatus())) {
-            return MrpDtos.PlannedOrderView.from(plannedOrder);
+            return MrpMapper.toPlannedOrderView(plannedOrder);
         }
 
         if ("PURCHASE_ORDER".equalsIgnoreCase(plannedOrder.getActionType())) {
@@ -336,7 +336,7 @@ public class MrpService {
         }
 
         mrpPlannedOrders.save(plannedOrder);
-        return MrpDtos.PlannedOrderView.from(plannedOrder);
+        return MrpMapper.toPlannedOrderView(plannedOrder);
     }
 
     @Transactional
@@ -369,6 +369,6 @@ public class MrpService {
                 .orElseThrow(() -> new NotFoundException("Planned order not found"));
         plannedOrder.markDismissed();
         mrpPlannedOrders.save(plannedOrder);
-        return MrpDtos.PlannedOrderView.from(plannedOrder);
+        return MrpMapper.toPlannedOrderView(plannedOrder);
     }
 }

@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import si.spindl.attachments.TenantStorageUsageRepository;
+import si.spindl.identity.SubscriptionQuotaDtos.PlanSummary;
+import si.spindl.identity.SubscriptionQuotaDtos.PlanChangePreview;
 
 @Service
 public class SubscriptionQuotaService {
@@ -107,9 +109,4 @@ public class SubscriptionQuotaService {
         };
     }
 
-    public record PlanSummary(String planCode,int version,String displayName,String status,int seatLimit,long activeSeats,long pendingInvitations,
-                              int storageLimitMb,long storageUsedBytes,long apiCallsPerMonth,long apiCallsUsed) {}
-    public record PlanChangePreview(String currentPlanCode,int currentVersion,String targetPlanCode,int targetVersion,String targetPlanName,
-                                    int targetSeatLimit,long seatsInUse,int storageLimitMb,long storageUsedBytes,long apiCallsPerMonth,long apiCallsUsed,List<String> overages,List<String> blockedModules,
-                                    String effectiveDate,String message) {}
 }

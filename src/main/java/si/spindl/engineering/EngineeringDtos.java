@@ -34,31 +34,7 @@ public final class EngineeringDtos {
             String createdByName,
             Instant createdAt,
             Instant implementedAt
-    ) {
-        public static EcoSummaryView from(EngineeringChangeOrderEntity e) {
-            long approved = e.getSignOffs().stream().filter(s -> "APPROVED".equalsIgnoreCase(s.getStatus())).count();
-            return new EcoSummaryView(
-                    e.getId(),
-                    e.getEcoNumber(),
-                    e.getTitle(),
-                    e.getReason(),
-                    e.getChangeSeverity(),
-                    e.getFinishedItem().getId(),
-                    e.getFinishedItem().getSku(),
-                    e.getFinishedItem().getName(),
-                    e.getBaseBom() != null ? e.getBaseBom().getId() : null,
-                    e.getBaseBom() != null ? e.getBaseBom().getRevision() : "BASELINE",
-                    e.getTargetRevision(),
-                    e.getStatus(),
-                    e.getEffectiveCutoverDate(),
-                    approved,
-                    e.getSignOffs().size(),
-                    e.getCreatedBy() != null ? e.getCreatedBy().getDisplayName() : "Chief Engineer",
-                    e.getCreatedAt(),
-                    e.getImplementedAt()
-            );
-        }
-    }
+    ) {}
 
     public record EcoDiffLineView(
             UUID id,
@@ -72,23 +48,7 @@ public final class EngineeringDtos {
             BigDecimal oldScrapPercent,
             BigDecimal newScrapPercent,
             String notes
-    ) {
-        public static EcoDiffLineView from(EcoBomDiffLineEntity d) {
-            return new EcoDiffLineView(
-                    d.getId(),
-                    d.getChangeType(),
-                    d.getComponentItem().getId(),
-                    d.getComponentItem().getSku(),
-                    d.getComponentItem().getName(),
-                    d.getComponentItem().getUnit(),
-                    d.getOldQuantity(),
-                    d.getNewQuantity(),
-                    d.getOldScrapPercent(),
-                    d.getNewScrapPercent(),
-                    d.getNotes()
-            );
-        }
-    }
+    ) {}
 
     public record EcoSignOffView(
             UUID id,
@@ -98,19 +58,7 @@ public final class EngineeringDtos {
             String signOffRole,
             String comments,
             Instant approvedAt
-    ) {
-        public static EcoSignOffView from(EcoSignOffEntity s) {
-            return new EcoSignOffView(
-                    s.getId(),
-                    s.getDepartment(),
-                    s.getStatus(),
-                    s.getApproverUser() != null ? s.getApproverUser().getDisplayName() : null,
-                    s.getSignOffRole(),
-                    s.getComments(),
-                    s.getApprovedAt()
-            );
-        }
-    }
+    ) {}
 
     public record EcoDetailView(
             UUID id,
@@ -134,37 +82,7 @@ public final class EngineeringDtos {
             Instant implementedAt,
             List<EcoDiffLineView> diffLines,
             List<EcoSignOffView> signOffs
-    ) {
-        public static EcoDetailView of(EngineeringChangeOrderEntity e, List<EcoBomDiffLineEntity> diffs, List<EcoSignOffEntity> signs) {
-            return new EcoDetailView(
-                    e.getId(),
-                    e.getEcoNumber(),
-                    e.getTitle(),
-                    e.getReason(),
-                    e.getChangeSeverity(),
-                    e.getFinishedItem().getId(),
-                    e.getFinishedItem().getSku(),
-                    e.getFinishedItem().getName(),
-                    e.getBaseBom() != null ? e.getBaseBom().getId() : null,
-                    e.getBaseBom() != null ? e.getBaseBom().getRevision() : "BASELINE",
-                    e.getTargetRevision(),
-                    e.getStatus(),
-                    e.getEffectiveCutoverDate(),
-                    e.getImplementationNotes(),
-                    e.getImplementedBom() != null ? e.getImplementedBom().getId() : null,
-                    e.getImplementedBom() != null ? e.getImplementedBom().getRevision() : null,
-                    e.getCreatedBy() != null ? e.getCreatedBy().getDisplayName() : "Chief Engineer",
-                    e.getCreatedAt(),
-                    e.getImplementedAt(),
-                    diffs.stream().map(EcoDiffLineView::from).toList(),
-                    signs.stream().map(EcoSignOffView::from).toList()
-            );
-        }
-
-        public static EcoDetailView from(EngineeringChangeOrderEntity e) {
-            return of(e, e.getDiffLines(), e.getSignOffs());
-        }
-    }
+    ) {}
 
     public record EngineeringMetricsView(
             long activeEcos,

@@ -24,19 +24,11 @@ public final class InvoiceDtos {
     public record InvoiceView(UUID id, String invoiceNumber, String status, UUID salesOrderId,
                               String orderNumber, UUID customerId, String customerName,
                               LocalDate dueDate, Instant issuedAt, BigDecimal subtotal,String taxCode,BigDecimal taxRate,BigDecimal taxTotal,BigDecimal total,
-                              BigDecimal amountPaid,BigDecimal creditTotal, BigDecimal balance, List<InvoiceLineView> lines) {
-        static InvoiceView from(InvoiceEntity invoice) {
-            return new InvoiceView(invoice.getId(), invoice.getInvoiceNumber(), invoice.getStatus(),
-                    invoice.getSalesOrder().getId(), invoice.getSalesOrder().getOrderNumber(),
-                    invoice.getCustomer().getId(), invoice.getCustomer().getName(), invoice.getDueDate(),
-                    invoice.getIssuedAt(),invoice.getSubtotal(),invoice.getTaxCode(),invoice.getTaxRate(),invoice.getTaxTotal(), invoice.getTotal(), invoice.getAmountPaid(),invoice.getCreditTotal(), invoice.getBalance(),
-                    invoice.getLines().stream().map(InvoiceLineView::from).toList());
-        }
-    }
+                              BigDecimal amountPaid,BigDecimal creditTotal, BigDecimal balance, List<InvoiceLineView> lines) {}
     public record InvoiceLineView(UUID id, String sku, String itemName, int quantity,int creditedQuantity,int creditEligibleQuantity,
-                                  BigDecimal unitPrice, BigDecimal lineTotal,BigDecimal taxRate,BigDecimal taxAmount,BigDecimal grossTotal) {
-        static InvoiceLineView from(InvoiceLineEntity line) {
-            return new InvoiceLineView(line.getId(), line.getSku(), line.getItemName(), line.getQuantity(),line.getCreditedQuantity(),line.getCreditEligibleQuantity(), line.getUnitPrice(), line.getLineTotal(),line.getTaxRate(),line.getTaxAmount(),line.getGrossTotal());
-        }
-    }
+                                  BigDecimal unitPrice, BigDecimal lineTotal,BigDecimal taxRate,BigDecimal taxAmount,BigDecimal grossTotal) {}
+
+    public record FinanceSettingsView(String taxCode,BigDecimal taxRate,String invoicePrefix,long nextInvoiceNumber) {}
+
+    public record TaxSummaryView(String period,String taxCode,BigDecimal taxRate,BigDecimal subtotal,BigDecimal taxAmount,BigDecimal grossTotal) {}
 }

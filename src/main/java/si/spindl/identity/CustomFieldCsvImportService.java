@@ -27,6 +27,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import si.spindl.identity.CustomFieldCsvImportDtos.RowError;
+import si.spindl.identity.CustomFieldCsvImportDtos.Preview;
+import si.spindl.identity.CustomFieldCsvImportDtos.CommitResult;
 
 @Service
 public class CustomFieldCsvImportService {
@@ -52,13 +55,13 @@ public class CustomFieldCsvImportService {
     public CommitResult commit(String resource,String key,byte[] file,UUID actorId){
         String code=resource(resource);UUID tenantId=tenant.currentTenantId();
         if(key==null||key.isBlank()||key.length()>120)throw new BadRequestException("A valid Idempotency-Key header is required");
-        if(file==null||file.length==0||file.length>MAX_BYTES)return CommitResult.rejected(validate(code,file));
+        if(file==null||file.length==0||file.length>MAX_BYTES)return rejectedCommit(validate(code,file));
         String hash=sha256(file),batchType="CUSTOM_FIELD_"+code.toUpperCase(Locale.ROOT);
         var prior=batches.findByTenantIdAndResourceTypeAndIdempotencyKey(tenantId,batchType,key).orElse(null);
         if(prior!=null){if(!prior.getContentSha256().equals(hash))throw new ConflictException("Idempotency key was reused with a different file");return new CommitResult(true,true,prior.getRowsImported(),List.of());}
         Validation result=validate(code,file);
-        if(!result.errors().isEmpty())return CommitResult.rejected(result);
-        if(result.rows().isEmpty())return CommitResult.rejected(result.withError(new RowError(1,"File has no data rows")));
+        if(!result.errors().isEmpty())return rejectedCommit(result);
+        if(result.rows().isEmpty())return rejectedCommit(result.withError(new RowError(1,"File has no data rows")));
         for(var row:result.rows())fields.mergeImportedValues(tenantId,actorId,code,row.recordId(),row.values());
         try{
             var batch=batches.saveAndFlush(new ImportBatchEntity(tenantId,batchType,key,hash,result.rows().size()));
@@ -81,15 +84,15 @@ public class CustomFieldCsvImportService {
         List<RowError> errors=new ArrayList<>();
         if(new HashSet<>(headers).size()!=headers.size())errors.add(new RowError(1,"Header contains duplicate columns"));
         if(!headers.contains("id"))errors.add(new RowError(1,"Missing required column: id"));
-        List<TenantCustomFieldService.ImportField> available=fields.importFields(tenantId,code);
-        Map<String,TenantCustomFieldService.ImportField> byKey=new HashMap<>();available.forEach(f->byKey.put(f.fieldKey(),f));
+        List<TenantCustomFieldDtos.ImportField> available=fields.importFields(tenantId,code);
+        Map<String,TenantCustomFieldDtos.ImportField> byKey=new HashMap<>();available.forEach(f->byKey.put(f.fieldKey(),f));
         List<String> selected=headers.stream().filter(h->!h.equals("id")).toList();
         if(selected.isEmpty())errors.add(new RowError(1,"Include at least one published custom-field key as a column"));
         for(String header:selected)if(!byKey.containsKey(header))errors.add(new RowError(1,"Unknown or unpublished custom-field column: "+header));
         if(parsed.records().size()==1)return Validation.invalid(0,new RowError(1,"File has no data rows"));
         int total=parsed.records().size()-1;if(total>MAX_ROWS)return Validation.invalid(total,new RowError(1,"Import is limited to 500 data rows"));
         if(!errors.isEmpty())return new Validation(total,List.of(),errors,previewRows(headers,parsed.records().stream().skip(1).limit(10).toList()),selected.size());
-        List<TenantCustomFieldService.ImportField> selectedFields=selected.stream().map(byKey::get).toList();
+        List<TenantCustomFieldDtos.ImportField> selectedFields=selected.stream().map(byKey::get).toList();
         Map<String,Integer> index=new HashMap<>();for(int i=0;i<headers.size();i++)index.put(headers.get(i),i);
         Set<UUID> seen=new HashSet<>();List<ImportRow> rows=new ArrayList<>();
         for(int i=1;i<parsed.records().size();i++){
@@ -125,7 +128,5 @@ public class CustomFieldCsvImportService {
     private record Parsed(List<List<String>> records,RowError error){}
     private record ImportRow(UUID recordId,Map<String,JsonNode> values){}
     private record Validation(int totalRows,List<ImportRow> rows,List<RowError> errors,List<Map<String,String>> sampleRows,int fieldCount){static Validation invalid(int count,RowError error){return new Validation(count,List.of(),List.of(error),List.of(),0);}Validation withError(RowError error){var next=new ArrayList<>(errors);next.add(error);return new Validation(totalRows,rows,next,sampleRows,fieldCount);}Preview preview(){return new Preview(totalRows,rows.size(),errors,sampleRows,fieldCount);}}
-    public record RowError(int row,String message){}
-    public record Preview(int totalRows,int validRows,List<RowError> errors,List<Map<String,String>> sampleRows,int customFieldCount){}
-    public record CommitResult(boolean imported,boolean replayed,int rowsImported,List<RowError> errors){static CommitResult rejected(Validation result){return new CommitResult(false,false,0,result.errors());}}
+    private CommitResult rejectedCommit(Validation result){return new CommitResult(false,false,0,result.errors());}
 }

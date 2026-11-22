@@ -18,9 +18,9 @@ import java.util.UUID;
 public class TenantApiTokenController {
     private final TenantApiTokenService service;
     public TenantApiTokenController(TenantApiTokenService service){this.service=service;}
-    @GetMapping public List<TenantApiTokenService.TokenView> list(@AuthenticationPrincipal Jwt jwt){return service.list(actor(jwt));}
+    @GetMapping public List<TenantApiTokenDtos.TokenView> list(@AuthenticationPrincipal Jwt jwt){return service.list(actor(jwt));}
     @GetMapping("/scopes") public List<String> scopes(@AuthenticationPrincipal Jwt jwt){return service.supportedScopes(actor(jwt));}
-    @PostMapping @ResponseStatus(HttpStatus.CREATED) public TenantApiTokenService.CreatedToken create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateTokenRequest request){return service.create(actor(jwt),new TenantApiTokenService.CreateTokenRequest(request.name(),request.scopes(),request.expiresInDays()));}
+    @PostMapping @ResponseStatus(HttpStatus.CREATED) public TenantApiTokenDtos.CreatedToken create(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody CreateTokenRequest request){return service.create(actor(jwt),new TenantApiTokenDtos.CreateTokenRequest(request.name(),request.scopes(),request.expiresInDays()));}
     @DeleteMapping("/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void revoke(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){service.revoke(actor(jwt),id);}
     private UUID actor(Jwt jwt){return AuthenticatedActor.userId(jwt);}
     public record CreateTokenRequest(@NotBlank @Size(max=120) String name,@NotEmpty List<@NotBlank String> scopes,@Min(1) @Max(365) Integer expiresInDays){}

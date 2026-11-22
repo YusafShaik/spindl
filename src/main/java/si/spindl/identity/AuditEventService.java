@@ -12,6 +12,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.*;
+import si.spindl.identity.AuditEventDtos.EventView;
+import si.spindl.identity.AuditEventDtos.EventPage;
 
 @Service
 public class AuditEventService {
@@ -80,6 +82,4 @@ public class AuditEventService {
     private String clean(String value){return value==null||value.isBlank()?null:value.trim();}
     private String cell(String value){String safe=value==null?"":value.replaceAll("^[\\s]*([=+@-])","'$1");return "\""+safe.replace("\"","\"\"")+"\"";}
     private ResponseStatusException badRequest(String message){return new BadRequestException(message);}
-    public record EventView(UUID id,UUID actorUserId,String actorName,String actorEmail,String eventType,String subjectType,UUID subjectId,Map<String,Object> details,Instant createdAt){}
-    public record EventPage(List<EventView> items,int page,int pageSize,long totalElements,int totalPages){}
 }

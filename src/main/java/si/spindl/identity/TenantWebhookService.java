@@ -27,6 +27,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import si.spindl.identity.TenantWebhookDtos.CreateEndpointRequest;
+import si.spindl.identity.TenantWebhookDtos.EndpointView;
+import si.spindl.identity.TenantWebhookDtos.DeliveryView;
+import si.spindl.identity.TenantWebhookDtos.CreatedEndpoint;
 
 @Service
 public class TenantWebhookService {
@@ -150,7 +154,7 @@ public class TenantWebhookService {
                 Map.of("name", endpoint.getName(), "events", endpoint.getEventTypes())
         ));
 
-        return new CreatedEndpoint(EndpointView.from(endpoint, 0), secret);
+        return new CreatedEndpoint(TenantWebhookMapper.toEndpointView(endpoint, 0), secret);
     }
 
     @Transactional
@@ -340,42 +344,7 @@ public class TenantWebhookService {
         return EVENT_TYPES.stream().sorted().toList();
     }
 
-    public record CreateEndpointRequest(String name, String targetUrl, List<String> eventTypes) {}
 
-    public record EndpointView(
-            UUID id,
-            String name,
-            String targetUrl,
-            List<String> eventTypes,
-            boolean active,
-            Instant createdAt,
-            long deadLetterCount
-    ) {
-        static EndpointView from(TenantWebhookEndpointEntity endpoint, long dead) {
-            return new EndpointView(
-                    endpoint.getId(),
-                    endpoint.getName(),
-                    endpoint.getTargetUrl(),
-                    endpoint.getEventTypes(),
-                    endpoint.isActive(),
-                    endpoint.getCreatedAt(),
-                    dead
-            );
-        }
-    }
 
-    public record DeliveryView(
-            UUID id,
-            String endpointName,
-            String eventType,
-            String status,
-            int attempts,
-            Instant nextAttemptAt,
-            Integer responseStatus,
-            String lastError,
-            Instant createdAt,
-            Instant deliveredAt
-    ) {}
 
-    public record CreatedEndpoint(EndpointView endpoint, String signingSecret) {}
 }
