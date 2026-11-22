@@ -56,6 +56,8 @@ CREATE INDEX idx_ecos_finished_item ON engineering_change_orders (tenant_id, fin
 CREATE INDEX idx_eco_diff_eco_id ON eco_bom_diff_lines (tenant_id, eco_id);
 CREATE INDEX idx_eco_sign_offs_eco_id ON eco_sign_offs (tenant_id, eco_id);
 
+DO $spindl_seed$
+BEGIN
 -- Seed ECO #1: Approved & Ready for Cutover Implementation
 INSERT INTO engineering_change_orders (
     id, tenant_id, eco_number, title, reason, change_severity, finished_item_id,
@@ -237,3 +239,8 @@ INSERT INTO eco_sign_offs (
     NULL,
     NULL
 ) ON CONFLICT DO NOTHING;
+EXCEPTION
+  WHEN foreign_key_violation THEN
+    RAISE NOTICE 'Skipping demo seed in V79__engineering_change_orders.sql; referenced rows are not present';
+END
+$spindl_seed$;

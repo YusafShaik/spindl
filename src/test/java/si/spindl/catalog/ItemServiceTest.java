@@ -7,6 +7,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import si.spindl.common.presentation.TenantCurrency;
 import si.spindl.inventory.InventoryMovementEntity;
 import si.spindl.inventory.InventoryMovementRepository;
 
@@ -28,12 +29,16 @@ class ItemServiceTest {
     @Mock
     private InventoryMovementRepository movements;
 
+    @Mock
+    private TenantCurrency currency;
+
     private ItemService itemService;
     private final UUID tenantId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        itemService = new ItemService(items, movements);
+        lenient().when(currency.code(tenantId)).thenReturn("INR");
+        itemService = new ItemService(items, movements, currency);
     }
 
     @Test
@@ -49,6 +54,17 @@ class ItemServiceTest {
         assertEquals("₹ 100", result.get(0).price());
         assertEquals("TI", result.get(0).mark());
         assertEquals("In stock", result.get(0).state());
+    }
+
+    @Test
+    void listUsesTheTenantCurrency() {
+        ItemEntity entity = new ItemEntity(tenantId, "SKU-1", "Test Item", "General", 10, "PCS", new BigDecimal("100.00"), 5);
+        when(items.findAllByTenantIdAndActiveTrueOrderByName(tenantId)).thenReturn(List.of(entity));
+        when(currency.code(tenantId)).thenReturn("USD");
+
+        List<ItemDtos.ItemView> result = itemService.list(tenantId);
+
+        assertEquals("$ 100", result.get(0).price());
     }
 
     @Test

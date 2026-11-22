@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import si.spindl.common.exception.ConflictException;
 import si.spindl.common.exception.NotFoundException;
+import si.spindl.common.presentation.TenantCurrency;
 import si.spindl.inventory.InventoryMovementEntity;
 import si.spindl.inventory.InventoryMovementRepository;
 
@@ -17,12 +18,13 @@ import java.util.UUID;
 public class ItemService {
     private final ItemRepository items;
     private final InventoryMovementRepository movements;
+    private final TenantCurrency currency;
 
     @Transactional(readOnly = true)
     public List<ItemDtos.ItemView> list(UUID tenantId) {
         return items.findAllByTenantIdAndActiveTrueOrderByName(tenantId)
                 .stream()
-                .map(ItemMapper::toView)
+                .map(item -> ItemMapper.toView(item, currency.code(tenantId)))
                 .toList();
     }
 
@@ -48,7 +50,7 @@ public class ItemService {
         if (request.openingStock() > 0) {
             movements.save(new InventoryMovementEntity(tenantId, saved, request.openingStock(), "Opening balance", "OPENING-" + saved.getSku()));
         }
-        return ItemMapper.toView(saved);
+        return ItemMapper.toView(saved, currency.code(tenantId));
     }
 
     @Transactional
@@ -59,7 +61,7 @@ public class ItemService {
         if (request.itemType() != null) {
             item.updateType(request.itemType().trim().toUpperCase(Locale.ROOT));
         }
-        return ItemMapper.toView(items.save(item));
+        return ItemMapper.toView(items.save(item), currency.code(tenantId));
     }
 
     @Transactional
@@ -67,6 +69,6 @@ public class ItemService {
         ItemEntity item = items.findByTenantIdAndId(tenantId, id)
                 .orElseThrow(NotFoundException::new);
         item.setLowStockThreshold(request.lowStockThreshold());
-        return ItemMapper.toView(items.save(item));
+        return ItemMapper.toView(items.save(item), currency.code(tenantId));
     }
 }

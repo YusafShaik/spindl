@@ -63,6 +63,8 @@ CREATE TABLE challan_items (
 CREATE INDEX ix_challan_items_challan ON challan_items(challan_id);
 CREATE INDEX ix_challan_items_package ON challan_items(package_id);
 
+DO $spindl_seed$
+BEGIN
 -- SEED DATA for Tenant '86346062-7d9c-40e4-be16-2007ab592625' (Soof)
 INSERT INTO delivery_challans (
     id, tenant_id, challan_number, sales_order_id, customer_id, warehouse_id, status,
@@ -275,3 +277,8 @@ INSERT INTO challan_items (
     '7609.00.00',
     now() - interval '1 hour'
 );
+EXCEPTION
+  WHEN foreign_key_violation THEN
+    RAISE NOTICE 'Skipping demo seed in V77__logistics_dispatch_challans.sql; referenced rows are not present';
+END
+$spindl_seed$;

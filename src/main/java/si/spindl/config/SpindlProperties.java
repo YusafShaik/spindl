@@ -17,6 +17,8 @@ public class SpindlProperties {
     private String platformSupportEmails = "";
     /** Matches {@code ${spindl.frontend-url:http://localhost:5173}}. */
     private String frontendUrl = "http://localhost:5173";
+    /** Used when a workspace has no currency code. */
+    private String defaultCurrency = "INR";
     private Security security = new Security();
     private Mail mail = new Mail();
     private Attachments attachments = new Attachments();

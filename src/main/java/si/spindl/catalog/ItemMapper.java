@@ -8,7 +8,7 @@ public final class ItemMapper {
     private ItemMapper() {
     }
 
-    public static ItemDtos.ItemView toView(ItemEntity item) {
+    public static ItemDtos.ItemView toView(ItemEntity item, String currencyCode) {
         String availableState = item.getAvailableQuantity() == 0
                 ? "Out of stock"
                 : item.getAvailableQuantity() <= item.getLowStockThreshold() ? "Low stock" : "In stock";
@@ -19,7 +19,7 @@ public final class ItemMapper {
                 item.getCategory(),
                 item.getOnHand(),
                 item.getUnit(),
-                MoneyFormat.inr(item.getUnitPrice()),
+                MoneyFormat.format(item.getUnitPrice(), currencyCode),
                 availableState,
                 DisplayMark.fromName(item.getName()),
                 "lavender",

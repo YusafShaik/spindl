@@ -8,6 +8,7 @@ import si.spindl.common.event.DomainAuditEvent;
 import si.spindl.common.exception.ConflictException;
 import si.spindl.common.exception.ForbiddenException;
 import si.spindl.common.exception.NotFoundException;
+import si.spindl.common.presentation.TenantCurrency;
 import si.spindl.common.text.TextValues;
 import si.spindl.finance.InvoiceRepository;
 import si.spindl.identity.TenantMembershipRepository;
@@ -30,10 +31,12 @@ public class CustomerService {
     private final TenantMembershipRepository memberships;
     private final TenantRolePermissionRepository permissions;
     private final ApplicationEventPublisher eventPublisher;
+    private final TenantCurrency currency;
 
     @Transactional(readOnly = true)
     public List<CustomerDtos.CustomerView> list(UUID tenantId, UUID actor, String email, String phone) {
-        String role = memberships.findActiveRole(tenantId, actor).orElseThrow();
+        String role = memberships.findActiveRole(tenantId, actor).orElseThrow(ForbiddenException::new);
+        String currencyCode = currency.code(tenantId);
         boolean all = permissions.allows(tenantId, role, "crm", "customers", "view", "ALL");
         List<CustomerEntity> rows;
         if (email != null && !email.isBlank()) {
@@ -52,7 +55,7 @@ public class CustomerService {
         Map<UUID, BigDecimal> balances = new HashMap<>();
         invoices.outstandingGroupedByCustomer(tenantId).forEach(r -> balances.put((UUID) r[0], (BigDecimal) r[1]));
         return rows.stream()
-                .map(c -> CustomerMapper.toView(c, orderCounts.getOrDefault(c.getId(), 0L), balances.getOrDefault(c.getId(), BigDecimal.ZERO)))
+                .map(c -> CustomerMapper.toView(c, orderCounts.getOrDefault(c.getId(), 0L), balances.getOrDefault(c.getId(), BigDecimal.ZERO), currencyCode))
                 .toList();
     }
 
@@ -82,7 +85,7 @@ public class CustomerService {
         applyProfile(customer, request, actor);
         customer = customers.save(customer);
         eventPublisher.publishEvent(new DomainAuditEvent(tenantId, actor, "CUSTOMER_CREATED", "customer", customer.getId(), Map.of("code", customer.getCode())));
-        return CustomerMapper.toView(customer, 0, BigDecimal.ZERO);
+        return CustomerMapper.toView(customer, 0, BigDecimal.ZERO, currency.code(tenantId));
     }
 
     @Transactional
@@ -93,7 +96,7 @@ public class CustomerService {
         applyProfile(customer, request, customer.getOwnerUserId());
         customer = customers.save(customer);
         eventPublisher.publishEvent(new DomainAuditEvent(tenantId, actor, "CUSTOMER_UPDATED", "customer", id, Map.of("active", request.active())));
-        return CustomerMapper.toView(customer, orders.countByTenantIdAndCustomerId(tenantId, id), invoices.outstandingForCustomer(tenantId, id));
+        return CustomerMapper.toView(customer, orders.countByTenantIdAndCustomerId(tenantId, id), invoices.outstandingForCustomer(tenantId, id), currency.code(tenantId));
     }
 
     private void applyProfile(CustomerEntity customer, CustomerDtos.CustomerProfile request, UUID owner) {

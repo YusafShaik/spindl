@@ -23,6 +23,7 @@ class SpindlPropertiesBindingTest {
         assertEquals(3310, properties.getAttachments().getClamavPort());
         assertEquals(5000, properties.getAttachments().getClamavTimeoutMillis());
         assertEquals("", properties.getPlatformBillingEmails());
+        assertEquals("INR", properties.getDefaultCurrency());
     }
 
     @Test

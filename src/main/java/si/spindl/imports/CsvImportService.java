@@ -251,7 +251,7 @@ public class CsvImportService {
     private static String normalizeExportResource(String resource){String type=resource==null?"":resource.trim().toUpperCase(Locale.ROOT);if(!Set.of("CUSTOMERS","ITEMS","SUPPLIERS","WORK_ORDERS","PURCHASE_ORDERS","QUOTES","SALES_ORDERS","INVOICES").contains(type))throw new BadRequestException("Choose a supported export resource");return type;}
     private static String resourceCode(String type){return switch(type){case "CUSTOMERS"->"customers";case "ITEMS"->"items";case "SUPPLIERS"->"suppliers";case "WORK_ORDERS"->"work_orders";case "PURCHASE_ORDERS"->"purchase_orders";case "QUOTES"->"quotes";case "SALES_ORDERS"->"sales_orders";case "INVOICES"->"invoices";default->throw new IllegalArgumentException("Unsupported import/export resource");};}
     private ResponseStatusException exportLimit(){return new PayloadTooLargeException("Export is limited to 10,000 records; narrow the export and try again");}
-    private static String sha256(byte[] bytes){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));}catch(Exception exception){throw new IllegalStateException(exception);}}
+    private static String sha256(byte[] bytes){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));}catch(Exception exception){throw new si.spindl.common.exception.InfrastructureException("SHA-256 is unavailable", exception);}}
 
     private static CsvRecords parse(String content){
         List<List<String>> records=new ArrayList<>();List<String> record=new ArrayList<>();StringBuilder field=new StringBuilder();boolean quoted=false,afterQuote=false;

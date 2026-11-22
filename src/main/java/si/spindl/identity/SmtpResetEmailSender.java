@@ -15,7 +15,7 @@ public class SmtpResetEmailSender implements ResetEmailSender {
     public SmtpResetEmailSender(ObjectProvider<JavaMailSender> mailSender, SpindlProperties properties) { this.mailSender = mailSender; this.from = properties.getMail().getFrom(); }
     @Override public void sendPasswordReset(String email, String resetLink) {
         JavaMailSender sender = mailSender.getIfAvailable();
-        if (sender == null) throw new IllegalStateException("SMTP is not configured");
+        if (sender == null) throw new si.spindl.common.exception.InfrastructureException("SMTP is not configured");
         var message = new SimpleMailMessage(); message.setFrom(from); message.setTo(email);
         message.setSubject("Reset your Spindl password");
         message.setText("Use this one-time link within 30 minutes to reset your Spindl password:\n\n" + resetLink + "\n\nIf you did not request this, you can ignore this email.");

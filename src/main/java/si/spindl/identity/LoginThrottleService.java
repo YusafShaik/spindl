@@ -62,7 +62,7 @@ public class LoginThrottleService {
             mac.init(new SecretKeySpec(bucketSecret,"HmacSHA256"));
             return HexFormat.of().formatHex(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
         } catch (java.security.GeneralSecurityException e) {
-            throw new IllegalStateException("HMAC-SHA-256 is unavailable", e);
+            throw new si.spindl.common.exception.InfrastructureException("HMAC-SHA-256 is unavailable", e);
         }
     }
 }
